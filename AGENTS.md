@@ -103,6 +103,7 @@ Before finishing a change, run lint and tests and report the real result.
 ## Layout
 
 - `docs/` detailed documentation; `docs/images/` figures and diagrams
+- `docs/<module>/spec.md` per-module agent spec (rules, architecture, build order); read it before working in that module. Import new ones in `CLAUDE.md`.
 - `src/ants/contracts/` shared types (the only thing both systems import)
 - `src/ants/synthesizer/` System 1: perception, policy synthesis, experience memory
 - `src/ants/adversary/` System 2: test planner, simulator rollouts, diagnoser, failure history
