@@ -131,7 +131,7 @@ The user wants every significant change traceable, so agents commit and push on 
 - **When:** after a complete, significant feature or fix works (a new component, a behavior change, a milestone result, a refactor that is finished). Not after every edit, and not for trivial tweaks, typo fixes or half-finished work; fold those into the next feature commit.
 - **Before committing:** run `uv run ruff check .` and `uv run pytest`. Never commit or push failing code. If something is knowingly broken, say so and ask first.
 - **One feature, one commit,** with a message that says what and why (imperative subject, short body). Do not mix unrelated changes in one commit, so any feature can be reverted or bisected alone.
-- **Branches:** work on a feature branch (`synthesizer/<topic>`, `adversary/<topic>`, `orchestrator/<topic>`, `docs/<topic>`), push it with `git push -u origin <branch>`, and tell the user. Do not push directly to `main`; the user merges (or asks you to) once it is verified. This protects the last known-good version when several people work in parallel.
+- **Branches:** do not create branches on your own. Commit and push on the branch that is currently checked out; create or switch branches only when the user asks.
 - **Report:** after each commit and push, tell the user the branch, the commit hash and a one-line summary.
 - **Never:** force-push, rewrite pushed history, skip hooks, commit secrets, `.env`, `.venv/`, datasets or large binaries, or `git add -A` blindly (stage only the files for this feature).
 - Milestones (a working end-to-end demo, a reported result) may get a tag such as `demo-v0.1`.
