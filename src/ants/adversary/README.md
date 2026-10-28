@@ -2,7 +2,7 @@
 
 System 2 takes a robot program written by System 1 and tries to make it fail in simulation. It explains each failure and hands it back as a constraint System 1 can follow. It only reports. It never edits code, never accepts or rejects rewrites, and never decides to escalate.
 
-> Status: architecture spec. Only the package skeleton exists so far; nothing below is implemented or measured yet.
+> Status: architecture spec. Only the package skeleton exists so far; nothing below is implemented or measured yet. Hard rules, layout and build order are in [`CLAUDE.md`](CLAUDE.md).
 
 ## One adversarial cycle
 
