@@ -130,14 +130,19 @@ adversary/
 │   └── diagnoser.py         model diagnoser + RuleDiagnoser, failure-mode list
 ├── history/
 │   └── store.py             FailureHistory, AttackRecord
-├── prompts/
-│   ├── propose.md
-│   └── diagnose.md
-└── tests/
-    ├── test_space.py        clamping, severity ≤ ρ
-    ├── test_selector.py     posteriors, exploration, reset on new policy
-    ├── test_runner.py       sandbox, timeout, crash → ERROR
-    └── test_loop.py         full loop offline: finds failures, rewrites pass a gate, failure rate drops
+└── prompts/
+    ├── propose.md
+    └── diagnose.md
+```
+
+Tests live in the repo-level `tests/`, mirroring the package (see AGENTS.md):
+
+```
+tests/adversary/
+├── test_space.py            clamping, severity ≤ ρ
+├── test_selector.py         posteriors, exploration, reset on new policy
+├── test_runner.py           sandbox, timeout, crash → ERROR
+└── test_loop.py             full loop offline: finds failures, rewrites pass a gate, failure rate drops
 ```
 
 ## Build order
