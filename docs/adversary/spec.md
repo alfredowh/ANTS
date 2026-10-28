@@ -1,4 +1,4 @@
-# CLAUDE.md: adversary/ (System 2)
+# Adversary (System 2): agent spec
 
 ## What this package is
 
@@ -104,7 +104,6 @@ status: RobustnessStatus = adv.status(policy)          # .robust when max_c Q_0.
 
 ```
 adversary/
-├── CLAUDE.md
 ├── README.md
 ├── __init__.py              exports Adversary, AdversaryConfig, AttackReport, RobustnessStatus
 ├── adversary.py             facade
