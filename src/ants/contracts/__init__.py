@@ -21,6 +21,9 @@ from ants.contracts.types import (
     Perturbation,
     Policy,
     RolloutResult,
+    Skill,
+    SkillKind,
+    SkillRef,
     to_dict,
 )
 
@@ -43,5 +46,8 @@ __all__ = [
     "Pose",
     "RobotAPI",
     "RolloutResult",
+    "Skill",
+    "SkillKind",
+    "SkillRef",
     "to_dict",
 ]
