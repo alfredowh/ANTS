@@ -1,6 +1,6 @@
 # To do (for the user)
 
-Open items that need you: a measurement, a decision, access or a review. The interactive version is the "ANTS To-do" artifact. Started 2026-10-31.
+Open items that need you: a measurement, a decision, access or a review. The interactive version is the [ANTS To-do](https://claude.ai/artifact/C3NqC3ij7jDMMtEqfzdaFp) artifact (source: `todo.html`). Started 2026-10-31.
 
 | # | Item | Why | Status |
 |---|---|---|---|

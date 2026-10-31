@@ -1,0 +1,194 @@
+<title>ANTS To-do</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one column of item rows grouped by kind; a sticky bar with counts and "Add item". */
+:root {
+  --bg: #f3f5f7; --surface: #ffffff; --sunk: #e8ecf0; --line: #d3dae2; --ink: #142231; --muted: #5a6b7c;
+  --accent: #1f4fd1; --accent-ink: #ffffff; --accent-soft: #e2e9fb;
+  --good: #1d7a4a; --good-soft: #dff3e7; --warn: #9a5b00; --warn-soft: #fbefd9; --bad: #b3261e;
+  --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  --r: 6px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e151d; --surface: #152029; --sunk: #1b2833; --line: #2a3a48; --ink: #e3eaf1; --muted: #93a4b5;
+  --accent: #7d9cff; --accent-ink: #0b1220; --accent-soft: #1d2b4d;
+  --good: #6fd19c; --good-soft: #15352a; --warn: #f0b35a; --warn-soft: #3a2b12; --bad: #ff8a80; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0e151d; --surface: #152029; --sunk: #1b2833; --line: #2a3a48; --ink: #e3eaf1; --muted: #93a4b5;
+  --accent: #7d9cff; --accent-ink: #0b1220; --accent-soft: #1d2b4d;
+  --good: #6fd19c; --good-soft: #15352a; --warn: #f0b35a; --warn-soft: #3a2b12; --bad: #ff8a80; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.5; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--surface); }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--surface); border-bottom: 1px solid var(--line);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 10px; }
+.bar-in { max-width: 900px; margin: 0 auto; display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; }
+h1 { font-family: var(--f-display); font-size: 20px; margin: 0 auto 0 0; }
+.counts { font-family: var(--f-mono); font-size: 12px; color: var(--muted); display: flex; gap: 12px; font-variant-numeric: tabular-nums; }
+.counts b { color: var(--ink); font-weight: 500; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: var(--r); padding: 6px 12px; cursor: pointer; font-weight: 500; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn.small { padding: 2px 8px; font-size: 12px; }
+.btn.danger { color: var(--bad); }
+.btn.danger.armed { background: var(--bad); color: var(--surface); border-color: var(--bad); }
+main { max-width: 900px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 16px 40px; }
+.filters { display: flex; gap: 8px; flex-wrap: wrap; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: none; padding: 5px 12px; cursor: pointer; font-size: 12px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+.group h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 6px; font-weight: 600; }
+.list { list-style: none; margin: 0; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); }
+.item { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+.item:last-child { border-bottom: 0; }
+.item input[type="checkbox"] { width: 18px; height: 18px; margin-top: 2px; accent-color: var(--good); cursor: pointer; }
+.item.done .t { text-decoration: line-through; color: var(--muted); }
+.t { font-weight: 600; }
+.why { color: var(--muted); margin-top: 2px; max-width: 70ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.ref { font-family: var(--f-mono); font-size: 11.5px; background: var(--sunk); padding: 1px 6px; border-radius: 4px; overflow-wrap: anywhere; }
+.chip { font-size: 11px; padding: 1px 8px; border-radius: 999px; }
+.k-measure { background: var(--warn-soft); color: var(--warn); } .k-decide { background: var(--accent-soft); color: var(--accent); }
+.k-access { background: var(--good-soft); color: var(--good); } .k-review, .k-check { background: var(--sunk); color: var(--muted); }
+.note { width: 100%; min-height: 34px; margin-top: 8px; border: 1px solid var(--line); border-radius: var(--r); background: var(--bg); padding: 6px 8px; resize: vertical; }
+.saved { font-size: 11px; color: var(--good); }
+.empty { padding: 28px 16px; text-align: center; color: var(--muted); }
+.empty strong { display: block; color: var(--ink); font-family: var(--f-display); font-size: 16px; }
+form.add { display: grid; gap: 8px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; }
+form.add label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); font-weight: 500; }
+form.add input, form.add select, form.add textarea { border: 1px solid var(--line); border-radius: var(--r); padding: 6px 8px; background: var(--bg); }
+.row2 { display: grid; grid-template-columns: 1fr 160px; gap: 8px; }
+@media (max-width: 520px) { .row2 { grid-template-columns: 1fr; } }
+.banner { background: var(--warn-soft); color: var(--warn); border-radius: var(--r); padding: 8px 12px; }
+</style>
+
+<header class="bar"><div class="bar-in">
+  <h1>ANTS To-do</h1>
+  <div class="counts" id="counts"><span><b>–</b> open</span><span><b>–</b> done</span></div>
+  <button class="btn primary" id="addBtn" type="button">Add item</button>
+</div></header>
+
+<main>
+  <div class="banner" id="banner" hidden></div>
+  <form class="add" id="addForm" hidden>
+    <label for="fTitle">What needs doing<input id="fTitle" required placeholder="e.g. Measure the plate rim height"></label>
+    <label for="fWhy">Why it matters (optional)<input id="fWhy"></label>
+    <div class="row2">
+      <label for="fRef">Where to look (optional)<input id="fRef" placeholder="docs/... or a link"></label>
+      <label for="fKind">Kind<select id="fKind"><option value="measure">Measure</option><option value="decide">Decide</option><option value="access">Access</option><option value="review">Review</option><option value="check">Check</option></select></label>
+    </div>
+    <div style="display:flex;gap:8px"><button class="btn primary" type="submit">Save item</button><button class="btn" type="button" id="cancelAdd">Cancel</button></div>
+  </form>
+  <div class="filters">
+    <div class="seg" role="group" aria-label="Show">
+      <button type="button" data-show="open" aria-pressed="true">Open</button>
+      <button type="button" data-show="done" aria-pressed="false">Done</button>
+      <button type="button" data-show="all" aria-pressed="false">All</button>
+    </div>
+  </div>
+  <div id="groups"><div class="empty"><strong>Loading your to-do list…</strong>Items come from the shared list; add one with Add item.</div></div>
+</main>
+
+<script>
+(() => {
+  const KINDS = { measure: "Measure", decide: "Decide", access: "Access", review: "Review", check: "Check" };
+  const S = { items: [], show: "open", loaded: false };
+  let db = null;
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const link = (r) => /^https?:\/\//.test(r || "") ? `<a href="${esc(r)}" target="_blank" rel="noopener">${esc(r)}</a>` : `<span class="ref">${esc(r)}</span>`;
+
+  function render() {
+    const open = S.items.filter((i) => !i.done).length;
+    $("counts").innerHTML = `<span><b>${open}</b> open</span><span><b>${S.items.length - open}</b> done</span>`;
+    const shown = S.items.filter((i) => S.show === "all" || (S.show === "done" ? i.done : !i.done))
+      .sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
+    if (!shown.length) {
+      $("groups").innerHTML = `<div class="empty"><strong>${!S.loaded ? "Loading your to-do list…" : S.show === "done" ? "Nothing done yet" : "Nothing open"}</strong>${S.loaded ? "Add an item with Add item." : ""}</div>`;
+      return;
+    }
+    const by = {};
+    shown.forEach((i) => (by[i.kind || "check"] ||= []).push(i));
+    $("groups").innerHTML = Object.keys(KINDS).filter((k) => by[k]).map((k) => `
+      <section class="group"><h2>${KINDS[k]}</h2><ul class="list">${by[k].map((i) => `
+        <li class="item ${i.done ? "done" : ""}">
+          <input type="checkbox" id="cb-${esc(i.id)}" data-id="${esc(i.id)}" ${i.done ? "checked" : ""} aria-label="Mark done">
+          <div style="min-width:0">
+            <label class="t" for="cb-${esc(i.id)}">${esc(i.title)}</label>
+            ${i.why ? `<div class="why">${esc(i.why)}</div>` : ""}
+            <div class="meta">
+              <span class="chip k-${esc(k)}">${KINDS[k]}</span>
+              ${i.ref ? link(i.ref) : ""}
+              ${i.done && i.done_at ? `<span>done ${esc(i.done_at.slice(0, 10))}</span>` : ""}
+              <button class="btn small danger" type="button" data-del="${esc(i.id)}">Delete</button>
+            </div>
+            <textarea class="note" id="note-${esc(i.id)}" data-note="${esc(i.id)}" placeholder="Notes or answer (e.g. the measured value)">${esc(i.note || "")}</textarea>
+            <span class="saved" id="saved-${esc(i.id)}" hidden>Saved</span>
+          </div>
+        </li>`).join("")}</ul></section>`).join("");
+  }
+
+  function needDb() { if (db) return true; $("banner").hidden = false; $("banner").textContent = "Changes need the shared list, which this view cannot reach. Open the page on claude.ai while signed in."; return false; }
+
+  document.querySelector(".seg").addEventListener("click", (e) => {
+    const b = e.target.closest("button"); if (!b) return;
+    S.show = b.dataset.show;
+    document.querySelectorAll(".seg button").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    render();
+  });
+  $("groups").addEventListener("change", async (e) => {
+    const cb = e.target.closest("input[type=checkbox]"); if (!cb || !needDb()) return;
+    const done = cb.checked;
+    try { await db.collection("todos").doc(cb.dataset.id).update({ done, done_at: done ? new Date().toISOString() : null }); }
+    catch { cb.checked = !done; $("banner").hidden = false; $("banner").textContent = "That change was not saved. Try again."; }
+  });
+  const timers = {};
+  $("groups").addEventListener("input", (e) => {
+    const t = e.target.closest("textarea[data-note]"); if (!t || !db) return;
+    const id = t.dataset.note; clearTimeout(timers[id]);
+    timers[id] = setTimeout(async () => {
+      try { await db.collection("todos").doc(id).update({ note: t.value.slice(0, 4000) }); const s = $("saved-" + id); if (s) { s.hidden = false; setTimeout(() => { s.hidden = true; }, 1500); } } catch {}
+    }, 800);
+  });
+  $("groups").addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-del]"); if (!b || !needDb()) return;
+    if (!b.classList.contains("armed")) { b.classList.add("armed"); b.textContent = "Confirm delete"; setTimeout(() => { if (b.isConnected) { b.classList.remove("armed"); b.textContent = "Delete"; } }, 4000); return; }
+    try { await db.collection("todos").doc(b.dataset.del).delete(); } catch { b.textContent = "Delete failed"; }
+  });
+  $("addBtn").addEventListener("click", () => { $("addForm").hidden = false; $("fTitle").focus(); });
+  $("cancelAdd").addEventListener("click", () => { $("addForm").hidden = true; });
+  $("addForm").addEventListener("submit", async (e) => {
+    e.preventDefault(); if (!needDb()) return;
+    const title = $("fTitle").value.trim(); if (!title) return;
+    const order = Math.max(0, ...S.items.map((i) => i.order || 0)) + 1;
+    try {
+      await db.collection("todos").add({ title, why: $("fWhy").value.trim() || null, ref: $("fRef").value.trim() || null, kind: $("fKind").value, done: false, order, added_at: new Date().toISOString(), source: "page" });
+      $("addForm").reset(); $("addForm").hidden = true;
+    } catch { $("banner").hidden = false; $("banner").textContent = "The item was not saved. Try again."; }
+  });
+
+  render();
+  const c = window.claude;
+  if (!c) { S.loaded = true; $("banner").hidden = false; $("banner").textContent = "Open this page on claude.ai to load the shared list."; render(); return; }
+  c.use("db").then((d) => {
+    db = d;
+    if (!db) { S.loaded = true; $("banner").hidden = false; $("banner").textContent = "Sign in on claude.ai to see the shared list."; render(); return; }
+    const timer = setTimeout(() => { $("banner").hidden = false; $("banner").textContent = "The list can't be reached yet. It will appear when the connection returns."; }, 10000);
+    db.collection("todos").limit(500).onSnapshot((snap) => {
+      if (!snap.metadata.fromCache) { clearTimeout(timer); $("banner").hidden = true; }
+      const active = document.activeElement && document.activeElement.dataset && document.activeElement.dataset.note;
+      S.items = snap.docs.map((x) => ({ id: x.id, ...x.data() })); S.loaded = true;
+      if (!active) render();
+    }, () => { clearTimeout(timer); $("banner").hidden = false; $("banner").textContent = "The list stopped updating. Reload the page to reconnect."; });
+  });
+})();
+</script>
