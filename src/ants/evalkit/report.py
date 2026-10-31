@@ -136,6 +136,7 @@ def collect(root: Path) -> dict:
 
 
 def build(root: Path) -> Path:
+    root = root.resolve()
     data = json.dumps(collect(root)).replace("</", "<\\/")
     out = root / "report.html"
     out.write_text(TEMPLATE.replace("__DATA__", data), encoding="utf-8")

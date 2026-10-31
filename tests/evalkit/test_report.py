@@ -34,3 +34,10 @@ def test_collect_and_build_from_a_run_dir(tmp_path):
     assert s["evaluation"][0]["scene"] == "scaled" and s["evaluation"][0]["seed"] == 53
     html = build(tmp_path).read_text(encoding="utf-8")
     assert "ANTS run viewer" in html and '"demo/sample0"' in html
+
+
+def test_build_returns_an_absolute_path_for_a_relative_run_dir(tmp_path, monkeypatch):
+    (tmp_path / "run").mkdir()
+    monkeypatch.chdir(tmp_path)
+    out = build(__import__("pathlib").Path("run"))
+    assert out.is_absolute() and out.as_uri().startswith("file://")
