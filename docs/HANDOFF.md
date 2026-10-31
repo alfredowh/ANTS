@@ -20,7 +20,7 @@ Give this file to a new session as context. It is the single place that says whe
 | SAM | SAM 3 inside the harness (ASPIRE loads only `sam3.pt`). SAM 3.1 for demo-video tracking later (also served by the Meta API as `sam-3.1`) |
 | Tasks | **T1** hurobo real-size bowl → plate (real phone clips; hurobo reused read-only) and **T2** LIBERO `libero_90:89` "pick up the book on the right and place it under the cabinet shelf". T0 = stock bowl-on-plate smoke task |
 | hurobo | Read-only. Outputs go to `ANTS/data/`, never into hurobo |
-| Marker size | 6.0 cm until the user measures it |
+| Marker size | 5.75 cm, measured by the user (2026-10-31). Smoke runs used 6.0 cm, so re-extract with `--marker-size-m 0.0575` |
 | Long runs | Ask the user before anything over ~15 min, unless they said "do it" for that step |
 | Git | Commit and push at milestones on `synthesizer`. The global git proxy is stale: use `git -c http.proxy= push` |
 
@@ -70,6 +70,13 @@ uv run ruff check . && uv run pytest
 - Keys: `ANTS/.env` holds `META_API_KEY` (endpoint `https://api.meta.ai/v1`). The OpenRouter key is in `../agentic-robot/sim/.env`. Never print or commit them.
 - Muse models on the key: `muse-wonder-1.0`, `muse-spark-1.3`, `muse-spark-1.2`, `muse-spark-1.1`, `sam-3.1`, `muse-image-1.0`, `muse-voice-transcribe-1.0`.
 
+### Recording and viewer (added after the first handoff)
+
+- A run (`uv run python -m ants.orchestrator.demo_vs_nodemo ... --out data/runs/<name>`) writes every prompt, model reply, program (initial policy and each repair), program diff, feedback and event (`events.jsonl`) into its run directory.
+- `--token-budget` now caps the **new** tokens of that run (default 600k, about $8 at the observed $13.5 per M tokens), not the ledger total. `--repairs` defaults to 4, `--scenes stock,scaled` evaluates each final program in both scenes (debug and repair use stock).
+- View a run: `uv run python -m ants.evalkit.report data/runs/<name> --open` (one `report.html` in the run dir; `--serve` for http). It also renders `demo_vs_nodemo_01`.
+- Observed Muse cost: dashboard went $150 -> $145.44 for about 337k tokens.
+
 ## 5. Results so far (all from logged runs, small n)
 
 | What | Result | Doc |
@@ -111,7 +118,7 @@ uv run ruff check . && uv run pytest
    - a `Constraint` per failure → generator context
    - the **per-case regression gate** (new candidate must pass every case the incumbent passes)
    - acceptance seeds 51–65, held-out seeds 1–50.
-4. **T1 real-size scene:**
+4. **T1 real-size scene (optional, after 1 and 3; it is a different test, not a harder one):**
    - Use `aspire_launch.py`'s `scale` option (bowl ×1.227, plate ×1.855) with the five other objects parked, as in hurobo E1.
    - Re-check placement, since the experimental scaling does not check overlap.
    - Then run the demo arm there.
@@ -130,4 +137,4 @@ uv run ruff check . && uv run pytest
 
 ## 9. Open items that need the user (see the to-do page)
 
-Measure the marker. Muse price or spend. Review the skills definition. Autonomous-mode budgets. Hackathon rules on reused code. Novelty wording with the teammate. Gemini key (optional). The hurobo clip issues. **Hackathon submission: 2026-11-04.**
+Muse price or spend. Review the skills definition. Autonomous-mode budgets. Hackathon rules on reused code. Novelty wording with the teammate. Gemini key (optional). The hurobo clip issues. **Hackathon submission: 2026-11-04.**

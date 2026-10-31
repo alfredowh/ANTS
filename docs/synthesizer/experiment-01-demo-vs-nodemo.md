@@ -47,6 +47,12 @@ The winning program, unchanged, under three perturbations on seed 51, through `t
 
 These perturbations were chosen by hand, not by an adversary, and are mild. Friction and actuation could not be confirmed from the outputs of these three runs; the launcher now logs every applied change.
 
+## Real-size scene (bowl x1.227, plate x1.855)
+
+The winning program, unchanged, on the real-size scene of hurobo E1 (`tools/aspire_launch.py` `scale`, seeds 51-55, runs in `data/scaled_test/`): **0/5**. On seeds 51 and 52 the first `move_to_pose` times out and the bowl ends 9-14 cm from the plate centre without the task counting as done. So a program that is perfect on stock objects does not transfer to your real object sizes: a size-robustness failure of the kind System 2 should find.
+
+Correction: the launcher's first version rebuilt the scene and then called `reset()` again, which restores the stock task, so an earlier "scaled" success was on stock objects and is discarded. The launcher now rebuilds after each reset and logs the scaled bounding radii (bowl 0.0841 -> 0.1031 m, plate 0.0974 -> 0.1806 m) as proof.
+
 ## Limits
 
 - Two samples per arm, one task, one demo clip.

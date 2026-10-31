@@ -78,7 +78,6 @@ class PerturbedEnv:
     def __init__(self, inner, spec: dict):
         self._inner = inner
         self._spec = spec
-        self._scaled = False
         act = spec.get("actuation") or {}
         self._rng = np.random.default_rng(int(act.get("seed", 0)))
         self._queue: collections.deque = collections.deque()
@@ -94,16 +93,46 @@ class PerturbedEnv:
     def reset(self):
         obs = self._inner.reset()
         scale = (self._spec.get("scale") or {}).get("bodies")
-        if scale and not self._scaled:
-            root = ET.fromstring(self.sim.model.get_xml())
-            for body, factor in scale.items():
-                scale_body_xml(root, body, float(factor))
-            self._inner.env.reset_from_xml_string(ET.tostring(root, encoding="unicode"))
-            self._scaled = True
-            obs = self._inner.reset()
+        if scale:
+            obs = self._rescale(scale, obs)
+            self._applied["scaled_bounding_radius_m"] = self._radii(list(scale))
         self._apply_scene()
         self._queue.clear()
         return obs
+
+    def _rescale(self, scale: dict, obs):
+        """Rebuild the scene from scaled MJCF; every reset restores the stock task, so redo it.
+
+        The joint state is saved by name and written back (as hurobo's `reload_model` does).
+        """
+        model = self.sim.model
+        saved = {
+            model.joint(j).name: self.sim.data.qpos[
+                model.jnt_qposadr[j] : model.jnt_qposadr[j] + (7 if model.jnt_type[j] == 0 else 1)
+            ].copy()
+            for j in range(model.njnt)
+        }
+        root = ET.fromstring(model.get_xml())
+        for body, factor in scale.items():
+            scale_body_xml(root, body, float(factor))
+        self._inner.env.reset_from_xml_string(ET.tostring(root, encoding="unicode"))
+        names = {self.sim.model.joint(j).name for j in range(self.sim.model.njnt)}
+        for name, qpos in saved.items():
+            if name in names:
+                self.sim.data.set_joint_qpos(name, qpos)
+        self.sim.forward()
+        return self._inner.env._get_observations(force_update=True)
+
+    def _radii(self, names: list[str]) -> dict:
+        """Largest geom bounding radius per body: proof that scaling reached the simulator."""
+        model, out = self.sim.model, {}
+        for name in names:
+            bid = model.body_name2id(name)
+            radii = [
+                model.geom_rbound[g] for g in range(model.ngeom) if model.geom_bodyid[g] == bid
+            ]
+            out[name] = round(float(max(radii)), 4) if radii else None
+        return out
 
     def _bodies(self, patterns: list[str]) -> list[int]:
         model = self.sim.model

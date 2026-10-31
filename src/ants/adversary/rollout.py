@@ -25,6 +25,8 @@ class CapHarness:
     camera_width: int = 800
     camera_height: int = 512
     timeout_s: float = 900.0
+    launcher: Path | None = None  # tools/aspire_launch.py; needed when `scene` is set
+    scene: dict | None = None  # perturbation spec (see the launcher), e.g. {"scale": {...}}
 
     def env(self) -> dict[str, str]:
         return dict(
@@ -38,8 +40,18 @@ class CapHarness:
         )
 
     def command(self, case: CaseSpec, program: Path, output_root: Path) -> list[str]:
+        if self.scene:
+            if self.launcher is None:
+                raise ValueError("a scene needs the launcher (tools/aspire_launch.py)")
+            output_root.mkdir(parents=True, exist_ok=True)
+            spec = output_root / "scene.json"
+            spec.write_text(json.dumps(self.scene, indent=1), encoding="utf-8")
+            head = [str(self.root / ".venv-libero" / "bin" / "python"), str(self.launcher),
+                    str(spec), "--"]  # fmt: skip
+        else:
+            head = [str(self.root / ".venv-libero" / "bin" / "cap-harness")]
         return [
-            str(self.root / ".venv-libero" / "bin" / "cap-harness"),
+            *head,
             "run",
             "--benchmark", "libero-pro",
             "--suite", case.suite,

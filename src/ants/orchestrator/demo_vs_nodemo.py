@@ -8,7 +8,9 @@ acceptance seeds (no model calls at evaluation time).
     uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE \
         --demospec data/demospecs/hurobo_233832.json --out data/runs/demo_vs_nodemo_01
 
-All model calls are cached and logged; --token-budget is a hard cap.
+All model calls are cached and logged; --token-budget is a hard cap on new tokens per run.
+Every program, reply, prompt, feedback, program diff and event is written to the run directory;
+view it with `uv run python -m ants.evalkit.report <run dir>`.
 """
 
 from __future__ import annotations
@@ -20,11 +22,14 @@ from pathlib import Path
 
 from ants.adversary.rollout import CapHarness, feedback
 from ants.contracts import CaseSpec, to_json
+from ants.evalkit.runlog import RunLog, unified_diff
 from ants.synthesizer.generator import build_messages, extract_code, repair_message
 from ants.synthesizer.llm import BudgetExceeded, ChatClient, load_dotenv
 
 EXAMPLE = "examples/libero/object_swap_seed1.py"
 EXAMPLE_TASK = "pick up the alphabet soup and place it in the basket"
+# hurobo E1 real size vs stock LIBERO bowl and plate (smoke-2026-10-31.md)
+REAL_SIZE = {"akita_black_bowl_1_main": 1.227, "plate_1_main": 1.855}
 
 
 def run_sample(
@@ -33,11 +38,13 @@ def run_sample(
     temperature: float,
     args: argparse.Namespace,
     client: ChatClient,
-    harness: CapHarness,
+    harnesses: dict[str, CapHarness],
     demo_summary: dict | None,
+    log: RunLog,
 ) -> dict:
     out = args.out / arm / f"sample{sample}"
     out.mkdir(parents=True, exist_ok=True)
+    rel = f"{arm}/sample{sample}"
     api_ref = (args.aspire / "docs" / "api-reference.md").read_text(encoding="utf-8")
     example = (args.aspire / EXAMPLE).read_text(encoding="utf-8")
     messages = build_messages(api_ref, example, EXAMPLE_TASK, args.task, demo_summary)
@@ -45,23 +52,43 @@ def run_sample(
     debug_case = CaseSpec(
         f"debug-{args.debug_seed}", args.suite, args.task_id, args.debug_seed, "acceptance"
     )
-    program = None
+    log.event("sample_start", arm=arm, sample=sample, temperature=temperature)
+    program = previous_text = None
     for attempt in range(args.repairs + 1):
+        role = "initial" if attempt == 0 else "repair"
         try:
             reply = client.chat(
                 messages, temperature=temperature, tag=f"{arm}/s{sample}/a{attempt}"
             )
         except BudgetExceeded as err:
             record["stopped"] = str(err)
+            log.event("budget_stop", arm=arm, sample=sample, attempt=attempt, reason=str(err))
             break
-        program = out / f"program_attempt{attempt}.py"
-        program.write_text(extract_code(reply.text), encoding="utf-8")
-        trace = harness.run(
+        tokens = reply.prompt_tokens + reply.completion_tokens
+        log.write_json(f"{rel}/messages_attempt{attempt}.json", messages)
+        log.write(f"{rel}/reply_attempt{attempt}.md", reply.text)
+        text = extract_code(reply.text)
+        program = log.write(f"{rel}/program_attempt{attempt}.py", text)
+        diff = ""
+        if previous_text is not None:
+            diff = unified_diff(previous_text, text, f"attempt{attempt - 1}", f"attempt{attempt}")
+            log.write(f"{rel}/diff_attempt{attempt}.diff", diff)
+        previous_text = text
+        log.event(
+            "program", arm=arm, sample=sample, attempt=attempt, role=role, tokens=tokens,
+            from_cache=reply.from_cache, lines=len(text.splitlines()),
+            diff_lines=len(diff.splitlines()),
+        )  # fmt: skip
+        trace = harnesses["stock"].run(
             debug_case, program, out / f"debug_attempt{attempt}", f"{arm}-s{sample}-a{attempt}"
         )
         record["attempts"].append(
-            {"attempt": attempt, "tokens": reply.prompt_tokens + reply.completion_tokens,
+            {"attempt": attempt, "role": role, "tokens": tokens,
              "from_cache": reply.from_cache, "trace": json.loads(to_json(trace))}
+        )  # fmt: skip
+        log.event(
+            "rollout", arm=arm, sample=sample, attempt=attempt, seed=args.debug_seed,
+            success=trace.task_success, reason=trace.termination_reason, wall_s=trace.wall_s,
         )  # fmt: skip
         print(
             f"[{arm} s{sample} a{attempt}] success={trace.task_success} "
@@ -70,35 +97,50 @@ def run_sample(
         )
         if trace.task_success or attempt == args.repairs or not trace.run_dir:
             break
-        messages = [
-            *messages,
-            {"role": "assistant", "content": reply.text},
-            repair_message(feedback(Path(trace.run_dir))),
-        ]
+        fb = feedback(Path(trace.run_dir))
+        log.write_json(f"{rel}/feedback_attempt{attempt}.json", fb)
+        log.event("feedback", arm=arm, sample=sample, attempt=attempt, keys=sorted(fb))
+        messages = [*messages, {"role": "assistant", "content": reply.text}, repair_message(fb)]
     record["evaluation"] = []
     if program is not None:
-        for seed in args.eval_seeds:
-            case = CaseSpec(f"eval-{seed}", args.suite, args.task_id, seed, "acceptance")
-            trace = harness.run(case, program, out / f"eval_seed{seed}", f"{arm}-s{sample}-final")
-            record["evaluation"].append(json.loads(to_json(trace)))
-            print(f"[{arm} s{sample} eval {seed}] success={trace.task_success}", flush=True)
-    (out / "record.json").write_text(json.dumps(record, indent=1), encoding="utf-8")
+        for scene, harness in harnesses.items():
+            for seed in args.eval_seeds:
+                case = CaseSpec(
+                    f"eval-{scene}-{seed}", args.suite, args.task_id, seed, "acceptance"
+                )
+                trace = harness.run(
+                    case, program, out / f"eval_{scene}_seed{seed}", f"{arm}-s{sample}-final"
+                )
+                record["evaluation"].append({"scene": scene, **json.loads(to_json(trace))})
+                log.event(
+                    "eval", arm=arm, sample=sample, scene=scene, seed=seed,
+                    success=trace.task_success, reason=trace.termination_reason,
+                )  # fmt: skip
+                print(
+                    f"[{arm} s{sample} eval {scene} {seed}] success={trace.task_success}",
+                    flush=True,
+                )
+    log.write_json(f"{rel}/record.json", record)
+    log.event("sample_end", arm=arm, sample=sample, spent_total=client.spent())
     return record
 
 
 def summarise(records: list[dict]) -> str:
-    lines = [
-        "| Arm | Sample | Debug attempts | Solved debug seed | Eval success | Tokens (uncached) |",
-        "|---|---|---|---|---|---|",
-    ]
+    scenes = sorted({e.get("scene", "stock") for r in records for e in r.get("evaluation", [])})
+    head = "| Arm | Sample | T | Debug attempts | Solved debug seed |"
+    head += "".join(f" Eval {s} |" for s in scenes) + " Tokens (uncached) |"
+    lines = [head, "|" + "---|" * (5 + len(scenes) + 1 - 1)]
     for r in records:
         evals = r.get("evaluation", [])
-        ok = sum(1 for e in evals if e["task_success"])
         solved = any(a["trace"]["task_success"] for a in r["attempts"])
         tokens = sum(a["tokens"] for a in r["attempts"] if not a["from_cache"])
+        cells = []
+        for s in scenes:
+            es = [e for e in evals if e.get("scene", "stock") == s]
+            cells.append(f"{sum(1 for e in es if e['task_success'])}/{len(es)}")
         lines.append(
-            f"| {r['arm']} | {r['sample']} | {len(r['attempts'])} | {'yes' if solved else 'no'} "
-            f"| {ok}/{len(evals)} | {tokens} |"
+            f"| {r['arm']} | {r['sample']} | {r['temperature']} | {len(r['attempts'])} "
+            f"| {'yes' if solved else 'no'} | " + " | ".join(cells) + f" | {tokens} |"
         )
     return "\n".join(lines) + "\n"
 
@@ -111,47 +153,80 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--demospec", type=Path, required=True)
     p.add_argument("--arms", default="nodemo,demo")
-    p.add_argument("--temperatures", default="0.2,0.7", help="one sample per temperature")
+    p.add_argument("--temperatures", default="0.2,0.7,0.5,1.0", help="one sample per temperature")
     p.add_argument("--suite", default="libero_goal_swap")
     p.add_argument("--task-id", type=int, default=8)
     p.add_argument("--task", default="put the bowl on the plate")
     p.add_argument("--debug-seed", type=int, default=51)
     p.add_argument("--eval-seeds", default="51,52,53,54,55")
-    p.add_argument("--repairs", type=int, default=2)
+    p.add_argument("--repairs", type=int, default=4)
     p.add_argument("--model", default="muse-wonder-1.0")
-    p.add_argument("--token-budget", type=int, default=600_000)
+    p.add_argument(
+        "--token-budget", type=int, default=600_000,
+        help="hard cap on NEW (uncached) tokens in this run; earlier ledger spend is not counted",
+    )  # fmt: skip
+    p.add_argument("--usd-per-mtok", type=float, default=13.5, help="for the cost estimate only")
+    p.add_argument(
+        "--scenes", default="stock,scaled",
+        help="scenes each final program is evaluated in; debug and repair always use stock",
+    )  # fmt: skip
+    p.add_argument("--scale-json", default=json.dumps(REAL_SIZE), help="body name -> scale factor")
     args = p.parse_args(argv)
     args.eval_seeds = [int(s) for s in args.eval_seeds.split(",")]
     args.aspire = args.aspire.resolve()
     args.out = args.out.resolve()
     load_dotenv(Path(".env"))
 
-    client = ChatClient(
-        args.model, Path("data/llm_cache"), Path("data/llm_ledger.jsonl"), args.token_budget
-    )
-    harness = CapHarness(args.aspire)
+    client = ChatClient(args.model, Path("data/llm_cache"), Path("data/llm_ledger.jsonl"), 10**12)
+    base_spent = client.spent()
+    client.token_budget = base_spent + args.token_budget
+    launcher = Path(__file__).resolve().parents[3] / "tools" / "aspire_launch.py"
+    harnesses = {}
+    for scene in args.scenes.split(","):
+        if scene == "stock":
+            harnesses[scene] = CapHarness(args.aspire)
+        elif scene == "scaled":
+            harnesses[scene] = CapHarness(
+                args.aspire,
+                launcher=launcher,
+                scene={"scale": {"bodies": json.loads(args.scale_json)}},
+            )
+        else:
+            raise SystemExit(f"unknown scene {scene!r} (stock, scaled)")
+    harnesses.setdefault("stock", CapHarness(args.aspire))
     demo = json.loads(args.demospec.read_text(encoding="utf-8"))["summary"]
-    (args.out).mkdir(parents=True, exist_ok=True)
-    (args.out / "config.json").write_text(
-        json.dumps(
-            {k: str(v) for k, v in vars(args).items()}
-            | {"started": time.strftime("%Y-%m-%dT%H:%M:%S")},
-            indent=1,
-        ),
-        encoding="utf-8",
-    )
+    log = RunLog(args.out)
+    log.write_json(
+        "config.json",
+        {k: str(v) for k, v in vars(args).items()}
+        | {"started": time.strftime("%Y-%m-%dT%H:%M:%S"), "ledger_spent_at_start": base_spent,
+           "scenes": {k: h.scene for k, h in harnesses.items()}},
+    )  # fmt: skip
+    log.event(
+        "run_start", token_budget=args.token_budget, usd_per_mtok=args.usd_per_mtok,
+        model=args.model, ledger_spent_at_start=base_spent,
+    )  # fmt: skip
     records = []
     temps = [float(t) for t in args.temperatures.split(",")]
     for sample, temp in enumerate(temps):
         for arm in args.arms.split(","):
+            if any(r.get("stopped") for r in records):
+                break  # the budget is used up; do not start new samples
             records.append(
                 run_sample(
-                    arm, sample, temp, args, client, harness, demo if arm == "demo" else None
+                    arm, sample, temp, args, client, harnesses, demo if arm == "demo" else None, log
                 )
             )
             (args.out / "summary.md").write_text(summarise(records), encoding="utf-8")
+    new_tokens = client.spent() - base_spent
+    log.event(
+        "run_end", new_tokens=new_tokens, usd_est=round(new_tokens / 1e6 * args.usd_per_mtok, 2)
+    )
     print(summarise(records))
-    print(f"tokens spent (ledger, uncached): {client.spent()}")
+    print(
+        f"new tokens this run: {new_tokens} (cap {args.token_budget}); "
+        f"ledger total {client.spent()}"
+    )
     return 0
 
 
