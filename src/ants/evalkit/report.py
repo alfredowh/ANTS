@@ -299,7 +299,7 @@ def collect(root: Path, base: Path | None = None) -> dict:
             tr = a["trace"]
             add_rollout(
                 sid, item["rid"],
-                {**meta, "kind": "debug", "scene": "stock",
+                {**meta, "kind": "debug", "scene": config.get("debug_scene", "stock"),
                  "seed": int(re.sub(r"\D", "", tr["case_id"].split("-")[-1]) or 0),
                  "attempt": a["attempt"]},
                 Path(tr["run_dir"]) if tr.get("run_dir") else None,
@@ -477,7 +477,7 @@ const evalSum=s=>{const m={};s.evaluation.forEach(e=>{(m[e.scene]??={n:0,ok:0});
 const RO=()=>D.rollouts,byId=id=>D.rollouts.find(r=>r.id===id),smp=id=>D.samples.find(s=>s.id===id);
 const arms=()=>[...new Set(RO().map(r=>r.arm))];
 const armCol=a=>PAL[Math.max(0,arms().indexOf(a))%PAL.length];
-const grp=r=>r.kind==="debug"?"debug seed":r.scene;
+const grp=r=>r.kind==="debug"?"debug ("+r.scene+")":r.scene;
 const groups=()=>[...new Set(RO().map(grp))];
 const label=r=>`${r.sample} · ${r.kind==="debug"?"debug a"+r.attempt:"eval "+grp(r)+" "+r.seed}`;
 let F={arm:"",scene:"",outcome:"",cause:"",q:""},S={key:0,dir:1},CM="tool",HM="result";
@@ -503,10 +503,11 @@ function barChart(rs){
    o+=`<g><title>${esc(a)} · ${esc(g)}: ${k}/${x.length} = ${(p*100).toFixed(0)}% (95% Wilson CI ${(lo*100).toFixed(0)}–${(hi*100).toFixed(0)}%)</title><rect x="${px+2}" y="${yv(p)}" width="${bw-4}" height="${Math.max(1,H-B-yv(p))}" rx="3" fill="${armCol(a)}" opacity=".85"/><line x1="${cx}" x2="${cx}" y1="${yv(lo)}" y2="${yv(hi)}" stroke="var(--ink)" stroke-width="1.5"/><line x1="${cx-4}" x2="${cx+4}" y1="${yv(hi)}" y2="${yv(hi)}" stroke="var(--ink)"/><line x1="${cx-4}" x2="${cx+4}" y1="${yv(lo)}" y2="${yv(lo)}" stroke="var(--ink)"/><text x="${cx}" y="${H-B+30}" text-anchor="middle">${k}/${x.length}</text></g>`})});
  const lg=as.map((a,i)=>`<span class="chip" style="color:${armCol(a)}">■ ${esc(a)}</span>`).join("");
  return `<svg viewBox="0 0 ${W} ${H}">${o}</svg><div>${lg}<span class="muted">bars = success rate, whiskers = 95% Wilson interval</span></div>`}
-const GTITLE={"debug seed":"Debug · stock assets · the seed the generator repairs on","stock":"Evaluation · stock assets","scaled":"Evaluation · scaled assets (real-size bowl and plate)"};
+const gtitle=g=>g.startsWith("debug")?`Debug · ${g.slice(7,-1)} assets · the seed the generator repairs on`:GTITLE[g]||g;
+const GTITLE={"stock":"Evaluation · stock assets","scaled":"Evaluation · scaled assets (real-size bowl and plate)"};
 function heatmaps(rs){
  if(!rs.length)return `<div class="muted">no rollouts match</div>`;
- const order=g=>g==="debug seed"?0:g==="stock"?1:g==="scaled"?2:3,gs=[...new Set(rs.map(grp))].sort((a,b)=>order(a)-order(b)||a.localeCompare(b));
+ const order=g=>g.startsWith("debug")?0:g==="stock"?1:g==="scaled"?2:3,gs=[...new Set(rs.map(grp))].sort((a,b)=>order(a)-order(b)||a.localeCompare(b));
  const col=r=>r.kind==="debug"?"a"+r.attempt:String(r.seed);
  const one=g=>{const x=rs.filter(r=>grp(r)===g),cols=[...new Set(x.map(col))],rows=[...new Set(x.map(r=>r.sample))],cw=30,rh=26,L=104,T=24,W=L+cols.length*cw+6,H=T+rows.length*rh+4,k=x.filter(r=>r.success).length;
   let o=cols.map((c,i)=>`<text x="${L+i*cw+cw/2}" y="${T-8}" text-anchor="middle">${esc(c)}</text>`).join("");
@@ -514,7 +515,7 @@ function heatmaps(rs){
    cols.forEach((c,ci)=>{const r=x.find(r=>r.sample===s&&col(r)===c);if(!r)return;
     const ph=HM==="phase"&&!r.success&&r.depth!=null,fill=r.success?"var(--ok)":ph?"var(--s2)":"var(--bad)",op=r.success?.85:ph?.18+.13*r.depth:.9;
     o+=`<g class="cl" onclick="show('r:${r.id}')"><rect x="${L+ci*cw+1}" y="${T+ri*rh+1}" width="${cw-2}" height="${rh-2}" rx="4" fill="${fill}" opacity="${op}"/>${HM==="phase"&&r.depth!=null?`<text x="${L+ci*cw+cw/2}" y="${T+ri*rh+17}" text-anchor="middle" style="fill:var(--ink);font-weight:600">${r.success?"✓":r.depth}</text>`:""}<title>${esc(label(r))}\n${r.success?"success":"failed: "+esc(r.cause)}${r.phase&&!r.success?"\nstopped at: "+esc(r.phase):""}</title></g>`})});
-  return `<div style="margin:0 24px 8px 0"><div style="font-weight:600;color:var(--ink)">${esc(GTITLE[g]||g)} <span class="muted" style="font-weight:400">· ${k}/${x.length} success</span></div><svg viewBox="0 0 ${W} ${H}" style="width:${W}px;max-width:100%">${o}</svg></div>`};
+  return `<div style="margin:0 24px 8px 0"><div style="font-weight:600;color:var(--ink)">${esc(gtitle(g))} <span class="muted" style="font-weight:400">· ${k}/${x.length} success</span></div><svg viewBox="0 0 ${W} ${H}" style="width:${W}px;max-width:100%">${o}</svg></div>`};
  const legend=HM==="phase"?`failed cells show the furthest stage reached (0 = never closed the gripper … 6 = released over the plate, task not done); darker orange = further. ✓ = success.`:"green = success, red = failure.";
  return `<div style="display:flex;flex-wrap:wrap">${gs.map(one).join("")}</div><div class="muted">${legend} Click a cell to open the rollout.</div>`}
 function causeChart(rs){
@@ -661,6 +662,42 @@ function compare(){const vr=RO().filter(r=>Object.keys(r.videos||{}).length);
 function system2(){return system2View(D.system2||[])}
 
 /* ---------- events, samples (program trace) ---------- */
+/* ---------- matched demo vs nodemo ---------- */
+let MC={all:false};
+const fmtP=p=>p<0.001?"< 0.001":"= "+p.toFixed(3);
+function binP(k,n){if(!n)return 1;const m=Math.min(k,n-k);let c=1,t=0;for(let i=0;i<=m;i++){if(i>0)c=c*(n-i+1)/i;t+=c}return Math.min(1,2*t/Math.pow(2,n))}
+function matchedData(){const by={};D.samples.forEach(s=>{(by[s.temperature]??={})[s.arm]=s});
+ const P=[],U=[];Object.keys(by).map(Number).sort((a,b)=>a-b).forEach(t=>{const g=by[t];g.demo&&g.nodemo?P.push({t,d:g.demo,n:g.nodemo}):U.push(...Object.values(g))});
+ const ev=s=>RO().filter(r=>r.sample===s.id&&r.kind==="eval"),cases=[];
+ P.forEach(p=>ev(p.n).forEach(rb=>{const ra=ev(p.d).find(r=>grp(r)===grp(rb)&&r.seed===rb.seed);if(ra)cases.push({p,t:p.t,g:grp(rb),seed:rb.seed,a:ra,b:rb})}));
+ return{P,U,cases}}
+const outc=c=>c.a.success&&c.b.success?"both succeed":c.a.success?"demo only":c.b.success?"nodemo only":"both fail";
+const outCls=o=>o==="demo only"?"ok":o==="nodemo only"?"bad":o==="both succeed"?"acc":"";
+function mcell(r,x,y,w,h){const ph=HM==="phase"&&!r.success&&r.depth!=null,fill=r.success?"var(--ok)":ph?"var(--s2)":"var(--bad)",op=r.success?.85:ph?.18+.13*r.depth:.9;
+ return `<g class="cl" onclick="show('r:${r.id}')"><rect x="${x+1}" y="${y+1}" width="${w-2}" height="${h-2}" rx="4" fill="${fill}" opacity="${op}"/>${HM==="phase"&&r.depth!=null?`<text x="${x+w/2}" y="${y+h-8}" text-anchor="middle" style="fill:var(--ink);font-weight:600">${r.success?"✓":r.depth}</text>`:""}<title>${esc(label(r))}\n${r.success?"success":"failed: "+esc(r.cause)}${r.phase&&!r.success?"\nstopped at: "+esc(r.phase):""}</title></g>`}
+function pairGrid(M,g){const x=M.cases.filter(c=>c.g===g),seeds=[...new Set(x.map(c=>c.seed))].sort((a,b)=>a-b),cw=30,rh=26,L=120,T=24,rows=M.P.flatMap(p=>[[p,"demo",p.d],[p,"nodemo",p.n]]),W=L+seeds.length*cw+6,H=T+rows.length*rh+4;
+ let o=seeds.map((sd,i)=>`<text x="${L+i*cw+cw/2}" y="${T-8}" text-anchor="middle">${sd}</text>`).join("");
+ rows.forEach(([p,arm,s],ri)=>{o+=`<text x="${L-6}" y="${T+ri*rh+17}" text-anchor="end" style="${arm==="demo"?"fill:var(--s1)":"fill:var(--s2)"}">T ${p.t} · ${arm}</text>`;
+  seeds.forEach((sd,ci)=>{const c=x.find(c=>c.p===p&&c.seed===sd);if(c)o+=mcell(arm==="demo"?c.a:c.b,L+ci*cw,T+ri*rh,cw,rh)});
+  if(ri%2)o+=`<line x1="4" x2="${W}" y1="${T+(ri+1)*rh+2}" y2="${T+(ri+1)*rh+2}" stroke="var(--line)"/>`});
+ return `<div style="margin:0 24px 8px 0"><div style="font-weight:600;color:var(--ink)">${esc(gtitle(g))}</div><svg viewBox="0 0 ${W} ${H}" style="width:${W}px;max-width:100%">${o}</svg></div>`}
+function matched(){const M=matchedData(),{P,U,cases}=M;
+ if(!P.length)return `<h2 style="margin:0 0 10px">Matched demo vs nodemo</h2><p class="muted">This run has no demo and nodemo sample at the same temperature, so there is nothing to match.</p>`;
+ const n=k=>cases.filter(c=>outc(c)===k).length,da=n("demo only"),nb=n("nodemo only"),bo=n("both succeed"),ne=n("both fail"),dis=da+nb,gs=[...new Set(cases.map(c=>c.g))].sort((a,b)=>(a.startsWith("debug")?0:a==="stock"?1:2)-(b.startsWith("debug")?0:b==="stock"?1:2));
+ const sc=gs.map(g=>{const x=cases.filter(c=>c.g===g),a=x.filter(c=>c.a.success).length,b=x.filter(c=>c.b.success).length,d=x.filter(c=>outc(c)==="demo only").length,e=x.filter(c=>outc(c)==="nodemo only").length;return `<tr><td>${esc(gtitle(g))}</td><td>${x.length}</td><td>${a}/${x.length}</td><td>${b}/${x.length}</td><td>${d}</td><td>${e}</td><td>${x.filter(c=>outc(c)==="both succeed").length}</td><td>${x.filter(c=>outc(c)==="both fail").length}</td><td>${d+e?fmtP(binP(d,d+e)).replace("= ",""):"–"}</td></tr>`}).join("");
+ const dbg=P.map(p=>{const f=s=>{const k=s.attempts.findIndex(a=>a.success);return k>=0?`${chip("solved","ok")} after ${k+1} of ${s.attempts.length}`:`${chip("not solved","bad")} ${s.attempts.length} attempts`};return `<tr class="row" onclick="show('${p.d.id}')"><td>T ${p.t}</td><td>${f(p.d)}</td><td>${f(p.n)}</td><td>${(p.d.tokens_new/1e3).toFixed(0)}k / ${(p.n.tokens_new/1e3).toFixed(0)}k</td></tr>`}).join("");
+ const st=D.stages||[],dd=cases.filter(c=>c.a.depth!=null&&c.b.depth!=null);
+ const stg=st.map((nm,i)=>{const a=dd.filter(c=>c.a.depth>=i+1).length,b=dd.filter(c=>c.b.depth>=i+1).length;return `<tr><td>${i+1}. ${esc(nm)}</td><td>${a}</td><td>${b}</td><td style="color:${a>b?"var(--ok)":a<b?"var(--bad)":"var(--mute)"}">${a-b>0?"+":""}${a-b}</td></tr>`}).join("");
+ const shown=cases.filter(c=>MC.all||outc(c)==="demo only"||outc(c)==="nodemo only");
+ const list=shown.map(c=>{const o=outc(c);return `<tr><td>T ${c.t}</td><td>${esc(c.g)}</td><td>${c.seed}</td><td>${chip(o,outCls(o))}</td><td class="muted">${esc(c.a.phase||"–")}</td><td class="muted">${esc(c.b.phase||"–")}</td><td><button class="chip acc" onclick="C.a='${c.a.id}';C.b='${c.b.id}';show('compare')">compare videos ▸</button></td></tr>`}).join("")||"<tr><td colspan=7 class=muted>no cases</td></tr>";
+ return `<h2 style="margin:0 0 6px">Matched demo vs nodemo</h2>
+ <p class="muted" style="margin-top:0">A demo sample is paired with the nodemo sample at the <b>same temperature</b>; their evaluation rollouts are paired on the <b>same scene and seed</b>. Only matched pairs and cases count here${U.length?`; ignored for lack of a partner: ${U.map(s=>esc(s.id)+" (T "+s.temperature+")").join(", ")}`:""}.</p>
+ <div class="grid"><div class="stat"><span class="muted">matched pairs</span><b>${P.length}</b><span class="muted">${cases.length} matched cases</span></div><div class="stat"><span class="muted">demo succeeds, nodemo fails</span><b style="color:var(--ok)">${da}</b></div><div class="stat"><span class="muted">nodemo succeeds, demo fails</span><b style="color:var(--bad)">${nb}</b></div><div class="stat"><span class="muted">both succeed / both fail</span><b>${bo} / ${ne}</b></div><div class="stat"><span class="muted">sign test (exact, two-sided)</span><b>${dis?"p "+fmtP(binP(da,dis)):"–"}</b><span class="muted">on the ${dis} cases where they differ</span></div></div>
+ <div class="card pad"><h3 class="t">By scene</h3><table><tr><th>Scene</th><th>cases</th><th>demo ok</th><th>nodemo ok</th><th>demo only</th><th>nodemo only</th><th>both ok</th><th>both fail</th><th>sign test p</th></tr>${sc}</table><p class="muted">The cases of one pair share a program, so they are not independent: read p as a rough guide with ${P.length} pairs, not as evidence. Debug columns are not matched case by case (attempt counts differ); see the debug table.</p></div>
+ <div class="card pad viz"><h3 class="t">Matched rollouts ${["result","phase"].map(m=>`<button class="chip ${HM===m?"acc":""}" onclick="setHM('${m}')">colour by ${m}</button>`).join("")}</h3><div style="display:flex;flex-wrap:wrap">${gs.map(g=>pairGrid(M,g)).join("")}</div><div class="muted">One row per sample, one column per seed; blue label = demo, orange = nodemo. Click a cell to open the rollout.</div></div>
+ <div class="two"><div class="card pad"><h3 class="t">Debug (each pair)</h3><table><tr><th>pair</th><th>demo</th><th>nodemo</th><th>new tokens demo / nodemo</th></tr>${dbg}</table></div>
+ <div class="card pad"><h3 class="t">Task phases reached, matched cases only</h3><table><tr><th>stage</th><th>demo</th><th>nodemo</th><th>difference</th></tr>${stg}</table><p class="muted">Counts of the ${dd.length} matched cases with a step log. Proxies, see the explorer.</p></div></div>
+ <div class="card pad"><h3 class="t">Cases ${chip(shown.length+" shown")}<button class="chip ${MC.all?"acc":""}" onclick="MC.all=!MC.all;show('matched',true)">${MC.all?"all matched cases":"only cases where they differ"}</button></h3><table><tr><th>T</th><th>scene</th><th>seed</th><th>outcome</th><th>demo stopped at</th><th>nodemo stopped at</th><th></th></tr>${list}</table></div>`}
 function events(){return `<h3>Events</h3><div class="card"><table><tr><th>Time</th><th>Kind</th><th>Details</th></tr>${D.events.map(e=>{const{time,kind,...r}=e;return `<tr><td class="muted">${esc(time.slice(11))}</td><td>${chip(kind,/stop/.test(kind)?"bad":"")}</td><td>${esc(JSON.stringify(r))}</td></tr>`}).join("")||"<tr><td colspan=3 class=muted>no events recorded (older run)</td></tr>"}</table></div>`}
 function attempt(a){const rail=okc(a.success);
  const calls=a.calls.map(c=>`<span class="${c.ok?"":"f"}" title="${esc(c.code||"")}">${esc(c.name)}</span>`).join("");
@@ -684,12 +721,12 @@ function header(){const n=D.samples.reduce((a,s)=>a+s.tokens_new,0);
  $("#rn").innerHTML=`<select onchange="pick(this.value)" title="Run">${ALL.runs.map((r,i)=>`<option value="${i}" ${r===D?"selected":""}>${esc(r.name)} · ${esc(r.date)} · ${r.samples.length} samples</option>`).join("")}</select>`;$("#hd").innerHTML=chip(RO().length+" rollouts")+chip(n.toLocaleString()+" new tokens")+chip("≈ "+usd(n),"acc")}
 function nav(c){const by={};D.samples.forEach(s=>(by[s.arm]??=[]).push(s));const sel=c.startsWith("r:")?"rollouts":c;
  const b=(id,t)=>`<button class="${sel===id?"on":""}" onclick="show('${id}')">${t}</button>`;
- let h=b("dash","Dashboard")+b("rollouts","Rollouts ("+RO().length+")")+b("compare","Compare")+b("system2","System 2"+((D.system2||[]).length?" ("+D.system2.length+")":""))+b("events","Events ("+D.events.length+")");
+ let h=b("dash","Dashboard")+b("rollouts","Rollouts ("+RO().length+")")+b("compare","Compare")+b("matched","Matched")+b("system2","System 2"+((D.system2||[]).length?" ("+D.system2.length+")":""))+b("events","Events ("+D.events.length+")");
  for(const arm in by){h+=`<h4>${esc(arm)} · trace</h4>`+by[arm].map(s=>{const e=evalSum(s);return `<button class="${c===s.id?"on":""}" onclick="show('${s.id}')">sample ${s.sample} · T ${s.temperature}<div class="sub">${solved(s)?"✓ solved debug":"✗ not solved"} · ${Object.entries(e).map(([k,v])=>k+" "+v.ok+"/"+v.n).join(" · ")||"no eval"}</div></button>`}).join("")}
  $("#nav").innerHTML=h}
 function show(id,keep){const y=window.scrollY;stopPlayer();if(id==="overview")id="dash";cur=id;location.hash=encodeURIComponent(D.name)+"|"+id;nav(id);const m=$("#main");
  if(id==="dash")m.innerHTML=dash();else if(id==="rollouts")m.innerHTML=rollouts();else if(id==="events")m.innerHTML=events();else if(id==="system2")m.innerHTML=system2();
- else if(id==="compare"){m.innerHTML=compare();mount([byId(C.a),byId(C.b)].filter(Boolean),"cmp")}
+ else if(id==="matched")m.innerHTML=matched();else if(id==="compare"){m.innerHTML=compare();mount([byId(C.a),byId(C.b)].filter(Boolean),"cmp")}
  else if(id.startsWith("r:")){const r=byId(id.slice(2));if(!r){m.innerHTML="<p>rollout not found</p>";return}m.innerHTML=explorer(r);mount([r],"single")}
  else{const s=smp(id);m.innerHTML=s?sample(s):"<p>not found</p>"}
  updCnt();
