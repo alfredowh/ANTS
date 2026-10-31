@@ -49,7 +49,9 @@ These perturbations were chosen by hand, not by an adversary, and are mild. Fric
 
 ## Real-size scene (bowl x1.227, plate x1.855)
 
-The winning program, unchanged, on the real-size scene of hurobo E1 (`tools/aspire_launch.py` `scale`, seeds 51-55, runs in `data/scaled_test/`): **0/5**. On seeds 51 and 52 the first `move_to_pose` times out and the bowl ends 9-14 cm from the plate centre without the task counting as done. So a program that is perfect on stock objects does not transfer to your real object sizes: a size-robustness failure of the kind System 2 should find.
+The winning program, unchanged, on the real-size scene of hurobo E1 (`tools/aspire_launch.py` `scale`, seeds 51-55, runs in `data/scaled_test/`) scored **0/5 under LIBERO's own success rule**. That number does not measure the program: LIBERO's "on top of" check needs the bowl centre within a fixed 3 cm of the plate centre, tuned for the stock plate (radius ~10 cm). The real plate has radius ~18 cm, and in the final frame of seed 51 the bowl rests on it, 9 cm from the centre. So the rule, not the robot, failed.
+
+Decision (2026-10-31): for scaled scenes the tolerance grows with the target, 3 cm x its scale factor (5.6 cm for the plate), via `scale_ontop_tolerance` in the launcher. Contact and height rules are unchanged. Scaled results are only comparable under this rule, so final programs are re-scored with `--eval-only`. The 9-14 cm offsets seen on seeds 51-52 would still fail even this rule, so a placement error at real size may remain; that is untested until the re-score.
 
 Correction: the launcher's first version rebuilt the scene and then called `reset()` again, which restores the stock task, so an earlier "scaled" success was on stock objects and is discarded. The launcher now rebuilds after each reset and logs the scaled bounding radii (bowl 0.0841 -> 0.1031 m, plate 0.0974 -> 0.1806 m) as proof.
 

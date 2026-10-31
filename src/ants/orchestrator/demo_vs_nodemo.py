@@ -125,6 +125,37 @@ def run_sample(
     return record
 
 
+def reevaluate(args: argparse.Namespace, harnesses: dict[str, CapHarness], log: RunLog) -> list:
+    """Re-score the final program of every finished sample in the chosen scenes (no model calls)."""
+    records = []
+    for rec_path in sorted(args.out.glob("*/sample*/record.json")):
+        record = json.loads(rec_path.read_text(encoding="utf-8"))
+        sample_dir = rec_path.parent
+        last = record["attempts"][-1]["attempt"]
+        program = sample_dir / f"program_attempt{last}.py"
+        scenes = [s for s in harnesses if s != "stock" or args.scenes == "stock"]
+        record["evaluation"] = [e for e in record["evaluation"] if e.get("scene") not in scenes]
+        for scene in scenes:
+            for seed in args.eval_seeds:
+                case = CaseSpec(
+                    f"eval-{scene}-{seed}", args.suite, args.task_id, seed, "acceptance"
+                )
+                tag = f"{record['arm']}-s{record['sample']}-final"
+                trace = harnesses[scene].run(
+                    case, program, sample_dir / f"eval_{scene}_seed{seed}", tag
+                )
+                record["evaluation"].append({"scene": scene, **json.loads(to_json(trace))})
+                log.event(
+                    "reeval", arm=record["arm"], sample=record["sample"], scene=scene, seed=seed,
+                    success=trace.task_success, reason=trace.termination_reason,
+                )  # fmt: skip
+                print(f"[{record['arm']} s{record['sample']} reeval {scene} {seed}] "
+                      f"success={trace.task_success}", flush=True)  # fmt: skip
+        rec_path.write_text(json.dumps(record, indent=1), encoding="utf-8")
+        records.append(record)
+    return records
+
+
 def summarise(records: list[dict]) -> str:
     scenes = sorted({e.get("scene", "stock") for r in records for e in r.get("evaluation", [])})
     head = "| Arm | Sample | T | Debug attempts | Solved debug seed |"
@@ -171,6 +202,10 @@ def main(argv: list[str] | None = None) -> int:
         help="scenes each final program is evaluated in; debug and repair always use stock",
     )  # fmt: skip
     p.add_argument("--scale-json", default=json.dumps(REAL_SIZE), help="body name -> scale factor")
+    p.add_argument(
+        "--eval-only", action="store_true",
+        help="no generation: re-score the final programs of an existing --out run in --scenes",
+    )  # fmt: skip
     args = p.parse_args(argv)
     args.eval_seeds = [int(s) for s in args.eval_seeds.split(",")]
     args.aspire = args.aspire.resolve()
@@ -194,8 +229,13 @@ def main(argv: list[str] | None = None) -> int:
         else:
             raise SystemExit(f"unknown scene {scene!r} (stock, scaled)")
     harnesses.setdefault("stock", CapHarness(args.aspire))
-    demo = json.loads(args.demospec.read_text(encoding="utf-8"))["summary"]
     log = RunLog(args.out)
+    if args.eval_only:
+        records = reevaluate(args, harnesses, log)
+        (args.out / "summary.md").write_text(summarise(records), encoding="utf-8")
+        print(summarise(records))
+        return 0
+    demo = json.loads(args.demospec.read_text(encoding="utf-8"))["summary"]
     log.write_json(
         "config.json",
         {k: str(v) for k, v in vars(args).items()}

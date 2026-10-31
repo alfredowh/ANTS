@@ -20,7 +20,8 @@ perturbation.json (every key optional):
      "scale":     {"bodies": {"akita_black_bowl_1_main": 1.227, "plate_1_main": 1.855}}}
 
 "bodies" in physics match by substring of the MuJoCo body name. "scale" rebuilds the scene
-from its XML at the first reset (experimental: object placement is not re-checked).
+from its XML after every reset (experimental: object placement is not re-checked) and scales
+LIBERO's 0.03 m "on top of" centre tolerance by the target's factor (`scale_ontop_tolerance`).
 """
 
 from __future__ import annotations
@@ -70,6 +71,31 @@ def scale_body_xml(root: ET.Element, body_name: str, factor: float) -> None:
             _scale_floats(el, "pos", factor)
             _scale_floats(el, "mass", factor**3)
             _scale_floats(el, "diaginertia", factor**5)
+
+
+def scale_ontop_tolerance(factors: dict[str, float]) -> None:
+    """Make LIBERO's "on top of" centre tolerance grow with the target's scale.
+
+    LIBERO's `ObjectState.check_ontop` requires the object's centre within 0.03 m (xy) of the
+    target's centre, a value tuned for the stock plate. At real size the plate is larger, so the
+    tolerance becomes 0.03 m x the target's scale factor. Contact and height rules are unchanged.
+    `factors` maps a body name such as "plate_1_main" to its scale.
+    """
+    import numpy as np
+    from libero.envs.object_states.base_object_states import ObjectState
+
+    def check_ontop(self, other):
+        env = self.env
+        this_pos = env.sim.data.body_xpos[env.obj_body_id[self.object_name]]
+        other_pos = env.sim.data.body_xpos[env.obj_body_id[other.object_name]]
+        tolerance = 0.03 * float(factors.get(f"{other.object_name}_main", 1.0))
+        return (
+            this_pos[2] <= other_pos[2]
+            and self.check_contact(other)
+            and np.linalg.norm(this_pos[:2] - other_pos[:2]) < tolerance
+        )
+
+    ObjectState.check_ontop = check_ontop
 
 
 class PerturbedEnv:
@@ -209,6 +235,9 @@ def main() -> int:
         return lambda **kwargs: PerturbedEnv(factory(**kwargs), spec)
 
     adapter._load_offscreen_render_env = patched_loader
+    scale = (spec.get("scale") or {}).get("bodies")
+    if scale:
+        scale_ontop_tolerance({k: float(v) for k, v in scale.items()})
     return cli.main(harness_argv)
 
 
