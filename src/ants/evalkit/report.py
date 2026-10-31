@@ -27,6 +27,7 @@ from datetime import datetime
 from pathlib import Path
 
 from ants.adversary.rollout import feedback
+from ants.evalkit.phases import STAGES, targets_from_run, task_phases
 from ants.evalkit.runlog import unified_diff
 from ants.evalkit.system2_view import JS as SYSTEM2_JS
 
@@ -61,11 +62,11 @@ def _arr(v):
     return v["$array_inline"] if isinstance(v, dict) and "$array_inline" in v else v
 
 
-def _signals(run: Path, max_points: int = 500) -> dict | None:
-    """Per-step end-effector position, gripper state/command and joint tracking error."""
+def _steps(run: Path) -> list[tuple]:
+    """Per step: (sim time, eef position, gripper state, gripper command, joint error)."""
     path = run / "episode" / "steps.jsonl"
     if not path.exists():
-        return None
+        return []
     rows = []
     with path.open(encoding="utf-8") as fh:
         for line in fh:
@@ -89,6 +90,11 @@ def _signals(run: Path, max_points: int = 500) -> dict | None:
                 err = sum((a - b) ** 2 for a, b in zip(joints, target, strict=True)) ** 0.5
             rows.append((st["simulator_time_s"], pos, (state.get("gripper_positions") or {}).get("primary"),
                          arm.get("gripper_position"), err))  # fmt: skip
+    return rows
+
+
+def _signals(rows: list[tuple], max_points: int = 500) -> dict | None:
+    """The per-step rows thinned to at most `max_points`, as parallel lists."""
     if not rows:
         return None
     stride = max(1, -(-len(rows) // max_points))
@@ -164,6 +170,11 @@ def _rollout(
         cause = "program error"
     else:
         cause = "finished, task not done"
+    rows = _steps(run_dir)
+    phases = task_phases(
+        [r[0] for r in rows], [r[1] for r in rows], [r[2] for r in rows],
+        targets_from_run(run_dir), success,
+    )  # fmt: skip
     out = run_dir / "logs" / "program.stdout"
     err = run_dir / "logs" / "program.stderr"
     return {
@@ -172,7 +183,10 @@ def _rollout(
         "fps": index.get("fps", 20.0),
         "overlays": overlays,
         "keyframes": _keyframes(str(run_dir), base, 8),
-        "signals": _signals(run_dir),
+        "signals": _signals(rows),
+        "phases": phases,
+        "phase": phases["label"] if phases else None,
+        "depth": phases["depth"] if phases else None,
         "spans": spans,
         "steps": outcome.get("steps_executed"),
         "sim_s": outcome.get("simulator_duration_s"),
@@ -339,6 +353,7 @@ def collect(root: Path, base: Path | None = None) -> dict:
         "samples": samples,
         "rollouts": rollouts,
         "system2": _system2(root),
+        "stages": STAGES,
         "usd_per_mtok": float(config.get("usd_per_mtok", 13.5)),
     }
 
@@ -465,8 +480,11 @@ const armCol=a=>PAL[Math.max(0,arms().indexOf(a))%PAL.length];
 const grp=r=>r.kind==="debug"?"debug seed":r.scene;
 const groups=()=>[...new Set(RO().map(grp))];
 const label=r=>`${r.sample} · ${r.kind==="debug"?"debug a"+r.attempt:"eval "+grp(r)+" "+r.seed}`;
-let F={arm:"",scene:"",outcome:"",cause:"",q:""},S={key:0,dir:1};
-const filt=()=>RO().filter(r=>(!F.arm||r.arm===F.arm)&&(!F.scene||grp(r)===F.scene)&&(!F.outcome||(F.outcome==="success")===r.success)&&(!F.cause||r.cause===F.cause)&&(!F.q||(r.id+" "+r.cause+" "+grp(r)+" "+r.seed).toLowerCase().includes(F.q)));
+let F={arm:"",scene:"",outcome:"",cause:"",q:""},S={key:0,dir:1},CM="tool",HM="result";
+const causeOf=r=>CM==="phase"?(r.phase||r.cause):r.cause;
+const filt=()=>RO().filter(r=>(!F.arm||r.arm===F.arm)&&(!F.scene||grp(r)===F.scene)&&(!F.outcome||(F.outcome==="success")===r.success)&&(!F.cause||causeOf(r)===F.cause)&&(!F.q||(r.id+" "+r.cause+" "+(r.phase||"")+" "+grp(r)+" "+r.seed).toLowerCase().includes(F.q)));
+function setCM(v){CM=v;F.cause="";show(cur,true)}
+function setHM(v){HM=v;show(cur,true)}
 function setF(k,v){F[k]=v;if(k==="q")renderRes();else show(cur,true)}
 function filterBar(){
  const opt=(k,vals,all)=>`<select onchange="setF('${k}',this.value)"><option value="">${all}</option>${vals.map(v=>`<option ${F[k]===v?"selected":""}>${esc(v)}</option>`).join("")}</select>`;
@@ -485,23 +503,27 @@ function barChart(rs){
    o+=`<g><title>${esc(a)} · ${esc(g)}: ${k}/${x.length} = ${(p*100).toFixed(0)}% (95% Wilson CI ${(lo*100).toFixed(0)}–${(hi*100).toFixed(0)}%)</title><rect x="${px+2}" y="${yv(p)}" width="${bw-4}" height="${Math.max(1,H-B-yv(p))}" rx="3" fill="${armCol(a)}" opacity=".85"/><line x1="${cx}" x2="${cx}" y1="${yv(lo)}" y2="${yv(hi)}" stroke="var(--ink)" stroke-width="1.5"/><line x1="${cx-4}" x2="${cx+4}" y1="${yv(hi)}" y2="${yv(hi)}" stroke="var(--ink)"/><line x1="${cx-4}" x2="${cx+4}" y1="${yv(lo)}" y2="${yv(lo)}" stroke="var(--ink)"/><text x="${cx}" y="${H-B+30}" text-anchor="middle">${k}/${x.length}</text></g>`})});
  const lg=as.map((a,i)=>`<span class="chip" style="color:${armCol(a)}">■ ${esc(a)}</span>`).join("");
  return `<svg viewBox="0 0 ${W} ${H}">${o}</svg><div>${lg}<span class="muted">bars = success rate, whiskers = 95% Wilson interval</span></div>`}
-function heatmap(rs){
- const cols=[...new Map(rs.map(r=>[r.kind==="debug"?"debug a"+r.attempt:grp(r)+" "+r.seed,r])).keys()];
- const rows=[...new Set(rs.map(r=>r.sample))];
- if(!rows.length)return `<div class="muted">no rollouts match</div>`;
- const cw=24,rh=24,L=110,T=84,W=L+cols.length*cw+8,H=T+rows.length*rh+4;
- let o=cols.map((c,i)=>`<text transform="translate(${L+i*cw+cw/2+4},${T-6}) rotate(-55)">${esc(c)}</text>`).join("");
- rows.forEach((s,ri)=>{o+=`<text x="${L-6}" y="${T+ri*rh+16}" text-anchor="end">${esc(s)}</text>`;
-  cols.forEach((c,ci)=>{const r=rs.find(r=>r.sample===s&&(r.kind==="debug"?"debug a"+r.attempt:grp(r)+" "+r.seed)===c);if(!r)return;
-   o+=`<rect class="cl" x="${L+ci*cw+1}" y="${T+ri*rh+1}" width="${cw-2}" height="${rh-2}" rx="4" fill="${r.success?"var(--ok)":"var(--bad)"}" opacity="${r.success?.8:.9}" onclick="show('r:${r.id}')"><title>${esc(label(r))}\n${r.success?"success":"failed: "+esc(r.cause)}</title></rect>`})});
- return `<svg viewBox="0 0 ${W} ${H}" style="max-width:${W}px">${o}</svg><div class="muted">green = success, red = failure · click a cell to open the rollout</div>`}
+const GTITLE={"debug seed":"Debug · stock assets · the seed the generator repairs on","stock":"Evaluation · stock assets","scaled":"Evaluation · scaled assets (real-size bowl and plate)"};
+function heatmaps(rs){
+ if(!rs.length)return `<div class="muted">no rollouts match</div>`;
+ const order=g=>g==="debug seed"?0:g==="stock"?1:g==="scaled"?2:3,gs=[...new Set(rs.map(grp))].sort((a,b)=>order(a)-order(b)||a.localeCompare(b));
+ const col=r=>r.kind==="debug"?"a"+r.attempt:String(r.seed);
+ const one=g=>{const x=rs.filter(r=>grp(r)===g),cols=[...new Set(x.map(col))],rows=[...new Set(x.map(r=>r.sample))],cw=30,rh=26,L=104,T=24,W=L+cols.length*cw+6,H=T+rows.length*rh+4,k=x.filter(r=>r.success).length;
+  let o=cols.map((c,i)=>`<text x="${L+i*cw+cw/2}" y="${T-8}" text-anchor="middle">${esc(c)}</text>`).join("");
+  rows.forEach((s,ri)=>{o+=`<text x="${L-6}" y="${T+ri*rh+17}" text-anchor="end">${esc(s)}</text>`;
+   cols.forEach((c,ci)=>{const r=x.find(r=>r.sample===s&&col(r)===c);if(!r)return;
+    const ph=HM==="phase"&&!r.success&&r.depth!=null,fill=r.success?"var(--ok)":ph?"var(--s2)":"var(--bad)",op=r.success?.85:ph?.18+.13*r.depth:.9;
+    o+=`<g class="cl" onclick="show('r:${r.id}')"><rect x="${L+ci*cw+1}" y="${T+ri*rh+1}" width="${cw-2}" height="${rh-2}" rx="4" fill="${fill}" opacity="${op}"/>${HM==="phase"&&r.depth!=null?`<text x="${L+ci*cw+cw/2}" y="${T+ri*rh+17}" text-anchor="middle" style="fill:var(--ink);font-weight:600">${r.success?"✓":r.depth}</text>`:""}<title>${esc(label(r))}\n${r.success?"success":"failed: "+esc(r.cause)}${r.phase&&!r.success?"\nstopped at: "+esc(r.phase):""}</title></g>`})});
+  return `<div style="margin:0 24px 8px 0"><div style="font-weight:600;color:var(--ink)">${esc(GTITLE[g]||g)} <span class="muted" style="font-weight:400">· ${k}/${x.length} success</span></div><svg viewBox="0 0 ${W} ${H}" style="width:${W}px;max-width:100%">${o}</svg></div>`};
+ const legend=HM==="phase"?`failed cells show the furthest stage reached (0 = never closed the gripper … 6 = released over the plate, task not done); darker orange = further. ✓ = success.`:"green = success, red = failure.";
+ return `<div style="display:flex;flex-wrap:wrap">${gs.map(one).join("")}</div><div class="muted">${legend} Click a cell to open the rollout.</div>`}
 function causeChart(rs){
- const fails=rs.filter(r=>!r.success),m={};fails.forEach(r=>{(m[r.cause]??={n:0,by:{}});m[r.cause].n++;m[r.cause].by[r.arm]=(m[r.cause].by[r.arm]||0)+1});
+ const fails=rs.filter(r=>!r.success),m={};fails.forEach(r=>{const c=causeOf(r);(m[c]??={n:0,by:{}});m[c].n++;m[c].by[r.arm]=(m[c].by[r.arm]||0)+1});
  const ents=Object.entries(m).sort((a,b)=>b[1].n-a[1].n);window._causes=ents.map(e=>e[0]);
  if(!ents.length)return `<div class="muted">no failures in this selection</div>`;
  const W=560,rh=26,L=210,mx=ents[0][1].n,H=ents.length*rh+6;
  const o=ents.map(([c,v],i)=>{let x=L;const y=i*rh+3;return `<g class="cl" onclick="setF('cause',window._causes[${i}])"><text x="${L-6}" y="${y+16}" text-anchor="end" style="${F.cause===c?"fill:var(--ink);font-weight:700":""}">${esc(c.length>32?c.slice(0,31)+"…":c)}</text>${Object.entries(v.by).map(([a,n])=>{const w=(W-L-30)*n/mx,r=`<rect x="${x}" y="${y}" width="${w}" height="${rh-8}" rx="3" fill="${armCol(a)}" opacity=".85"><title>${esc(c)} · ${esc(a)}: ${n}</title></rect>`;x+=w;return r}).join("")}<text x="${x+5}" y="${y+16}">${v.n}</text></g>`}).join("");
- return `<svg viewBox="0 0 ${W} ${H}">${o}</svg><div class="muted">failed rollouts by first failing tool call (or end state) · click a bar to filter</div>`}
+ return `<svg viewBox="0 0 ${W} ${H}">${o}</svg><div class="muted">failed rollouts by ${CM==="phase"?"the task phase they stopped at":"first failing tool call (or end state)"} · click a bar to filter</div>`}
 function scatter(rs){
  const pts=D.samples.map(s=>{const e=rs.filter(r=>r.sample===s.id&&r.kind==="eval");return e.length?{s,n:e.length,p:e.filter(r=>r.success).length/e.length,x:s.tokens_new}:null}).filter(Boolean);
  if(!pts.length)return `<div class="muted">no evaluated samples match</div>`;
@@ -516,6 +538,14 @@ function summaryTable(rs){
  return `<table><tr><th>Arm</th><th>Outcome</th><th>n</th><th>median steps</th><th>median sim s</th><th>median program s</th><th>median tool calls</th></tr>${rows.join("")}</table>`}
 
 /* ---------- dashboard ---------- */
+const cmToggle=()=>["tool","phase"].map(m=>`<button class="chip ${CM===m?"acc":""}" onclick="setCM('${m}')">${m==="tool"?"by tool call":"by task phase"}</button>`).join("");
+function funnel(rs){
+ const st=D.stages||[],rr=rs.filter(r=>r.depth!=null);
+ if(!rr.length)return `<div class="muted">no phase data (rollouts without a step log)</div>`;
+ const as=arms().filter(a=>rr.some(r=>r.arm===a)),W=560,rh=26,L=150,H=st.length*rh+6,mx=rr.length;
+ const o=st.map((nm,i)=>{let x=L;const y=i*rh+3,n=rr.filter(r=>r.depth>=i+1).length;
+  return `<g><text x="${L-6}" y="${y+16}" text-anchor="end">${i+1}. ${esc(nm)}</text>${as.map(a=>{const k=rr.filter(r=>r.arm===a&&r.depth>=i+1).length,w=(W-L-80)*k/mx,r=`<rect x="${x}" y="${y}" width="${w}" height="${rh-8}" rx="3" fill="${armCol(a)}" opacity=".85"><title>${esc(a)} · reached "${esc(nm)}": ${k} of ${rr.filter(r=>r.arm===a).length}</title></rect>`;x+=w;return r}).join("")}<text x="${x+5}" y="${y+16}">${n} (${Math.round(100*n/mx)}%)</text></g>`}).join("");
+ return `<svg viewBox="0 0 ${W} ${H}" style="max-width:720px">${o}</svg><div class="muted">rollouts that reached each stage of put-the-bowl-on-the-plate. Proxies from the gripper width, the end-effector track and the perception estimate of bowl and plate (no ground-truth object poses are logged).</div>`}
 function dashRes(){const rs=filt(),ev=rs.filter(r=>r.kind==="eval"),k=rs.filter(r=>r.success).length,[p,lo,hi]=wilson(k,rs.length);
  const ke=ev.filter(r=>r.success).length,[pe,loe,hie]=wilson(ke,ev.length);
  const tok=D.samples.reduce((a,s)=>a+s.tokens_new,0),nc=new Set(rs.filter(r=>!r.success).map(r=>r.cause)).size;
@@ -524,18 +554,19 @@ function dashRes(){const rs=filt(),ev=rs.filter(r=>r.kind==="eval"),k=rs.filter(
  <div class="stat"><span class="muted">evaluation only</span><b>${ev.length?(pe*100).toFixed(0)+"%":"–"}</b><span class="muted">${ke}/${ev.length} · CI ${(loe*100).toFixed(0)}–${(hie*100).toFixed(0)}%</span></div>
  <div class="stat"><span class="muted">distinct failure causes</span><b>${nc}</b><span class="muted">click a bar below to drill in</span></div>
  <div class="stat"><span class="muted">new tokens</span><b>${tok.toLocaleString()}</b><span class="muted">≈ ${usd(tok)}</span></div></div>
- <div class="two viz"><div class="card pad"><h3 class="t">Success rate by scene and arm</h3>${barChart(rs)}</div><div class="card pad"><h3 class="t">Why rollouts fail</h3>${causeChart(rs)}</div></div>
- <div class="card pad viz" style="overflow:auto"><h3 class="t">Every rollout: sample × seed</h3>${heatmap(rs)}</div>
+ <div class="two viz"><div class="card pad"><h3 class="t">Success rate by scene and arm</h3>${barChart(rs)}</div><div class="card pad"><h3 class="t">Why rollouts fail ${cmToggle()}</h3>${causeChart(rs)}</div></div>
+ <div class="card pad viz"><h3 class="t">How far rollouts got</h3>${funnel(rs)}</div>
+ <div class="card pad viz" style="margin-top:12px"><h3 class="t">Every rollout: sample × seed ${["result","phase"].map(m=>`<button class="chip ${HM===m?"acc":""}" onclick="setHM('${m}')">colour by ${m}</button>`).join("")}</h3>${heatmaps(rs)}</div>
  <div class="two viz" style="margin-top:12px"><div class="card pad"><h3 class="t">Token spend vs evaluation success</h3>${scatter(rs)}</div><div class="card pad"><h3 class="t">What a success looks like vs a failure</h3>${summaryTable(rs)}<p class="muted">Medians over the selected rollouts. A large gap in steps or program time between outcomes points to a stuck or aborted motion.</p></div></div>`}
 function dash(){return `${filterBar()}<div id="res">${dashRes()}</div>
  <p class="muted">Run config: ${Object.entries(D.config).filter(([k])=>!["scenes"].includes(k)).map(([k,v])=>esc(k)+"="+esc(v)).join(" · ")}</p>`}
 
 /* ---------- rollout table ---------- */
-const COLS=[["Rollout",r=>r.id],["Arm",r=>r.arm],["T",r=>r.temperature],["Scene",r=>grp(r)],["Seed",r=>r.seed],["Result",r=>r.success?1:0],["Cause",r=>r.cause],["Steps",r=>r.steps],["Sim s",r=>r.sim_s],["Program s",r=>(r.spans||[]).reduce((s,c)=>s+c.wall_s,0)],["Calls ok",r=>(r.spans||[]).filter(c=>c.ok).length/Math.max(1,(r.spans||[]).length)],["Video",r=>Object.keys(r.videos||{}).length]];
+const COLS=[["Rollout",r=>r.id],["Arm",r=>r.arm],["T",r=>r.temperature],["Scene",r=>grp(r)],["Seed",r=>r.seed],["Result",r=>r.success?1:0],["Cause",r=>r.cause],["Phase reached",r=>r.depth],["Bowl cm",r=>r.phases?.bowl_cm],["Lift cm",r=>r.phases?.lift_cm],["Plate cm",r=>r.phases?.plate_cm],["Steps",r=>r.steps],["Sim s",r=>r.sim_s],["Program s",r=>(r.spans||[]).reduce((s,c)=>s+c.wall_s,0)],["Calls ok",r=>(r.spans||[]).filter(c=>c.ok).length/Math.max(1,(r.spans||[]).length)],["Video",r=>Object.keys(r.videos||{}).length]];
 const sorted=rs=>{const g=COLS[S.key][1];return [...rs].sort((a,b)=>{const x=g(a),y=g(b);return (x==null)-(y==null)||(x<y?-1:x>y?1:0)*S.dir})};
 function sortBy(i){S.dir=S.key===i?-S.dir:1;S.key=i;renderRes()}
 function rowsRes(){const rs=sorted(filt());
- return `<div class="card"><table><tr>${COLS.map((c,i)=>`<th class="s" onclick="sortBy(${i})">${c[0]}${S.key===i?(S.dir>0?" ▲":" ▼"):""}</th>`).join("")}</tr>${rs.map(r=>`<tr class="row" onclick="show('r:${r.id}')"><td>${esc(label(r))}</td><td>${esc(r.arm)}</td><td>${r.temperature}</td><td>${esc(grp(r))}</td><td>${r.seed}</td><td>${chip(r.success?"success":"failed",okc(r.success))}</td><td>${esc(r.cause)}</td><td>${r.steps??"–"}</td><td>${fmt(r.sim_s)}</td><td>${fmt((r.spans||[]).reduce((s,c)=>s+c.wall_s,0))}</td><td>${(r.spans||[]).filter(c=>c.ok).length}/${(r.spans||[]).length}</td><td>${Object.keys(r.videos||{}).length?"▶":""}</td></tr>`).join("")||"<tr><td colspan=12 class=muted>no rollouts match</td></tr>"}</table></div>`}
+ return `<div class="card"><table><tr>${COLS.map((c,i)=>`<th class="s" onclick="sortBy(${i})">${c[0]}${S.key===i?(S.dir>0?" ▲":" ▼"):""}</th>`).join("")}</tr>${rs.map(r=>`<tr class="row" onclick="show('r:${r.id}')"><td>${esc(label(r))}</td><td>${esc(r.arm)}</td><td>${r.temperature}</td><td>${esc(grp(r))}</td><td>${r.seed}</td><td>${chip(r.success?"success":"failed",okc(r.success))}</td><td>${esc(r.cause)}</td><td>${r.success?"✓ success":r.phase?r.depth+" · "+esc(r.phase):"–"}</td><td>${fmt(r.phases?.bowl_cm)}</td><td>${fmt(r.phases?.lift_cm)}</td><td>${fmt(r.phases?.plate_cm)}</td><td>${r.steps??"–"}</td><td>${fmt(r.sim_s)}</td><td>${fmt((r.spans||[]).reduce((s,c)=>s+c.wall_s,0))}</td><td>${(r.spans||[]).filter(c=>c.ok).length}/${(r.spans||[]).length}</td><td>${Object.keys(r.videos||{}).length?"▶":""}</td></tr>`).join("")||"<tr><td colspan=16 class=muted>no rollouts match</td></tr>"}</table></div>`}
 function rollouts(){return `<h2 style="margin:0 0 10px">Rollouts</h2>${filterBar()}<div id="res">${rowsRes()}</div><p class="muted">Click a header to sort and a row to open the video and signal explorer. The filters are shared with the dashboard.</p>`}
 function updCnt(){const c=$("#cnt");if(c)c.textContent=`${filt().length} of ${RO().length} rollouts`}
 function renderRes(){const e=$("#res");if(e)e.innerHTML=cur==="dash"?dashRes():rowsRes();updCnt()}
@@ -582,6 +613,7 @@ function plot(rs,mode){
   rs.forEach((r,ri)=>chs.forEach(([k,nm],ci)=>{const s=r.signals;if(!s)return;let d="",pen=false;s[k].forEach((v,i)=>{if(v==null){pen=false;return}d+=(pen?"L":"M")+X(s.t[i]).toFixed(1)+" "+Y(v).toFixed(1);pen=true});
    const col=mode==="single"?PAL[ci]:PAL[ri];o+=`<path d="${d}" fill="none" stroke="${col}" stroke-width="1.6" ${mode!=="single"||k!=="grip_cmd"?"":"stroke-dasharray='4 3'"}><title>${esc(nm)}</title></path>`}));
   if(mode==="single")o+=chs.map(([,nm],ci)=>`<text x="${W-R-6-(chs.length-1-ci)*60}" y="${y0+12}" text-anchor="end" style="fill:${PAL[ci]}">${esc(nm)}</text>`).join("")});
+ if(mode==="single"&&rs[0].phases)[["close_t","grasp"],["release_t","release"]].forEach(([k,nm])=>{const t=rs[0].phases[k];if(t!=null)o+=`<line x1="${X(t)}" x2="${X(t)}" y1="${top}" y2="${H-22}" stroke="var(--ok)" stroke-dasharray="4 3"/><text x="${X(t)+3}" y="${H-12}" style="fill:var(--ok)">${nm}</text>`});
  const st=niceStep(T),yb=H-8;for(let t=0;t<=T+1e-6;t+=st)o+=`<text x="${X(t)}" y="${yb}" text-anchor="middle">${t}s</text>`;
  o+=`<line class="gh" y1="${top}" y2="${H-22}" stroke="var(--ink)" opacity="0" pointer-events="none"/><line class="cur" y1="${top}" y2="${H-22}" stroke="var(--ink)" stroke-width="1.5" pointer-events="none"/>`;
  return `<svg id="plot" viewBox="0 0 ${W} ${H}" style="touch-action:none;cursor:crosshair" data-t="${T}" data-l="${L}" data-r="${R}">${o}</svg>`}
@@ -590,12 +622,18 @@ function whyBox(r){const f=(r.spans||[]).find(c=>!c.ok),s=smp(r.sample),att=r.ki
  if(r.success)return `<div class="why ok"><b>Success</b> after ${r.steps??"?"} steps (${fmt(r.sim_s)} s simulated)${r.success_step!=null?`, task detected at step ${r.success_step}`:""}. ${esc(r.description||"")}</div>`;
  const d=f?.error?.details;
  return `<div class="why"><b>Failed: ${esc(r.cause)}</b><br>${f?`${esc(f.name)} failed at sim ${f.t1.toFixed(2)} s${f.error?.message?": "+esc(f.error.message):""}${d&&d.joint_error_rad!=null?` (joint error ${(+d.joint_error_rad).toFixed(3)} rad vs tolerance ${d.tolerance_rad} after ${d.max_steps} steps)`:""}.`:esc(r.description||"The program ended without the task being completed.")}${r.error?`<pre>${esc(r.error)}</pre>`:""}${att?.feedback?det("Feedback the model received for the next attempt",`<pre>${esc(JSON.stringify(att.feedback,null,1))}</pre>`):""}</div>`}
+function phaseBox(r){const p=r.phases;if(!p)return "";const st=D.stages||[];
+ const f=(v,u)=>v==null?"n/a":v+u;
+ return `<div class="card pad"><h3 class="t">Task phases · proxies from the gripper, the end-effector track and the perception estimate of bowl and plate</h3><div>${st.map((nm,i)=>chip((i+1)+". "+nm,r.depth>=i+1?"ok":"bad")).join("")}</div>
+ <table style="margin-top:8px"><tr><th>gripper closed at</th><th>distance eef → bowl at close</th><th>width while closed</th><th>lift while held</th><th>distance eef → plate at release</th><th>released at</th><th>grasp attempts</th></tr><tr><td>${f(p.close_t," s")}</td><td>${f(p.bowl_cm," cm")}</td><td>${f(p.hold_width,"")}${p.hold_width!=null?(p.hold_width>=0.03?" (holding an object)":" (closed on nothing)"):""}</td><td>${f(p.lift_cm," cm")}</td><td>${f(p.plate_cm," cm")}</td><td>${f(p.release_t," s")}</td><td>${p.grasps}</td></tr></table>
+ <div class="muted">Shown for the best grasp attempt. Thresholds: held ≥ 0.03 width, near bowl ≤ 10 cm, lifted ≥ 5 cm, over plate ≤ 12 cm. Bowl and plate positions are perception estimates from the first localization, not ground truth.</div></div>`}
 function explorer(r){
  const list=sorted(filt().includes(r)?filt():RO()),i=list.indexOf(r),pv=list[i-1],nx=list[i+1],s=smp(r.sample);
  const cams=Object.keys(r.videos||{}),vids=cams.map(c=>videoTag(r,c,c.replace(/_/g," "))).join("");
  return `<div class="bar"><button class="chip" onclick="show('rollouts')">← rollouts</button><button class="chip" ${pv?`onclick="show('r:${pv.id}')"`:"disabled"}>◀ prev</button><button class="chip" ${nx?`onclick="show('r:${nx.id}')"`:"disabled"}>next ▶</button><button class="chip acc" onclick="C.a='${r.id}';show('compare')">compare…</button><button class="chip acc" onclick="show('${r.sample}')">open sample trace</button></div>
  <h2 style="margin:0 0 6px">${esc(label(r))}</h2><div style="margin-bottom:10px">${chip(r.success?"success":"failed",okc(r.success))}${chip(grp(r)+" · seed "+r.seed)}${chip("T "+r.temperature)}${chip((r.steps??"?")+" steps")}${chip(fmt(r.sim_s)+" s sim")}${r.reward!=null?chip("reward "+r.reward):""}</div>
  ${r.missing?`<div class="why">This rollout's directory is no longer on disk, so only the summary is available.</div>`:whyBox(r)}
+ ${phaseBox(r)}
  ${cams.length?`<div class="vids">${vids}</div>${controls([r])}`:""}
  ${r.signals?`<div class="card pad viz"><h3 class="t">Signals, aligned with the video · shaded bands are tool calls (red = failed) · click or drag to seek</h3>${plot([r],"single")}<div id="readout" class="mono muted"></div></div>`:""}
  ${det("Tool calls ("+(r.spans||[]).length+")",spanTable(r),true)}
