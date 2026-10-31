@@ -244,6 +244,12 @@ def is_run(path: Path) -> bool:
     return (path / "config.json").exists() or any(path.glob("*/sample*/record.json"))
 
 
+def _system2(root: Path) -> list[dict]:
+    """Cycles of the adversary loop, one JSON object per line of `<run>/system2.jsonl`."""
+    text = _read(root / "system2.jsonl") or ""
+    return [json.loads(line) for line in text.splitlines() if line.strip()]
+
+
 def collect(root: Path, base: Path | None = None) -> dict:
     """One run as plain data; image paths are relative to `base` (where report.html lives)."""
     root = root.resolve()
@@ -327,6 +333,7 @@ def collect(root: Path, base: Path | None = None) -> dict:
         "events": events,
         "samples": samples,
         "rollouts": rollouts,
+        "system2": _system2(root),
         "usd_per_mtok": float(config.get("usd_per_mtok", 13.5)),
     }
 
@@ -603,6 +610,13 @@ function compare(){const vr=RO().filter(r=>Object.keys(r.videos||{}).length);
  <div class="two"><div class="card pad"><h3 class="t">A · tool calls</h3>${spanTable(A)}</div><div class="card pad"><h3 class="t">B · tool calls</h3>${spanTable(B)}</div></div>
  <p class="muted">Pairs are preselected as a success and a failure on the same scene and seed when one exists, so the difference is down to the program.</p>`}
 
+/* ---------- System 2 tab: extension point. Reads D.system2 (one object per cycle from <run>/system2.jsonl).
+   Replace the body of system2() to build the real view; the nav entry and routing exist already. ---------- */
+function system2(){const c=D.system2||[];
+ if(!c.length)return `<h2>System 2</h2><p class="muted">No <code>system2.jsonl</code> in this run yet (one JSON object per adversary cycle).</p>`;
+ const keys=[...new Set(c.flatMap(Object.keys))];
+ return `<h2>System 2</h2><div class="card"><table><tr>${keys.map(k=>`<th>${esc(k)}</th>`).join("")}</tr>${c.map(o=>`<tr>${keys.map(k=>`<td>${esc(typeof o[k]==="object"?JSON.stringify(o[k]):o[k])}</td>`).join("")}</tr>`).join("")}</table></div>`}
+
 /* ---------- events, samples (program trace) ---------- */
 function events(){return `<h3>Events</h3><div class="card"><table><tr><th>Time</th><th>Kind</th><th>Details</th></tr>${D.events.map(e=>{const{time,kind,...r}=e;return `<tr><td class="muted">${esc(time.slice(11))}</td><td>${chip(kind,/stop/.test(kind)?"bad":"")}</td><td>${esc(JSON.stringify(r))}</td></tr>`}).join("")||"<tr><td colspan=3 class=muted>no events recorded (older run)</td></tr>"}</table></div>`}
 function attempt(a){const rail=okc(a.success);
@@ -627,11 +641,11 @@ function header(){const n=D.samples.reduce((a,s)=>a+s.tokens_new,0);
  $("#rn").innerHTML=`<select onchange="pick(this.value)" title="Run">${ALL.runs.map((r,i)=>`<option value="${i}" ${r===D?"selected":""}>${esc(r.name)} (${r.samples.length} samples)</option>`).join("")}</select>`;$("#hd").innerHTML=chip(RO().length+" rollouts")+chip(n.toLocaleString()+" new tokens")+chip("≈ "+usd(n),"acc")}
 function nav(c){const by={};D.samples.forEach(s=>(by[s.arm]??=[]).push(s));const sel=c.startsWith("r:")?"rollouts":c;
  const b=(id,t)=>`<button class="${sel===id?"on":""}" onclick="show('${id}')">${t}</button>`;
- let h=b("dash","Dashboard")+b("rollouts","Rollouts ("+RO().length+")")+b("compare","Compare")+b("events","Events ("+D.events.length+")");
+ let h=b("dash","Dashboard")+b("rollouts","Rollouts ("+RO().length+")")+b("compare","Compare")+b("system2","System 2"+((D.system2||[]).length?" ("+D.system2.length+")":""))+b("events","Events ("+D.events.length+")");
  for(const arm in by){h+=`<h4>${esc(arm)} · trace</h4>`+by[arm].map(s=>{const e=evalSum(s);return `<button class="${c===s.id?"on":""}" onclick="show('${s.id}')">sample ${s.sample} · T ${s.temperature}<div class="sub">${solved(s)?"✓ solved debug":"✗ not solved"} · ${Object.entries(e).map(([k,v])=>k+" "+v.ok+"/"+v.n).join(" · ")||"no eval"}</div></button>`}).join("")}
  $("#nav").innerHTML=h}
 function show(id,keep){const y=window.scrollY;stopPlayer();if(id==="overview")id="dash";cur=id;location.hash=encodeURIComponent(D.name)+"|"+id;nav(id);const m=$("#main");
- if(id==="dash")m.innerHTML=dash();else if(id==="rollouts")m.innerHTML=rollouts();else if(id==="events")m.innerHTML=events();
+ if(id==="dash")m.innerHTML=dash();else if(id==="rollouts")m.innerHTML=rollouts();else if(id==="events")m.innerHTML=events();else if(id==="system2")m.innerHTML=system2();
  else if(id==="compare"){m.innerHTML=compare();mount([byId(C.a),byId(C.b)].filter(Boolean),"cmp")}
  else if(id.startsWith("r:")){const r=byId(id.slice(2));if(!r){m.innerHTML="<p>rollout not found</p>";return}m.innerHTML=explorer(r);mount([r],"single")}
  else{const s=smp(id);m.innerHTML=s?sample(s):"<p>not found</p>"}
