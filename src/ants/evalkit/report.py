@@ -3,10 +3,15 @@
     uv run python -m ants.evalkit.report data/runs/<name> [--serve] [--open]
     uv run python -m ants.evalkit.report data/runs [--open]        # all runs, pick one in the UI
 
-Reads `config.json`, `events.jsonl`, and per sample `record.json`, programs, replies, prompts,
-feedback and program diffs; keyframe images are linked by relative path, so keep `report.html`
-inside the run directory. Older runs (without replies, diffs or events) still render: diffs and
-feedback are recomputed from the programs and run directories.
+An interactive dashboard: success rates with confidence intervals, a seed-by-sample heatmap,
+failure causes, a sortable rollout table, a synced video + signal explorer per rollout (end-effector
+pose, gripper, tracking error, tool-call spans with failure details), a side-by-side comparison, and
+the per-sample trace (prompts, replies, program diffs, feedback).
+
+Reads `config.json`, `events.jsonl`, per sample `record.json`, programs, replies, prompts, feedback
+and diffs, and per rollout `episode/steps.jsonl`, `trace/events.jsonl`, `outcome.json` and the videos.
+Videos and images are linked by relative path, so keep `report.html` in the folder you point at.
+Older runs (without replies, diffs or events) still render.
 """
 
 from __future__ import annotations
@@ -26,6 +31,156 @@ from ants.evalkit.runlog import unified_diff
 
 def _read(path: Path) -> str | None:
     return path.read_text(encoding="utf-8") if path.exists() else None
+
+
+def _resolve(run_dir: str | None, root: Path) -> Path | None:
+    """A rollout directory as logged, or re-anchored under `root` if the run was moved."""
+    if not run_dir:
+        return None
+    path = Path(run_dir)
+    if path.is_dir():
+        return path
+    parts = path.parts
+    if root.name in parts:
+        moved = root.joinpath(*parts[len(parts) - parts[::-1].index(root.name) :])
+        if moved.is_dir():
+            return moved
+    return None
+
+
+def _json(path: Path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def _arr(v):
+    return v["$array_inline"] if isinstance(v, dict) and "$array_inline" in v else v
+
+
+def _signals(run: Path, max_points: int = 500) -> dict | None:
+    """Per-step end-effector position, gripper state/command and joint tracking error."""
+    path = run / "episode" / "steps.jsonl"
+    if not path.exists():
+        return None
+    rows = []
+    with path.open(encoding="utf-8") as fh:
+        for line in fh:
+            if not line.strip():
+                continue
+            st = json.loads(line)
+            state = st.get("robot_state") or {}
+            arm = ((st.get("action") or {}).get("arms") or {}).get("primary") or {}
+            pos = _arr(
+                ((state.get("end_effector_poses") or {}).get("primary") or {}).get("position")
+            )
+            joints = _arr((state.get("joint_positions") or {}).get("primary"))
+            target = _arr(arm.get("target"))
+            err = None
+            if (
+                arm.get("mode") == "joint_position"
+                and joints
+                and target
+                and len(joints) == len(target)
+            ):
+                err = sum((a - b) ** 2 for a, b in zip(joints, target, strict=True)) ** 0.5
+            rows.append((st["simulator_time_s"], pos, (state.get("gripper_positions") or {}).get("primary"),
+                         arm.get("gripper_position"), err))  # fmt: skip
+    if not rows:
+        return None
+    stride = max(1, -(-len(rows) // max_points))
+    rows = rows[::stride]
+    r4 = lambda v: None if v is None else round(v, 4)  # noqa: E731
+    return {
+        "t": [r4(r[0]) for r in rows],
+        "x": [r4(r[1][0]) if r[1] else None for r in rows],
+        "y": [r4(r[1][1]) if r[1] else None for r in rows],
+        "z": [r4(r[1][2]) if r[1] else None for r in rows],
+        "grip": [r4(r[2]) for r in rows],
+        "grip_cmd": [r4(r[3]) for r in rows],
+        "err": [r4(r[4]) for r in rows],
+    }
+
+
+def _spans(run: Path) -> list[dict]:
+    """Top-level program calls with simulator-time windows and, for failures, the API error."""
+    path = run / "trace" / "events.jsonl"
+    if not path.exists():
+        return []
+    starts, spans = {}, []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        e = json.loads(line)
+        if e.get("category") != "program" or e.get("parent_id") is not None:
+            continue
+        if e["event"] == "span_start":
+            starts[e["span_id"]] = e
+        elif e["event"] == "span_end" and e["span_id"] in starts:
+            s0 = starts[e["span_id"]]
+            span = {
+                "name": e["name"],
+                "t0": s0["simulator_time_s"],
+                "t1": e["simulator_time_s"],
+                "wall_s": round(e.get("duration_s", 0.0), 3),
+                "ok": bool(e.get("ok", True)),
+            }
+            if not span["ok"]:
+                n = int(re.sub(r"\D", "", e["span_id"]) or 0)
+                for d in (run / "trace" / "calls").glob(f"call-{n:06d}-*"):
+                    out = _json(d / "output.json") or {}
+                    err = out.get("error") or {}
+                    span["error"] = {
+                        "code": err.get("code"),
+                        "message": err.get("message"),
+                        "details": err.get("details"),
+                        "diagnostics": out.get("diagnostics"),
+                    }
+            spans.append(span)
+    return spans
+
+
+def _rollout(
+    run_dir: Path | None, base: Path, success: bool, reason: str, error: str | None
+) -> dict:
+    """Everything the explorer needs about one simulator rollout."""
+    if run_dir is None:
+        return {"missing": True, "cause": "success" if success else reason}
+    rel = lambda p: os.path.relpath(p, base).replace(os.sep, "/")  # noqa: E731
+    videos = {p.stem: rel(p) for p in sorted((run_dir / "media" / "videos").glob("*.mp4"))}
+    overlays = [rel(p) for p in sorted((run_dir / "media" / "overlays").glob("*.png"))[:6]]
+    outcome = _json(run_dir / "outcome.json") or {}
+    index = _json(run_dir / "media" / "video-index.json") or {}
+    spans = _spans(run_dir)
+    failed = next((s for s in spans if not s["ok"]), None)
+    if success:
+        cause = "success"
+    elif failed:
+        cause = f"{failed['name']}: {(failed.get('error') or {}).get('code') or 'failed'}"
+    elif error or outcome.get("error"):
+        cause = "program error"
+    else:
+        cause = "finished, task not done"
+    out = run_dir / "logs" / "program.stdout"
+    err = run_dir / "logs" / "program.stderr"
+    return {
+        "cause": cause,
+        "videos": videos,
+        "fps": index.get("fps", 20.0),
+        "overlays": overlays,
+        "keyframes": _keyframes(str(run_dir), base, 8),
+        "signals": _signals(run_dir),
+        "spans": spans,
+        "steps": outcome.get("steps_executed"),
+        "sim_s": outcome.get("simulator_duration_s"),
+        "reward": outcome.get("cumulative_reward"),
+        "success_step": outcome.get("success_observed_step"),
+        "description": outcome.get("termination_description"),
+        "error": error or outcome.get("error"),
+        "stdout": (_read(out) or "")[-4000:],
+        "stderr": (_read(err) or "")[-2000:],
+    }
 
 
 def _keyframes(run_dir: str | None, root: Path, limit: int = 14) -> list[dict]:
@@ -99,30 +254,63 @@ def collect(root: Path, base: Path | None = None) -> dict:
         for line in (_read(root / "events.jsonl") or "").splitlines()
         if line.strip()
     ]
-    samples = []
+    samples, rollouts = [], []
+
+    def add_rollout(sid: str, rid: str, meta: dict, run_dir: Path | None, ok: bool, reason: str,
+                    error: str | None) -> None:  # fmt: skip
+        rollouts.append({"id": rid, "sample": sid, **meta, "success": ok, "reason": reason,
+                         **_rollout(run_dir, base, ok, reason, error)})  # fmt: skip
+
     for rec_path in sorted(root.glob("*/sample*/record.json")):
         sample_dir = rec_path.parent
         rec = json.loads(rec_path.read_text(encoding="utf-8"))
+        sid = f"{rec['arm']}/sample{rec['sample']}"
+        meta = {"arm": rec["arm"], "temperature": rec["temperature"], "n": rec["sample"]}
+        for a in rec["attempts"]:
+            a["trace"]["run_dir"] = str(_resolve(a["trace"].get("run_dir"), root) or "") or None
+        for e in rec.get("evaluation", []):
+            e["run_dir"] = str(_resolve(e.get("run_dir"), root) or "") or None
         attempts, prev = [], None
         for a in rec["attempts"]:
             item = _attempt(sample_dir, base, a, prev)
+            item["rid"] = f"{sid}|debug{a['attempt']}"
+            tr = a["trace"]
+            add_rollout(
+                sid, item["rid"],
+                {**meta, "kind": "debug", "scene": "stock",
+                 "seed": int(re.sub(r"\D", "", tr["case_id"].split("-")[-1]) or 0),
+                 "attempt": a["attempt"]},
+                Path(tr["run_dir"]) if tr.get("run_dir") else None,
+                tr["task_success"], tr["termination_reason"], tr.get("error"),
+            )  # fmt: skip
             attempts.append(item)
             prev = item["program"]
-        evals = [
-            {
-                "scene": e.get("scene", "stock"),
-                "seed": int(re.sub(r"\D", "", e["case_id"].split("-")[-1]) or 0),
-                "success": e["task_success"],
-                "reason": e["termination_reason"],
-                "wall_s": e.get("wall_s"),
-                "frames": _keyframes(e.get("run_dir"), base, 3),
-            }
-            for e in rec.get("evaluation", [])
-        ]
+        evals = []
+        for i, e in enumerate(rec.get("evaluation", [])):
+            seed = int(re.sub(r"\D", "", e["case_id"].split("-")[-1]) or 0)
+            rid = f"{sid}|eval{i}"
+            add_rollout(
+                sid, rid,
+                {**meta, "kind": "eval", "scene": e.get("scene", "stock"), "seed": seed,
+                 "attempt": len(rec["attempts"]) - 1},
+                Path(e["run_dir"]) if e.get("run_dir") else None,
+                e["task_success"], e["termination_reason"], e.get("error"),
+            )  # fmt: skip
+            evals.append(
+                {
+                    "rid": rid,
+                    "scene": e.get("scene", "stock"),
+                    "seed": seed,
+                    "success": e["task_success"],
+                    "reason": e["termination_reason"],
+                    "wall_s": e.get("wall_s"),
+                    "frames": _keyframes(e.get("run_dir"), base, 3),
+                }
+            )
         new_tokens = sum(a["tokens"] for a in rec["attempts"] if not a["from_cache"])
         samples.append(
             {
-                "id": f"{rec['arm']}/sample{rec['sample']}",
+                "id": sid,
                 "arm": rec["arm"],
                 "sample": rec["sample"],
                 "temperature": rec["temperature"],
@@ -138,6 +326,7 @@ def collect(root: Path, base: Path | None = None) -> dict:
         "config": config,
         "events": events,
         "samples": samples,
+        "rollouts": rollouts,
         "usd_per_mtok": float(config.get("usd_per_mtok", 13.5)),
     }
 
@@ -192,46 +381,59 @@ TEMPLATE = r"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>ANTS run viewer</title>
 <style>
-:root{--bg:#f6f7f9;--panel:#fff;--ink:#1d2330;--mute:#677086;--line:#e1e4ea;--ok:#1a7f4b;--okbg:#e3f5ea;--bad:#b4281f;--badbg:#fbe7e5;--acc:#2f5fd0;--accbg:#e8eefc;--code:#f1f3f7;--add:#e3f5ea;--del:#fbe7e5}
-@media(prefers-color-scheme:dark){:root{--bg:#12151c;--panel:#1a1f29;--ink:#e6e9f0;--mute:#98a1b5;--line:#2b3240;--ok:#5fd394;--okbg:#17321f;--bad:#ff8a80;--badbg:#3a1c1a;--acc:#8aa9ff;--accbg:#1f2a47;--code:#10131a;--add:#16301f;--del:#3a1c1a}}
+:root{--bg:#f6f7f9;--panel:#fff;--ink:#1d2330;--mute:#677086;--line:#e1e4ea;--ok:#1a7f4b;--okbg:#e3f5ea;--bad:#b4281f;--badbg:#fbe7e5;--acc:#2f5fd0;--accbg:#e8eefc;--code:#f1f3f7;--add:#e3f5ea;--del:#fbe7e5;--s1:#2f5fd0;--s2:#d9822b;--s3:#1f9d8a;--s4:#8a5cd0}
+@media(prefers-color-scheme:dark){:root{--bg:#12151c;--panel:#1a1f29;--ink:#e6e9f0;--mute:#98a1b5;--line:#2b3240;--ok:#5fd394;--okbg:#17321f;--bad:#ff8a80;--badbg:#3a1c1a;--acc:#8aa9ff;--accbg:#1f2a47;--code:#10131a;--add:#16301f;--del:#3a1c1a;--s1:#8aa9ff;--s2:#f0a35e;--s3:#4fd1bd;--s4:#b693f0}}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,sans-serif}
 header{display:flex;gap:16px;align-items:center;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
 header h1{font-size:15px;margin:0}header .sp{flex:1}
-.layout{display:grid;grid-template-columns:260px minmax(0,1fr);min-height:calc(100vh - 49px)}
+.layout{display:grid;grid-template-columns:240px minmax(0,1fr);min-height:calc(100vh - 49px)}
 nav{border-right:1px solid var(--line);background:var(--panel);padding:8px;overflow:auto}
 nav button{display:block;width:100%;text-align:left;border:0;background:none;color:var(--ink);padding:8px 10px;border-radius:8px;cursor:pointer;font:inherit}
 nav button:hover{background:var(--bg)}nav button.on{background:var(--accbg);color:var(--acc)}
 nav .sub{font-size:12px;color:var(--mute)}nav h4{margin:12px 10px 4px;font-size:11px;text-transform:uppercase;color:var(--mute);letter-spacing:.06em}
-select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 8px;max-width:340px}
-main{padding:16px 20px;max-width:1100px;min-width:0}
-.chip{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;background:var(--code);color:var(--mute);margin-right:4px}
-.chip.ok{background:var(--okbg);color:var(--ok)}.chip.bad{background:var(--badbg);color:var(--bad)}.chip.acc{background:var(--accbg);color:var(--acc)}
+select,input[type=search]{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 8px;max-width:340px}
+main{padding:16px 20px;max-width:1320px;min-width:0}
+.chip{display:inline-block;padding:1px 8px;border-radius:99px;font-size:12px;background:var(--code);color:var(--mute);margin-right:4px;border:0;font-family:inherit}
+button.chip{cursor:pointer}.chip.ok{background:var(--okbg);color:var(--ok)}.chip.bad{background:var(--badbg);color:var(--bad)}.chip.acc{background:var(--accbg);color:var(--acc)}
 .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin:0 0 12px}
 .card>summary,.card>.hd{padding:10px 14px;cursor:pointer;display:flex;gap:8px;align-items:center;font-weight:600;list-style:none}
-.card>summary::-webkit-details-marker{display:none}.card>summary:before{content:"▸";color:var(--mute)}.card[open]>summary:before{content:"▾"}
-.card .bd{padding:0 14px 12px}
+.card>.hd{cursor:default}.card>summary::-webkit-details-marker{display:none}.card>summary:before{content:"▸";color:var(--mute)}.card[open]>summary:before{content:"▾"}
+.card .bd{padding:0 14px 12px}.card.pad{padding:12px 14px}
 .rail{border-left:3px solid var(--line);margin-left:6px;padding-left:14px}
 .rail.ok{border-color:var(--ok)}.rail.bad{border-color:var(--bad)}.rail.acc{border-color:var(--acc)}
 pre{margin:6px 0;padding:10px;background:var(--code);border-radius:8px;overflow:auto;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;max-height:460px}
 .ln{display:block;white-space:pre}.ln i{color:var(--mute);font-style:normal;display:inline-block;width:3em;text-align:right;margin-right:10px;user-select:none}
 .add{background:var(--add)}.del{background:var(--del)}.hunk{color:var(--acc)}
-table{border-collapse:collapse;width:100%}th,td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--mute);font-weight:600;font-size:12px}
+table{border-collapse:collapse;width:100%}th,td{padding:6px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--mute);font-weight:600;font-size:12px;white-space:nowrap}
+th.s{cursor:pointer;user-select:none}th.s:hover{color:var(--ink)}tr.row{cursor:pointer}tr.row:hover td{background:var(--bg)}
 .calls span{display:inline-block;margin:2px;padding:1px 7px;border-radius:6px;font-size:12px;background:var(--okbg);color:var(--ok)}.calls span.f{background:var(--badbg);color:var(--bad)}
 .frames{display:flex;gap:8px;overflow:auto;padding:4px 0}.frames figure{margin:0;flex:none;width:200px}.frames img{width:200px;border-radius:8px;border:1px solid var(--line);cursor:zoom-in}.frames figcaption{font-size:11px;color:var(--mute)}
-.muted{color:var(--mute)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px}.stat b{display:block;font-size:20px}
+.muted{color:var(--mute)}.mono{font:12px ui-monospace,Menlo,Consolas,monospace}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px}.stat b{display:block;font-size:22px}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:12px;margin-bottom:12px}.two>.card{margin:0}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
+h3.t{margin:0 0 6px;font-size:13px;color:var(--mute);font-weight:600}
+.viz svg{width:100%;height:auto;display:block}.viz svg text{fill:var(--mute);font-size:11px;font-family:inherit}.viz .cl{cursor:pointer}.viz .cl:hover{opacity:.75}
+.vids{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:12px}.vids figure{margin:0}.vids video{width:100%;border-radius:10px;background:#000;display:block}.vids figcaption{font-size:12px;color:var(--mute);margin-top:2px}
+.ctl{display:flex;gap:10px;align-items:center;margin:10px 0}.ctl input[type=range]{flex:1}.ctl button{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:3px 10px;cursor:pointer}
+.why{border-left:4px solid var(--bad);background:var(--badbg);padding:10px 14px;border-radius:8px;margin:0 0 12px}.why.ok{border-color:var(--ok);background:var(--okbg)}
 #lb{position:fixed;inset:0;background:#000c;display:none;align-items:center;justify-content:center;z-index:9}#lb img{max-width:92vw;max-height:92vh}
-@media(max-width:800px){.layout{grid-template-columns:1fr}nav{border-right:0;border-bottom:1px solid var(--line)}}
+@media(max-width:800px){.layout{grid-template-columns:1fr}nav{border-right:0;border-bottom:1px solid var(--line)}.two{grid-template-columns:1fr}}
 </style></head><body>
 <header><h1>ANTS run viewer</h1><span id="rn" class="muted"></span><span class="sp"></span><span id="hd"></span></header>
 <div class="layout"><nav id="nav"></nav><main id="main"></main></div>
 <div id="lb" onclick="this.style.display='none'"><img id="lbi"></div>
 <script>
-const ALL=__DATA__;let D=ALL.runs[0];
+const ALL=__DATA__;let D=ALL.runs[0],cur="dash";
 const $=s=>document.querySelector(s);
-const esc=s=>String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const usd=t=>"$"+(t/1e6*D.usd_per_mtok).toFixed(2);
 const chip=(t,c="")=>`<span class="chip ${c}">${esc(t)}</span>`;
 const okc=b=>b?"ok":"bad";
+const PAL=["var(--s1)","var(--s2)","var(--s3)","var(--s4)"];
+const fmt=(v,d=1)=>v==null?"–":(+v).toFixed(d);
+const med=a=>{a=a.filter(x=>x!=null).sort((x,y)=>x-y);return a.length?(a.length%2?a[(a.length-1)/2]:(a[a.length/2-1]+a[a.length/2])/2):null};
+const wilson=(k,n)=>{if(!n)return[0,0,0];const z=1.96,p=k/n,d=1+z*z/n,c=(p+z*z/(2*n))/d,h=z*Math.sqrt(p*(1-p)/n+z*z/(4*n*n))/d;return[p,Math.max(0,c-h),Math.min(1,c+h)]};
 function code(t){return `<pre>${String(t).split("\n").map((l,i)=>`<span class="ln"><i>${i+1}</i>${esc(l)}</span>`).join("")}</pre>`}
 function diff(t){if(!t)return `<div class="muted">no changes (identical program)</div>`;
  return `<pre>${t.split("\n").map(l=>`<span class="ln ${l.startsWith("+")&&!l.startsWith("+++")?"add":l.startsWith("-")&&!l.startsWith("---")?"del":l.startsWith("@@")?"hunk":""}">${esc(l)}</span>`).join("")}</pre>`}
@@ -240,26 +442,173 @@ function frames(f){return f&&f.length?`<div class="frames">${f.map(x=>`<figure><
 function zoom(s){$("#lbi").src=s;$("#lb").style.display="flex"}
 const solved=s=>s.attempts.some(a=>a.success);
 const evalSum=s=>{const m={};s.evaluation.forEach(e=>{(m[e.scene]??={n:0,ok:0});m[e.scene].n++;m[e.scene].ok+=e.success?1:0});return m};
-function pick(i){D=ALL.runs[i];header();show("overview")}
-function header(){const n=D.samples.reduce((a,s)=>a+s.tokens_new,0);
- $("#rn").innerHTML=`<select onchange="pick(this.value)" title="Run">${ALL.runs.map((r,i)=>`<option value="${i}" ${r===D?"selected":""}>${esc(r.name)} (${r.samples.length} samples)</option>`).join("")}</select>`;$("#hd").innerHTML=chip(n.toLocaleString()+" new tokens")+chip("≈ "+usd(n),"acc")+chip(D.samples.length+" samples")}
-function nav(cur){const by={};D.samples.forEach(s=>(by[s.arm]??=[]).push(s));
- let h=`<button class="${cur==="overview"?"on":""}" onclick="show('overview')">Overview</button><button class="${cur==="events"?"on":""}" onclick="show('events')">Events (${D.events.length})</button>`;
- for(const arm in by){h+=`<h4>${esc(arm)}</h4>`+by[arm].map(s=>{const e=evalSum(s);return `<button class="${cur===s.id?"on":""}" onclick="show('${s.id}')">sample ${s.sample} · T ${s.temperature}<div class="sub">${solved(s)?"✓ solved debug":"✗ not solved"} · ${Object.entries(e).map(([k,v])=>k+" "+v.ok+"/"+v.n).join(" · ")||"no eval"}</div></button>`}).join("")}
- $("#nav").innerHTML=h}
-function overview(){
- const arms=[...new Set(D.samples.map(s=>s.arm))];
- const stat=arms.map(a=>{const ss=D.samples.filter(s=>s.arm===a);return `<div class="stat"><span class="muted">${esc(a)}</span><b>${ss.filter(solved).length}/${ss.length}</b><span class="muted">samples solved the debug seed</span></div>`}).join("");
- const rows=D.samples.map(s=>{const e=evalSum(s);return `<tr style="cursor:pointer" onclick="show('${s.id}')"><td>${esc(s.arm)}</td><td>${s.sample}</td><td>${s.temperature}</td><td>${s.attempts.length}</td><td>${solved(s)?chip("yes","ok"):chip("no","bad")}</td>${["stock","scaled"].map(k=>`<td>${e[k]?e[k].ok+"/"+e[k].n:"–"}</td>`).join("")}<td>${s.tokens_new.toLocaleString()}</td><td>${usd(s.tokens_new)}</td></tr>`}).join("");
- const cfg=Object.entries(D.config).filter(([k])=>!["scenes"].includes(k)).map(([k,v])=>`<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join("");
- return `<div class="grid">${stat}</div><h3>Samples</h3><div class="card"><table><tr><th>Arm</th><th>Sample</th><th>T</th><th>Attempts</th><th>Solved debug</th><th>Eval stock</th><th>Eval scaled</th><th>New tokens</th><th>≈ cost</th></tr>${rows}</table></div>
- <p class="muted">Cost uses ${D.usd_per_mtok} $/M tokens (an estimate). "New tokens" excludes cached replies. Click a row to open the trace.</p>
- ${det("Run config",`<table>${cfg}</table>`)}`}
+
+/* ---------- rollout helpers, filters ---------- */
+const RO=()=>D.rollouts,byId=id=>D.rollouts.find(r=>r.id===id),smp=id=>D.samples.find(s=>s.id===id);
+const arms=()=>[...new Set(RO().map(r=>r.arm))];
+const armCol=a=>PAL[Math.max(0,arms().indexOf(a))%PAL.length];
+const grp=r=>r.kind==="debug"?"debug seed":r.scene;
+const groups=()=>[...new Set(RO().map(grp))];
+const label=r=>`${r.sample} · ${r.kind==="debug"?"debug a"+r.attempt:"eval "+grp(r)+" "+r.seed}`;
+let F={arm:"",scene:"",outcome:"",cause:"",q:""},S={key:0,dir:1};
+const filt=()=>RO().filter(r=>(!F.arm||r.arm===F.arm)&&(!F.scene||grp(r)===F.scene)&&(!F.outcome||(F.outcome==="success")===r.success)&&(!F.cause||r.cause===F.cause)&&(!F.q||(r.id+" "+r.cause+" "+grp(r)+" "+r.seed).toLowerCase().includes(F.q)));
+function setF(k,v){F[k]=v;if(k==="q")renderRes();else show(cur,true)}
+function filterBar(){
+ const opt=(k,vals,all)=>`<select onchange="setF('${k}',this.value)"><option value="">${all}</option>${vals.map(v=>`<option ${F[k]===v?"selected":""}>${esc(v)}</option>`).join("")}</select>`;
+ return `<div class="bar">${opt("arm",arms(),"all arms")}${opt("scene",groups(),"all scenes")}<select onchange="setF('outcome',this.value)"><option value="">success + failure</option><option value="success" ${F.outcome==="success"?"selected":""}>success only</option><option value="failure" ${F.outcome==="failure"?"selected":""}>failure only</option></select>${F.cause?`<button class="chip acc" onclick="setF('cause','')">cause: ${esc(F.cause)} ✕</button>`:""}<input type="search" placeholder="search rollouts" value="${esc(F.q)}" oninput="setF('q',this.value.toLowerCase())"><span id="cnt" class="muted"></span></div>`}
+
+/* ---------- charts (inline SVG) ---------- */
+function barChart(rs){
+ const gs=groups().filter(g=>rs.some(r=>grp(r)===g)),as=arms().filter(a=>rs.some(r=>r.arm===a));
+ if(!gs.length)return `<div class="muted">no rollouts match</div>`;
+ const W=560,H=230,L=34,B=44,T=14,gw=(W-L-8)/gs.length,bw=Math.min(46,(gw-14)/as.length);
+ let o=[0,.25,.5,.75,1].map(v=>{const y=T+(H-T-B)*(1-v);return `<line x1="${L}" x2="${W}" y1="${y}" y2="${y}" stroke="var(--line)"/><text x="${L-5}" y="${y+4}" text-anchor="end">${v*100}%</text>`}).join("");
+ gs.forEach((g,gi)=>{const x0=L+gi*gw+(gw-bw*as.length)/2;
+  o+=`<text x="${L+gi*gw+gw/2}" y="${H-B+16}" text-anchor="middle">${esc(g)}</text>`;
+  as.forEach((a,ai)=>{const x=rs.filter(r=>r.arm===a&&grp(r)===g),k=x.filter(r=>r.success).length,[p,lo,hi]=wilson(k,x.length);if(!x.length)return;
+   const px=x0+ai*bw,yv=v=>T+(H-T-B)*(1-v),cx=px+bw/2;
+   o+=`<g><title>${esc(a)} · ${esc(g)}: ${k}/${x.length} = ${(p*100).toFixed(0)}% (95% Wilson CI ${(lo*100).toFixed(0)}–${(hi*100).toFixed(0)}%)</title><rect x="${px+2}" y="${yv(p)}" width="${bw-4}" height="${Math.max(1,H-B-yv(p))}" rx="3" fill="${armCol(a)}" opacity=".85"/><line x1="${cx}" x2="${cx}" y1="${yv(lo)}" y2="${yv(hi)}" stroke="var(--ink)" stroke-width="1.5"/><line x1="${cx-4}" x2="${cx+4}" y1="${yv(hi)}" y2="${yv(hi)}" stroke="var(--ink)"/><line x1="${cx-4}" x2="${cx+4}" y1="${yv(lo)}" y2="${yv(lo)}" stroke="var(--ink)"/><text x="${cx}" y="${H-B+30}" text-anchor="middle">${k}/${x.length}</text></g>`})});
+ const lg=as.map((a,i)=>`<span class="chip" style="color:${armCol(a)}">■ ${esc(a)}</span>`).join("");
+ return `<svg viewBox="0 0 ${W} ${H}">${o}</svg><div>${lg}<span class="muted">bars = success rate, whiskers = 95% Wilson interval</span></div>`}
+function heatmap(rs){
+ const cols=[...new Map(rs.map(r=>[r.kind==="debug"?"debug a"+r.attempt:grp(r)+" "+r.seed,r])).keys()];
+ const rows=[...new Set(rs.map(r=>r.sample))];
+ if(!rows.length)return `<div class="muted">no rollouts match</div>`;
+ const cw=24,rh=24,L=110,T=84,W=L+cols.length*cw+8,H=T+rows.length*rh+4;
+ let o=cols.map((c,i)=>`<text transform="translate(${L+i*cw+cw/2+4},${T-6}) rotate(-55)">${esc(c)}</text>`).join("");
+ rows.forEach((s,ri)=>{o+=`<text x="${L-6}" y="${T+ri*rh+16}" text-anchor="end">${esc(s)}</text>`;
+  cols.forEach((c,ci)=>{const r=rs.find(r=>r.sample===s&&(r.kind==="debug"?"debug a"+r.attempt:grp(r)+" "+r.seed)===c);if(!r)return;
+   o+=`<rect class="cl" x="${L+ci*cw+1}" y="${T+ri*rh+1}" width="${cw-2}" height="${rh-2}" rx="4" fill="${r.success?"var(--ok)":"var(--bad)"}" opacity="${r.success?.8:.9}" onclick="show('r:${r.id}')"><title>${esc(label(r))}\n${r.success?"success":"failed: "+esc(r.cause)}</title></rect>`})});
+ return `<svg viewBox="0 0 ${W} ${H}" style="max-width:${W}px">${o}</svg><div class="muted">green = success, red = failure · click a cell to open the rollout</div>`}
+function causeChart(rs){
+ const fails=rs.filter(r=>!r.success),m={};fails.forEach(r=>{(m[r.cause]??={n:0,by:{}});m[r.cause].n++;m[r.cause].by[r.arm]=(m[r.cause].by[r.arm]||0)+1});
+ const ents=Object.entries(m).sort((a,b)=>b[1].n-a[1].n);window._causes=ents.map(e=>e[0]);
+ if(!ents.length)return `<div class="muted">no failures in this selection</div>`;
+ const W=560,rh=26,L=210,mx=ents[0][1].n,H=ents.length*rh+6;
+ const o=ents.map(([c,v],i)=>{let x=L;const y=i*rh+3;return `<g class="cl" onclick="setF('cause',window._causes[${i}])"><text x="${L-6}" y="${y+16}" text-anchor="end" style="${F.cause===c?"fill:var(--ink);font-weight:700":""}">${esc(c.length>32?c.slice(0,31)+"…":c)}</text>${Object.entries(v.by).map(([a,n])=>{const w=(W-L-30)*n/mx,r=`<rect x="${x}" y="${y}" width="${w}" height="${rh-8}" rx="3" fill="${armCol(a)}" opacity=".85"><title>${esc(c)} · ${esc(a)}: ${n}</title></rect>`;x+=w;return r}).join("")}<text x="${x+5}" y="${y+16}">${v.n}</text></g>`}).join("");
+ return `<svg viewBox="0 0 ${W} ${H}">${o}</svg><div class="muted">failed rollouts by first failing tool call (or end state) · click a bar to filter</div>`}
+function scatter(rs){
+ const pts=D.samples.map(s=>{const e=rs.filter(r=>r.sample===s.id&&r.kind==="eval");return e.length?{s,n:e.length,p:e.filter(r=>r.success).length/e.length,x:s.tokens_new}:null}).filter(Boolean);
+ if(!pts.length)return `<div class="muted">no evaluated samples match</div>`;
+ const W=560,H=230,L=40,B=34,T=10,mx=Math.max(...pts.map(p=>p.x),1)*1.08,X=v=>L+(W-L-12)*v/mx,Y=v=>T+(H-T-B)*(1-v);
+ let o=[0,.5,1].map(v=>`<line x1="${L}" x2="${W}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(--line)"/><text x="${L-5}" y="${Y(v)+4}" text-anchor="end">${v*100}%</text>`).join("");
+ for(let i=0;i<=4;i++){const v=mx*i/4;o+=`<text x="${X(v)}" y="${H-B+16}" text-anchor="middle">${v>=1000?Math.round(v/1000)+"k":Math.round(v)}</text>`}
+ o+=`<text x="${(L+W)/2}" y="${H-4}" text-anchor="middle">new tokens spent on the sample</text>`;
+ o+=pts.map(p=>`<circle class="cl" cx="${X(p.x)}" cy="${Y(p.p)}" r="7" fill="${armCol(p.s.arm)}" opacity=".85" onclick="show('${p.s.id}')"><title>${esc(p.s.id)}: ${Math.round(p.p*p.n)}/${p.n} eval rollouts, ${p.x.toLocaleString()} tokens (${usd(p.x)})</title></circle>`).join("");
+ return `<svg viewBox="0 0 ${W} ${H}">${o}</svg><div class="muted">one dot per sample · click to open its trace</div>`}
+function summaryTable(rs){
+ const rows=[];arms().forEach(a=>[true,false].forEach(ok=>{const x=rs.filter(r=>r.arm===a&&r.success===ok);if(x.length)rows.push(`<tr><td>${esc(a)}</td><td>${chip(ok?"success":"failed",okc(ok))}</td><td>${x.length}</td><td>${fmt(med(x.map(r=>r.steps)),0)}</td><td>${fmt(med(x.map(r=>r.sim_s)))}</td><td>${fmt(med(x.map(r=>(r.spans||[]).reduce((s,c)=>s+c.wall_s,0))))}</td><td>${fmt(med(x.map(r=>(r.spans||[]).length)),0)}</td></tr>`)}));
+ return `<table><tr><th>Arm</th><th>Outcome</th><th>n</th><th>median steps</th><th>median sim s</th><th>median program s</th><th>median tool calls</th></tr>${rows.join("")}</table>`}
+
+/* ---------- dashboard ---------- */
+function dashRes(){const rs=filt(),ev=rs.filter(r=>r.kind==="eval"),k=rs.filter(r=>r.success).length,[p,lo,hi]=wilson(k,rs.length);
+ const ke=ev.filter(r=>r.success).length,[pe,loe,hie]=wilson(ke,ev.length);
+ const tok=D.samples.reduce((a,s)=>a+s.tokens_new,0),nc=new Set(rs.filter(r=>!r.success).map(r=>r.cause)).size;
+ return `<div class="grid"><div class="stat"><span class="muted">rollouts</span><b>${rs.length}</b><span class="muted">${k} success · ${rs.length-k} failed</span></div>
+ <div class="stat"><span class="muted">success rate</span><b>${rs.length?(p*100).toFixed(0)+"%":"–"}</b><span class="muted">95% CI ${(lo*100).toFixed(0)}–${(hi*100).toFixed(0)}%</span></div>
+ <div class="stat"><span class="muted">evaluation only</span><b>${ev.length?(pe*100).toFixed(0)+"%":"–"}</b><span class="muted">${ke}/${ev.length} · CI ${(loe*100).toFixed(0)}–${(hie*100).toFixed(0)}%</span></div>
+ <div class="stat"><span class="muted">distinct failure causes</span><b>${nc}</b><span class="muted">click a bar below to drill in</span></div>
+ <div class="stat"><span class="muted">new tokens</span><b>${tok.toLocaleString()}</b><span class="muted">≈ ${usd(tok)}</span></div></div>
+ <div class="two viz"><div class="card pad"><h3 class="t">Success rate by scene and arm</h3>${barChart(rs)}</div><div class="card pad"><h3 class="t">Why rollouts fail</h3>${causeChart(rs)}</div></div>
+ <div class="card pad viz" style="overflow:auto"><h3 class="t">Every rollout: sample × seed</h3>${heatmap(rs)}</div>
+ <div class="two viz" style="margin-top:12px"><div class="card pad"><h3 class="t">Token spend vs evaluation success</h3>${scatter(rs)}</div><div class="card pad"><h3 class="t">What a success looks like vs a failure</h3>${summaryTable(rs)}<p class="muted">Medians over the selected rollouts. A large gap in steps or program time between outcomes points to a stuck or aborted motion.</p></div></div>`}
+function dash(){return `${filterBar()}<div id="res">${dashRes()}</div>
+ <p class="muted">Run config: ${Object.entries(D.config).filter(([k])=>!["scenes"].includes(k)).map(([k,v])=>esc(k)+"="+esc(v)).join(" · ")}</p>`}
+
+/* ---------- rollout table ---------- */
+const COLS=[["Rollout",r=>r.id],["Arm",r=>r.arm],["T",r=>r.temperature],["Scene",r=>grp(r)],["Seed",r=>r.seed],["Result",r=>r.success?1:0],["Cause",r=>r.cause],["Steps",r=>r.steps],["Sim s",r=>r.sim_s],["Program s",r=>(r.spans||[]).reduce((s,c)=>s+c.wall_s,0)],["Calls ok",r=>(r.spans||[]).filter(c=>c.ok).length/Math.max(1,(r.spans||[]).length)],["Video",r=>Object.keys(r.videos||{}).length]];
+const sorted=rs=>{const g=COLS[S.key][1];return [...rs].sort((a,b)=>{const x=g(a),y=g(b);return (x==null)-(y==null)||(x<y?-1:x>y?1:0)*S.dir})};
+function sortBy(i){S.dir=S.key===i?-S.dir:1;S.key=i;renderRes()}
+function rowsRes(){const rs=sorted(filt());
+ return `<div class="card"><table><tr>${COLS.map((c,i)=>`<th class="s" onclick="sortBy(${i})">${c[0]}${S.key===i?(S.dir>0?" ▲":" ▼"):""}</th>`).join("")}</tr>${rs.map(r=>`<tr class="row" onclick="show('r:${r.id}')"><td>${esc(label(r))}</td><td>${esc(r.arm)}</td><td>${r.temperature}</td><td>${esc(grp(r))}</td><td>${r.seed}</td><td>${chip(r.success?"success":"failed",okc(r.success))}</td><td>${esc(r.cause)}</td><td>${r.steps??"–"}</td><td>${fmt(r.sim_s)}</td><td>${fmt((r.spans||[]).reduce((s,c)=>s+c.wall_s,0))}</td><td>${(r.spans||[]).filter(c=>c.ok).length}/${(r.spans||[]).length}</td><td>${Object.keys(r.videos||{}).length?"▶":""}</td></tr>`).join("")||"<tr><td colspan=12 class=muted>no rollouts match</td></tr>"}</table></div>`}
+function rollouts(){return `<h2 style="margin:0 0 10px">Rollouts</h2>${filterBar()}<div id="res">${rowsRes()}</div><p class="muted">Click a header to sort and a row to open the video and signal explorer. The filters are shared with the dashboard.</p>`}
+function updCnt(){const c=$("#cnt");if(c)c.textContent=`${filt().length} of ${RO().length} rollouts`}
+function renderRes(){const e=$("#res");if(e)e.innerHTML=cur==="dash"?dashRes():rowsRes();updCnt()}
+
+/* ---------- synced player + signal plot ---------- */
+const P={vids:[],master:null,raf:0,rs:[],view:null};
+function stopPlayer(){cancelAnimationFrame(P.raf);P.vids.forEach(v=>v.pause());P.vids=[];P.master=null}
+const dur=r=>r.steps!=null?(r.steps+1)/(r.fps||20):(r.signals?r.signals.t.at(-1):1);
+function videoTag(r,cam,cap){const src=r.videos?.[cam];return src?`<figure><video data-sync data-dur="${dur(r)}" src="${esc(src)}" muted playsinline preload="auto"></video><figcaption>${esc(cap)}</figcaption></figure>`:`<figure><div class="card pad muted">no ${esc(cam)} video recorded</div></figure>`}
+function controls(rs){const d=Math.max(...rs.map(dur));return `<div class="ctl"><button id="pp" onclick="toggle()" title="space">▶</button><button onclick="stepF(-1)" title="←">⏮</button><button onclick="stepF(1)" title="→">⏭</button><input id="sc" type="range" min="0" max="${d}" step="0.01" value="0" oninput="seek(+this.value)"><span id="tl" class="mono">0.00 / ${d.toFixed(2)} s</span><select onchange="setRate(+this.value)" title="speed">${[.25,.5,1,2].map(x=>`<option ${x===1?"selected":""} value="${x}">${x}×</option>`).join("")}</select></div>`}
+function mount(rs,mode){stopPlayer();P.vids=[...document.querySelectorAll("video[data-sync]")];P.rs=rs;P.view=mode;
+ P.master=P.vids.reduce((a,b)=>(+b.dataset.dur>+(a?.dataset.dur||0)?b:a),null);
+ if(P.master)P.master.addEventListener("ended",()=>{$("#pp").textContent="▶"});
+ P.vids.forEach(v=>v.addEventListener("seeked",()=>{if(v===P.master)cursor(v.currentTime)}));
+ const svg=$("#plot");if(svg){const W=1000,T=+svg.dataset.t,L=+svg.dataset.l,R=+svg.dataset.r;svg._m={T,L,R,X:t=>L+(W-L-R)*t/T};const tOf=e=>{const b=svg.getBoundingClientRect(),m=svg._m;return Math.max(0,Math.min(m.T,((e.clientX-b.left)/b.width*W-m.L)/(W-m.L-m.R)*m.T))};
+  svg.addEventListener("pointerdown",e=>{svg.setPointerCapture(e.pointerId);seek(tOf(e))});
+  svg.addEventListener("pointermove",e=>{const t=tOf(e);ghost(t);if(e.buttons)seek(t)});svg.addEventListener("pointerleave",()=>ghost(null))}
+ cursor(0)}
+function toggle(){if(!P.master)return;if(P.master.paused){if(P.master.ended||P.master.currentTime>=+P.master.dataset.dur-.06)seek(0);P.vids.forEach(v=>v.play());$("#pp").textContent="⏸";loop()}else{P.vids.forEach(v=>v.pause());$("#pp").textContent="▶"}}
+function loop(){cancelAnimationFrame(P.raf);const f=()=>{if(!P.master)return;cursor(P.master.currentTime);if(!P.master.paused&&!P.master.ended)P.raf=requestAnimationFrame(f);else $("#pp").textContent="▶"};f()}
+function seek(t){P.vids.forEach(v=>{v.currentTime=Math.max(0,Math.min(t,(v.duration||t)-.001))});cursor(t)}
+function stepF(n){if(!P.master)return;P.vids.forEach(v=>v.pause());$("#pp").textContent="▶";seek(P.master.currentTime+n/(P.rs[0].fps||20))}
+function setRate(x){P.vids.forEach(v=>v.playbackRate=x)}
+function cursor(t){const sc=$("#sc");if(sc)sc.value=t;const tl=$("#tl");if(tl)tl.textContent=`${t.toFixed(2)} / ${(+sc?.max||0).toFixed(2)} s`;
+ const svg=$("#plot");if(svg&&svg._m){const x=svg._m.X(t);svg.querySelectorAll(".cur").forEach(l=>{l.setAttribute("x1",x);l.setAttribute("x2",x)})}
+ const ro=$("#readout");if(ro)ro.innerHTML=readout(t)}
+function ghost(t){const svg=$("#plot");if(!svg)return;svg.querySelectorAll(".gh").forEach(l=>{if(t==null)l.setAttribute("opacity",0);else{const x=svg._m.X(t);l.setAttribute("x1",x);l.setAttribute("x2",x);l.setAttribute("opacity",.5)}})}
+function at(r,t){const s=r.signals;if(!s)return null;let i=0;while(i<s.t.length-1&&s.t[i+1]<=t)i++;return i}
+function readout(t){return P.rs.map((r,k)=>{const s=r.signals,i=at(r,t);if(i==null)return "";const span=[...(r.spans||[])].reverse().find(c=>c.t0<=t&&t<=c.t1);
+ const v=n=>fmt(s[n][i],3);return `<span style="color:${P.rs.length>1?PAL[k]:"inherit"}">${P.rs.length>1?esc(label(r))+" · ":""}t=${t.toFixed(2)}s · eef (${v("x")}, ${v("y")}, ${v("z")}) · gripper ${v("grip")} / cmd ${v("grip_cmd")} · err ${v("err")} rad${span?` · in <b>${esc(span.name)}</b>${span.ok?"":" ✗"}`:""}</span>`}).join("<br>")}
+function niceStep(T){const c=[.5,1,2,5,10,20,50];return c.find(s=>T/s<=10)||100}
+function plot(rs,mode){
+ const W=1000,L=58,R=12,PH=mode==="single"?110:90,GAP=26,top=mode==="single"?34:18,T=Math.max(0.1,...rs.map(r=>r.signals?r.signals.t.at(-1):0));
+ const X=t=>L+(W-L-R)*t/T;
+ const pan=mode==="single"?[["end-effector position (m)",[["x","x"],["y","y"],["z","z"]]],["gripper state / command",[["grip","state"],["grip_cmd","command"]]],["joint tracking error ‖q − q_target‖ (rad)",[["err","error"]]]]:[["height z (m)",[["z","z"]]],["x (m)",[["x","x"]]],["y (m)",[["y","y"]]],["gripper state",[["grip","state"]]],["joint tracking error (rad)",[["err","error"]]]];
+ const H=top+pan.length*(PH+GAP)+8;let o="";
+ if(mode==="single")(rs[0].spans||[]).forEach((c,i)=>{const x0=X(c.t0),w=Math.max(1.5,X(c.t1)-x0);
+  o+=`<rect x="${x0}" y="${top}" width="${w}" height="${H-top-22}" fill="${c.ok?(i%2?"var(--acc)":"var(--mute)"):"var(--bad)"}" opacity="${c.ok?.07:.12}"><title>${esc(c.name)} · sim ${c.t0.toFixed(2)}–${c.t1.toFixed(2)} s · program ${c.wall_s}s${c.ok?"":"\nFAILED "+esc(JSON.stringify(c.error||{}))}</title></rect>`;
+  if(w>34)o+=`<text x="${x0+3}" y="14" style="font-size:10px;${c.ok?"":"fill:var(--bad)"}">${esc(c.name.replace(/_/g," ").slice(0,Math.floor(w/5.5)))}</text>`});
+ pan.forEach(([title,chs],pi)=>{const y0=top+pi*(PH+GAP);
+  const vals=rs.flatMap(r=>chs.flatMap(([k])=>r.signals?.[k]||[])).filter(v=>v!=null);if(!vals.length){o+=`<text x="${L}" y="${y0+PH/2}">no data: ${esc(title)}</text>`;return}
+  let lo=Math.min(...vals),hi=Math.max(...vals);if(hi-lo<1e-6){lo-=.5;hi+=.5}const pd=(hi-lo)*.08;lo-=pd;hi+=pd;const Y=v=>y0+PH-(v-lo)/(hi-lo)*PH;
+  o+=`<text x="${L}" y="${y0-4}" style="font-weight:600">${esc(title)}</text><rect x="${L}" y="${y0}" width="${W-L-R}" height="${PH}" fill="none" stroke="var(--line)"/><text x="${L-4}" y="${y0+9}" text-anchor="end">${(hi).toFixed(2)}</text><text x="${L-4}" y="${y0+PH}" text-anchor="end">${lo.toFixed(2)}</text>`;
+  rs.forEach((r,ri)=>chs.forEach(([k,nm],ci)=>{const s=r.signals;if(!s)return;let d="",pen=false;s[k].forEach((v,i)=>{if(v==null){pen=false;return}d+=(pen?"L":"M")+X(s.t[i]).toFixed(1)+" "+Y(v).toFixed(1);pen=true});
+   const col=mode==="single"?PAL[ci]:PAL[ri];o+=`<path d="${d}" fill="none" stroke="${col}" stroke-width="1.6" ${mode!=="single"||k!=="grip_cmd"?"":"stroke-dasharray='4 3'"}><title>${esc(nm)}</title></path>`}));
+  if(mode==="single")o+=chs.map(([,nm],ci)=>`<text x="${W-R-6-(chs.length-1-ci)*60}" y="${y0+12}" text-anchor="end" style="fill:${PAL[ci]}">${esc(nm)}</text>`).join("")});
+ const st=niceStep(T),yb=H-8;for(let t=0;t<=T+1e-6;t+=st)o+=`<text x="${X(t)}" y="${yb}" text-anchor="middle">${t}s</text>`;
+ o+=`<line class="gh" y1="${top}" y2="${H-22}" stroke="var(--ink)" opacity="0" pointer-events="none"/><line class="cur" y1="${top}" y2="${H-22}" stroke="var(--ink)" stroke-width="1.5" pointer-events="none"/>`;
+ return `<svg id="plot" viewBox="0 0 ${W} ${H}" style="touch-action:none;cursor:crosshair" data-t="${T}" data-l="${L}" data-r="${R}">${o}</svg>`}
+function spanTable(r){return `<table><tr><th>#</th><th>call</th><th>sim time</th><th>program s</th><th>status</th><th>detail</th></tr>${(r.spans||[]).map((c,i)=>`<tr class="row" onclick="seek(${c.t0})"><td>${i+1}</td><td class="mono">${esc(c.name)}</td><td class="mono">${c.t0.toFixed(2)}–${c.t1.toFixed(2)}</td><td>${c.wall_s}</td><td>${chip(c.ok?"ok":(c.error?.code||"failed"),okc(c.ok))}</td><td>${c.error?`${esc(c.error.message||"")}<pre>${esc(JSON.stringify({details:c.error.details,diagnostics:c.error.diagnostics},null,1))}</pre>`:""}</td></tr>`).join("")||"<tr><td colspan=6 class=muted>no tool-call trace</td></tr>"}</table>`}
+function whyBox(r){const f=(r.spans||[]).find(c=>!c.ok),s=smp(r.sample),att=r.kind==="debug"?s?.attempts[r.attempt]:null;
+ if(r.success)return `<div class="why ok"><b>Success</b> after ${r.steps??"?"} steps (${fmt(r.sim_s)} s simulated)${r.success_step!=null?`, task detected at step ${r.success_step}`:""}. ${esc(r.description||"")}</div>`;
+ const d=f?.error?.details;
+ return `<div class="why"><b>Failed: ${esc(r.cause)}</b><br>${f?`${esc(f.name)} failed at sim ${f.t1.toFixed(2)} s${f.error?.message?": "+esc(f.error.message):""}${d&&d.joint_error_rad!=null?` (joint error ${(+d.joint_error_rad).toFixed(3)} rad vs tolerance ${d.tolerance_rad} after ${d.max_steps} steps)`:""}.`:esc(r.description||"The program ended without the task being completed.")}${r.error?`<pre>${esc(r.error)}</pre>`:""}${att?.feedback?det("Feedback the model received for the next attempt",`<pre>${esc(JSON.stringify(att.feedback,null,1))}</pre>`):""}</div>`}
+function explorer(r){
+ const list=sorted(filt().includes(r)?filt():RO()),i=list.indexOf(r),pv=list[i-1],nx=list[i+1],s=smp(r.sample);
+ const cams=Object.keys(r.videos||{}),vids=cams.map(c=>videoTag(r,c,c.replace(/_/g," "))).join("");
+ return `<div class="bar"><button class="chip" onclick="show('rollouts')">← rollouts</button><button class="chip" ${pv?`onclick="show('r:${pv.id}')"`:"disabled"}>◀ prev</button><button class="chip" ${nx?`onclick="show('r:${nx.id}')"`:"disabled"}>next ▶</button><button class="chip acc" onclick="C.a='${r.id}';show('compare')">compare…</button><button class="chip acc" onclick="show('${r.sample}')">open sample trace</button></div>
+ <h2 style="margin:0 0 6px">${esc(label(r))}</h2><div style="margin-bottom:10px">${chip(r.success?"success":"failed",okc(r.success))}${chip(grp(r)+" · seed "+r.seed)}${chip("T "+r.temperature)}${chip((r.steps??"?")+" steps")}${chip(fmt(r.sim_s)+" s sim")}${r.reward!=null?chip("reward "+r.reward):""}</div>
+ ${r.missing?`<div class="why">This rollout's directory is no longer on disk, so only the summary is available.</div>`:whyBox(r)}
+ ${cams.length?`<div class="vids">${vids}</div>${controls([r])}`:""}
+ ${r.signals?`<div class="card pad viz"><h3 class="t">Signals, aligned with the video · shaded bands are tool calls (red = failed) · click or drag to seek</h3>${plot([r],"single")}<div id="readout" class="mono muted"></div></div>`:""}
+ ${det("Tool calls ("+(r.spans||[]).length+")",spanTable(r),true)}
+ ${r.overlays?.length?det("Perception overlays (SAM3 segmentation)",frames(r.overlays.map((p,k)=>({src:p,label:"overlay "+(k+1)}))),true):""}
+ ${r.keyframes?.length?det("Keyframes around each action",frames(r.keyframes)):""}
+ ${r.stdout?det("Program stdout",`<pre>${esc(r.stdout)}</pre>`):""}${r.stderr?det("Program stderr",`<pre>${esc(r.stderr)}</pre>`):""}`}
+
+/* ---------- compare ---------- */
+let C={a:"",b:"",cam:"agentview"};
+function compare(){const vr=RO().filter(r=>Object.keys(r.videos||{}).length);
+ if(!vr.length)return `<h2>Compare</h2><p class="muted">No rollout videos in this run.</p>`;
+ if(!byId(C.a)){const a=vr.find(r=>r.success)||vr[0];C.a=a.id}
+ if(!byId(C.b)){const A=byId(C.a),b=vr.find(r=>r!==A&&r.success!==A.success&&grp(r)===grp(A)&&r.seed===A.seed)||vr.find(r=>r!==A&&r.success!==A.success)||vr.find(r=>r!==A);C.b=(b||A).id}
+ const A=byId(C.a),B=byId(C.b),cams=[...new Set(vr.flatMap(r=>Object.keys(r.videos)))];
+ const sel=(k)=>`<select onchange="C.${k}=this.value;show('compare')">${vr.map(r=>`<option value="${esc(r.id)}" ${C[k]===r.id?"selected":""}>${esc(label(r))} ${r.success?"✓":"✗"}</option>`).join("")}</select>`;
+ const side=(r,k)=>`<div><div style="margin-bottom:6px;color:${PAL[k]}">■ ${k?"B":"A"} ${chip(r.success?"success":"failed",okc(r.success))}${chip(r.cause)}${chip((r.steps??"?")+" steps")}</div>${videoTag(r,C.cam,label(r))}</div>`;
+ return `<h2 style="margin:0 0 10px">Compare two rollouts</h2><div class="bar"><span style="color:var(--s1)">A</span>${sel("a")}<span style="color:var(--s2)">B</span>${sel("b")}<select onchange="C.cam=this.value;show('compare')">${cams.map(c=>`<option ${C.cam===c?"selected":""}>${esc(c)}</option>`).join("")}</select><button class="chip" onclick="[C.a,C.b]=[C.b,C.a];show('compare')">swap</button></div>
+ <div class="vids">${side(A,0)}${side(B,1)}</div>${controls([A,B])}
+ <div class="card pad viz"><h3 class="t">Signals overlaid · blue = A, orange = B · click or drag to seek both videos</h3>${plot([A,B],"cmp")}<div id="readout" class="mono muted"></div></div>
+ <div class="two"><div class="card pad"><h3 class="t">A · tool calls</h3>${spanTable(A)}</div><div class="card pad"><h3 class="t">B · tool calls</h3>${spanTable(B)}</div></div>
+ <p class="muted">Pairs are preselected as a success and a failure on the same scene and seed when one exists, so the difference is down to the program.</p>`}
+
+/* ---------- events, samples (program trace) ---------- */
 function events(){return `<h3>Events</h3><div class="card"><table><tr><th>Time</th><th>Kind</th><th>Details</th></tr>${D.events.map(e=>{const{time,kind,...r}=e;return `<tr><td class="muted">${esc(time.slice(11))}</td><td>${chip(kind,/stop/.test(kind)?"bad":"")}</td><td>${esc(JSON.stringify(r))}</td></tr>`}).join("")||"<tr><td colspan=3 class=muted>no events recorded (older run)</td></tr>"}</table></div>`}
 function attempt(a){const rail=okc(a.success);
  const calls=a.calls.map(c=>`<span class="${c.ok?"":"f"}" title="${esc(c.code||"")}">${esc(c.name)}</span>`).join("");
  const fb=a.feedback?det("Feedback sent to the model for the next attempt",`<pre>${esc(JSON.stringify(a.feedback,null,1))}</pre>`):"";
- return `<div class="rail ${rail}"><details class="card" open><summary>Attempt ${a.attempt} · ${a.role==="initial"?"initial policy":"repair"} ${chip(a.success?"success":"failed",okc(a.success))}${chip(a.tokens.toLocaleString()+" tokens"+(a.from_cache?" (cached)":""))}</summary><div class="bd">
+ return `<div class="rail ${rail}"><details class="card" open><summary>Attempt ${a.attempt} · ${a.role==="initial"?"initial policy":"repair"} ${chip(a.success?"success":"failed",okc(a.success))}${chip(a.tokens.toLocaleString()+" tokens"+(a.from_cache?" (cached)":""))}<button class="chip acc" onclick="event.preventDefault();show('r:${a.rid}')">watch rollout ▸</button></summary><div class="bd">
  ${a.prompt?det(a.attempt?"Message sent to the model":"Prompt (task + demonstration)",`<pre>${esc(a.prompt)}</pre>`):""}
  ${a.reply?det("Model reply",`<pre>${esc(a.reply)}</pre>`):""}
  ${a.attempt?det("Program changes vs attempt "+(a.attempt-1),diff(a.diff),true):""}
@@ -267,14 +616,30 @@ function attempt(a){const rail=okc(a.success);
  ${det("Rollout on the debug seed "+chip(a.reason,okc(a.success))+chip((a.wall_s??"?")+" s"),`<div class="calls">${calls||"<span class=muted>no tool calls</span>"}</div>${a.error?`<pre>${esc(a.error)}</pre>`:""}${frames(a.frames)}`,true)}
  ${fb}</div></details></div>`}
 function sample(s){const e=s.evaluation;
- const scenes=[...new Set(e.map(x=>x.scene))];
- const ev=e.length?`<div class="card"><table><tr><th>Scene</th><th>Seed</th><th>Result</th><th>Reason</th><th>Time</th></tr>${e.map(x=>`<tr><td>${esc(x.scene)}</td><td>${x.seed}</td><td>${chip(x.success?"success":"failed",okc(x.success))}</td><td>${esc(x.reason)}</td><td>${x.wall_s??""} s</td></tr>`).join("")}</table></div>${scenes.length?"":""}`:`<p class="muted">no evaluation</p>`;
+ const ev=e.length?`<div class="card"><table><tr><th>Scene</th><th>Seed</th><th>Result</th><th>Reason</th><th>Time</th></tr>${e.map(x=>`<tr class="row" onclick="show('r:${x.rid}')"><td>${esc(x.scene)}</td><td>${x.seed}</td><td>${chip(x.success?"success":"failed",okc(x.success))}</td><td>${esc(x.reason)}</td><td>${x.wall_s??""} s</td></tr>`).join("")}</table></div>`:`<p class="muted">no evaluation</p>`;
  const sm=Object.entries(evalSum(s)).map(([k,v])=>chip(k+" "+v.ok+"/"+v.n,v.ok===v.n?"ok":v.ok?"acc":"bad")).join("");
  return `<h2 style="margin:0 0 6px">${esc(s.id)} <span class="muted" style="font-weight:400">T ${s.temperature}</span></h2><div style="margin-bottom:12px">${chip(s.attempts.length+" attempts")}${chip(s.tokens_new.toLocaleString()+" new tokens · ≈ "+usd(s.tokens_new),"acc")}${sm}${s.stopped?chip("stopped: "+s.stopped,"bad"):""}</div>
- ${s.attempts.map(attempt).join("")}<h3>Evaluation of the final program</h3>${ev}`}
-function show(id){location.hash=encodeURIComponent(D.name)+"|"+id;nav(id);$("#main").innerHTML=id==="overview"?overview():id==="events"?events():sample(D.samples.find(s=>s.id===id));window.scrollTo(0,0)}
+ ${s.attempts.map(attempt).join("")}<h3>Evaluation of the final program <span class="muted" style="font-weight:400">(click a row to watch)</span></h3>${ev}`}
+
+/* ---------- shell ---------- */
+function pick(i){D=ALL.runs[i];F={arm:"",scene:"",outcome:"",cause:"",q:""};C={a:"",b:"",cam:"agentview"};header();show("dash")}
+function header(){const n=D.samples.reduce((a,s)=>a+s.tokens_new,0);
+ $("#rn").innerHTML=`<select onchange="pick(this.value)" title="Run">${ALL.runs.map((r,i)=>`<option value="${i}" ${r===D?"selected":""}>${esc(r.name)} (${r.samples.length} samples)</option>`).join("")}</select>`;$("#hd").innerHTML=chip(RO().length+" rollouts")+chip(n.toLocaleString()+" new tokens")+chip("≈ "+usd(n),"acc")}
+function nav(c){const by={};D.samples.forEach(s=>(by[s.arm]??=[]).push(s));const sel=c.startsWith("r:")?"rollouts":c;
+ const b=(id,t)=>`<button class="${sel===id?"on":""}" onclick="show('${id}')">${t}</button>`;
+ let h=b("dash","Dashboard")+b("rollouts","Rollouts ("+RO().length+")")+b("compare","Compare")+b("events","Events ("+D.events.length+")");
+ for(const arm in by){h+=`<h4>${esc(arm)} · trace</h4>`+by[arm].map(s=>{const e=evalSum(s);return `<button class="${c===s.id?"on":""}" onclick="show('${s.id}')">sample ${s.sample} · T ${s.temperature}<div class="sub">${solved(s)?"✓ solved debug":"✗ not solved"} · ${Object.entries(e).map(([k,v])=>k+" "+v.ok+"/"+v.n).join(" · ")||"no eval"}</div></button>`}).join("")}
+ $("#nav").innerHTML=h}
+function show(id,keep){const y=window.scrollY;stopPlayer();if(id==="overview")id="dash";cur=id;location.hash=encodeURIComponent(D.name)+"|"+id;nav(id);const m=$("#main");
+ if(id==="dash")m.innerHTML=dash();else if(id==="rollouts")m.innerHTML=rollouts();else if(id==="events")m.innerHTML=events();
+ else if(id==="compare"){m.innerHTML=compare();mount([byId(C.a),byId(C.b)].filter(Boolean),"cmp")}
+ else if(id.startsWith("r:")){const r=byId(id.slice(2));if(!r){m.innerHTML="<p>rollout not found</p>";return}m.innerHTML=explorer(r);mount([r],"single")}
+ else{const s=smp(id);m.innerHTML=s?sample(s):"<p>not found</p>"}
+ updCnt();
+ window.scrollTo(0,keep?y:0)}
+document.addEventListener("keydown",e=>{if(!P.master||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;if(e.code==="Space"){e.preventDefault();toggle()}else if(e.code==="ArrowRight"){e.preventDefault();stepF(1)}else if(e.code==="ArrowLeft"){e.preventDefault();stepF(-1)}});
 {const [rn,...v]=decodeURIComponent(location.hash.slice(1)).split("|");const i=ALL.runs.findIndex(r=>r.name===rn);if(i>=0)D=ALL.runs[i];
-header();show(v.join("|")||"overview")}
+header();show(v.join("|")||"dash")}
 </script></body></html>
 """
 
