@@ -48,3 +48,10 @@ class RunLog:
 
     def write_json(self, relpath: str, obj: object) -> Path:
         return self.write(relpath, json.dumps(obj, indent=1, default=str))
+
+    def append_json(self, relpath: str, obj: object) -> None:
+        """Append one JSON object as a line (e.g. one System 2 cycle per line)."""
+        path = self.root / relpath
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(obj, default=str) + "\n")

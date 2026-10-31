@@ -13,6 +13,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from ants.adversary.perturbations import to_launcher_spec
 from ants.contracts import CallRecord, CaseSpec, EpisodeTrace
 
 
@@ -40,12 +41,13 @@ class CapHarness:
         )
 
     def command(self, case: CaseSpec, program: Path, output_root: Path) -> list[str]:
-        if self.scene:
+        scene = {**(self.scene or {}), **to_launcher_spec(case.perturbations)}
+        if scene:
             if self.launcher is None:
                 raise ValueError("a scene needs the launcher (tools/aspire_launch.py)")
             output_root.mkdir(parents=True, exist_ok=True)
             spec = output_root / "scene.json"
-            spec.write_text(json.dumps(self.scene, indent=1), encoding="utf-8")
+            spec.write_text(json.dumps(scene, indent=1), encoding="utf-8")
             head = [str(self.root / ".venv-libero" / "bin" / "python"), str(self.launcher),
                     str(spec), "--"]  # fmt: skip
         else:
