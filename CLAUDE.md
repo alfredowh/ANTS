@@ -1,5 +1,9 @@
 @AGENTS.md
 
+# Project context
+
+@docs/context.md
+
 # Architecture
 
 @docs/architecture.md
