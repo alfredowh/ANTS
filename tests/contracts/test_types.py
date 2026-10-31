@@ -15,6 +15,9 @@ from ants.contracts import (
     Perturbation,
     Policy,
     RolloutResult,
+    Skill,
+    SkillKind,
+    SkillRef,
 )
 
 
@@ -119,3 +122,52 @@ def test_frozen():
     p = Perturbation("pose", {}, 0.0, seed=0)
     with pytest.raises(FrozenInstanceError):
         p.seed = 1
+
+
+GRASP_SKILL = Skill(
+    "grasp_with_retry",
+    2,
+    SkillKind.CODE,
+    "grasp_with_retry",
+    "the target may move or slip during the grasp",
+    "def grasp_with_retry(robot, name, attempts):\n    ...\n",
+    evidence=("bowl_on_plate@v3",),
+    source_constraints=("c3",),
+    help_count=4,
+)
+
+
+def test_skill_round_trip():
+    rule = Skill("relocalise", 1, SkillKind.GUIDANCE, "Re-localise", "after a miss", "Re-localise.")
+    for s in (GRASP_SKILL, rule):
+        assert Skill.from_dict(_json(s)) == s
+
+
+def test_skill_rejects_empty_body():
+    with pytest.raises(ValueError):
+        Skill("x", 0, SkillKind.GUIDANCE, "x", "always", "  ")
+
+
+def test_policy_records_skills_used():
+    p = Policy("bowl", 4, "t", "def run(robot, params): ...", skills_used=(GRASP_SKILL.ref,))
+    back = Policy.from_dict(_json(p))
+    assert back == p and back.skills_used == (SkillRef("grasp_with_retry", 2),)
+
+
+def test_constraint_can_blame_a_skill():
+    c = Constraint(
+        "c9",
+        "grasp_slip | physics",
+        "low friction",
+        "Raise grasp force when the object is light.",
+        target=BlameTarget.SKILL,
+        skill=GRASP_SKILL.ref,
+    )
+    assert Constraint.from_dict(_json(c)) == c
+
+
+def test_skill_target_and_ref_must_agree():
+    with pytest.raises(ValueError):
+        Constraint("c", "s", "w", "r", target=BlameTarget.SKILL)
+    with pytest.raises(ValueError):
+        Constraint("c", "s", "w", "r", skill=GRASP_SKILL.ref)

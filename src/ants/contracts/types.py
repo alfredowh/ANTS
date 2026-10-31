@@ -4,6 +4,9 @@ Everything is a frozen dataclass and round-trips through JSON (`to_dict` / `from
 object can be logged and replayed. Flow per cycle:
 
     System 1 --Policy--> System 2 --AttackReport--> orchestrator --Feedback--> System 1
+
+Skills (code functions and guidance rules) are proposed by System 1 and admitted to the library by
+the orchestrator only after a policy using them passes the gate.
 """
 
 from __future__ import annotations
@@ -55,6 +58,57 @@ class FailureMode(StrEnum):
 class BlameTarget(StrEnum):
     PROGRAM = "program"  # rewrite the code
     PERCEPTION = "perception"  # re-check what was extracted from the demonstration (DemoSpec)
+    SKILL = "skill"  # fix a library skill; affects every policy that uses it
+
+
+class SkillKind(StrEnum):
+    CODE = "code"  # a verified function over RobotAPI primitives, inlined into policy code
+    GUIDANCE = "guidance"  # a rule the generator reads in context
+
+
+@dataclass(frozen=True)
+class SkillRef:
+    skill_id: str
+    version: int
+
+
+@dataclass(frozen=True)
+class Skill:
+    """One library entry. Retrieved by System 1; admitted only through the regression gate."""
+
+    skill_id: str
+    version: int
+    kind: SkillKind
+    name: str  # function name for CODE, short title for GUIDANCE
+    when_to_apply: str
+    body: str  # Python source of one function for CODE, the rule text for GUIDANCE
+    evidence: tuple[str, ...] = ()  # attack ids or policy versions that passed the gate with it
+    source_constraints: tuple[str, ...] = ()  # constraint ids this skill generalises
+    help_count: int = 0  # times a policy using it passed the gate; drives retrieval and decay
+
+    def __post_init__(self) -> None:
+        if self.version < 0 or self.help_count < 0:
+            raise ValueError("version and help_count must be >= 0")
+        if not self.body.strip():
+            raise ValueError(f"skill {self.skill_id} has an empty body")
+
+    @property
+    def ref(self) -> SkillRef:
+        return SkillRef(self.skill_id, self.version)
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_dict(self)
+
+    @classmethod
+    def from_dict(cls, d: Mapping[str, Any]) -> Skill:
+        return cls(
+            **{
+                **d,
+                "kind": SkillKind(d["kind"]),
+                "evidence": tuple(d.get("evidence", ())),
+                "source_constraints": tuple(d.get("source_constraints", ())),
+            }
+        )
 
 
 @dataclass(frozen=True)
@@ -68,6 +122,7 @@ class Policy:
     params: Mapping[str, Any] = field(default_factory=dict)  # demo-derived values, JSON-able
     parent_version: int | None = None
     constraints: tuple[str, ...] = ()  # constraint ids this version claims to satisfy
+    skills_used: tuple[SkillRef, ...] = ()  # library skills inlined in `code` or read as guidance
     demo_id: str | None = None
 
     def __post_init__(self) -> None:
@@ -84,6 +139,7 @@ class Policy:
                 **d,
                 "params": dict(d.get("params", {})),
                 "constraints": tuple(d.get("constraints", ())),
+                "skills_used": tuple(SkillRef(**s) for s in d.get("skills_used", ())),
             }
         )
 
@@ -197,6 +253,11 @@ class Constraint:
     target: BlameTarget = BlameTarget.PROGRAM
     code_sketch: str | None = None  # a hint, never a full patch
     evidence: tuple[str, ...] = ()  # attack ids, replayable
+    skill: SkillRef | None = None  # the blamed skill when target is SKILL
+
+    def __post_init__(self) -> None:
+        if (self.target is BlameTarget.SKILL) != (self.skill is not None):
+            raise ValueError("skill must be set exactly when target is SKILL")
 
     def to_dict(self) -> dict[str, Any]:
         return to_dict(self)
@@ -208,6 +269,7 @@ class Constraint:
                 **d,
                 "target": BlameTarget(d.get("target", BlameTarget.PROGRAM.value)),
                 "evidence": tuple(d.get("evidence", ())),
+                "skill": SkillRef(**d["skill"]) if d.get("skill") else None,
             }
         )
 
