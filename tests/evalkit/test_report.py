@@ -38,6 +38,21 @@ def test_collect_and_build_from_a_run_dir(tmp_path):
 
 def test_build_returns_an_absolute_path_for_a_relative_run_dir(tmp_path, monkeypatch):
     (tmp_path / "run").mkdir()
+    (tmp_path / "run" / "config.json").write_text("{}", encoding="utf-8")
     monkeypatch.chdir(tmp_path)
     out = build(__import__("pathlib").Path("run"))
     assert out.is_absolute() and out.as_uri().startswith("file://")
+
+
+def test_a_folder_of_runs_gives_one_report_with_a_run_choice(tmp_path):
+    for name in ("run_a", "run_b"):
+        sample = tmp_path / name / "demo" / "sample0"
+        sample.mkdir(parents=True)
+        (sample / "program_attempt0.py").write_text("x = 1\n", encoding="utf-8")
+        record = {"arm": "demo", "sample": 0, "temperature": 0.2, "evaluation": [],
+                  "attempts": [{"attempt": 0, "tokens": 1, "from_cache": False,
+                                "trace": _trace(True)}]}  # fmt: skip
+        (sample / "record.json").write_text(json.dumps(record), encoding="utf-8")
+    html = build(tmp_path).read_text(encoding="utf-8")
+    assert '"name": "run_a"' in html and '"name": "run_b"' in html
+    assert (tmp_path / "report.html").exists()
