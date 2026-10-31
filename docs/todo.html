@@ -97,6 +97,46 @@ form.add input, form.add select { border: 1px solid var(--line); border-radius: 
 .row2 { display: grid; grid-template-columns: 1fr 160px; gap: 8px; }
 @media (max-width: 520px) { .row2 { grid-template-columns: 1fr; } .kv { grid-template-columns: 1fr; } }
 .banner { background: var(--warn-soft); color: var(--warn); border-radius: var(--r); padding: 8px 12px; }
+/* ideas */
+.ideas { display: flex; flex-direction: column; gap: 14px; }
+.idea { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 10px; }
+.idea-head { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: baseline; }
+.idea-head h3 { font-family: var(--f-display); font-size: 18px; margin: 0; text-wrap: balance; }
+.v-go, .st-promising { background: var(--good-soft); color: var(--good); }
+.v-change, .st-raw { background: var(--warn-soft); color: var(--warn); }
+.v-park, .v-drop, .st-parked, .st-dropped { background: var(--sunk); color: var(--muted); }
+.st-in-progress { background: var(--accent-soft); color: var(--accent); }
+.concept { margin: 0; max-width: 75ch; }
+.scores { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 14px; }
+.sc { display: grid; gap: 3px; font-size: 12px; }
+.sc-top { display: flex; justify-content: space-between; gap: 6px; color: var(--muted); }
+.sc-top b { color: var(--ink); font-family: var(--f-mono); font-weight: 500; font-variant-numeric: tabular-nums; }
+.bar-t { height: 6px; border-radius: 3px; background: var(--sunk); overflow: hidden; }
+.bar-f { height: 100%; background: var(--accent); }
+.bar-f.cost { background: var(--warn); }
+.sc-ab { font-family: var(--f-mono); font-size: 11px; color: var(--muted); }
+.idea details { border-top: 1px solid var(--line); padding-top: 8px; }
+.idea summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+.idea details > :not(summary) { margin-top: 8px; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.tbl th, .tbl td { text-align: left; vertical-align: top; padding: 5px 8px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.tbl th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.tblwrap { overflow-x: auto; }
+.rel { border: 1px solid var(--line); border-radius: var(--r); padding: 8px 10px; }
+.rel b { font-size: 13px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.idea ul.plain { margin: 4px 0 0; padding-left: 18px; max-width: 75ch; }
+.docbtns { display: flex; flex-wrap: wrap; gap: 6px; }
+.docview { position: fixed; inset: 0; z-index: 40; background: rgba(8, 14, 20, .6); display: flex; justify-content: center; align-items: stretch;
+  padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px)); }
+.docview-in { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); width: min(900px, 100%); display: flex; flex-direction: column; min-height: 0; }
+.docview-bar { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--line); }
+.md { padding: 12px 18px 24px; overflow: auto; overflow-wrap: anywhere; }
+.md table { border-collapse: collapse; font-size: 12.5px; display: block; overflow-x: auto; }
+.md th, .md td { border: 1px solid var(--line); padding: 4px 8px; vertical-align: top; }
+.md code { font-family: var(--f-mono); font-size: 12px; background: var(--sunk); padding: 0 4px; border-radius: 4px; }
+.md pre { background: var(--sunk); padding: 8px; overflow: auto; border-radius: var(--r); }
+.md h1, .md h2, .md h3 { font-family: var(--f-display); }
 </style>
 
 <header class="bar"><div class="bar-in">
@@ -105,6 +145,7 @@ form.add input, form.add select { border: 1px solid var(--line); border-radius: 
     <a href="#status" data-view="status">Status</a>
     <a href="#next" data-view="next">Next steps</a>
     <a href="#todo" data-view="todo">To-do</a>
+    <a href="#ideas" data-view="ideas">Ideas</a>
   </nav>
   <div class="counts" id="counts"></div>
 </div></header>
@@ -120,6 +161,11 @@ form.add input, form.add select { border: 1px solid var(--line); border-radius: 
   <section id="v-next" hidden>
     <p class="lead">Planned next steps, in order. Items marked "needs you" wait for an answer or an approval.</p>
     <ul class="list" id="nextList"><li class="empty"><strong>Loading next steps…</strong></li></ul>
+  </section>
+
+  <section id="v-ideas" hidden>
+    <p class="lead">Ideas that could make ANTS different from the closest prior work. Each one is reviewed by a supportive and a strict judge on relevance, uniqueness, feasibility, reasonableness, effort (cost, lower is cheaper) and safety, with initial building blocks. Add a new one with the idea-judge skill.</p>
+    <div class="ideas" id="ideas"><div class="empty"><strong>Loading ideas…</strong></div></div>
   </section>
 
   <section id="v-todo" hidden>
@@ -143,13 +189,17 @@ form.add input, form.add select { border: 1px solid var(--line); border-radius: 
     <div id="groups" style="display:flex;flex-direction:column;gap:18px;margin-top:12px"><div class="empty"><strong>Loading your to-do list…</strong></div></div>
   </section>
 </main>
+<div class="docview" id="docview" hidden role="dialog" aria-modal="true" aria-label="Document"><div class="docview-in">
+  <div class="docview-bar"><span class="mono" id="docTitle"></span><button class="btn small" type="button" id="docClose">Close</button></div>
+  <div class="md" id="docBody"></div>
+</div></div>
 <div class="lightbox" id="lightbox" hidden><img id="lbImg" alt=""><p id="lbCap"></p></div>
 
 <script>
 (() => {
   const KINDS = { measure: "Measure", decide: "Decide", access: "Access", review: "Review", check: "Check" };
   const STATUS = { done: "done", running: "running", failed: "failed", lost: "evidence lost", next: "next" };
-  const S = { items: [], steps: [], next: [], show: "open", loaded: { todos: false, steps: false, next: false } };
+  const S = { items: [], steps: [], next: [], ideas: [], show: "open", loaded: { todos: false, steps: false, next: false, ideas: false } };
   let db = null;
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -158,8 +208,8 @@ form.add input, form.add select { border: 1px solid var(--line); border-radius: 
 
   // ---------- views ----------
   function view() {
-    const v = ["status", "next", "todo"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "status";
-    ["status", "next", "todo"].forEach((k) => { $("v-" + k).hidden = k !== v; });
+    const v = ["status", "next", "todo", "ideas"].includes(location.hash.slice(1)) ? location.hash.slice(1) : "status";
+    ["status", "next", "todo", "ideas"].forEach((k) => { $("v-" + k).hidden = k !== v; });
     document.querySelectorAll(".tabs a").forEach((a) => { if (a.dataset.view === v) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
   }
   window.addEventListener("hashchange", view);
@@ -202,6 +252,76 @@ form.add input, form.add select { border: 1px solid var(--line); border-radius: 
         </div>
       </li>`).join("");
   }
+
+  // ---------- ideas ----------
+  const AXES = [["relevance", "Relevance"], ["uniqueness", "Uniqueness"], ["feasibility", "Feasibility"], ["reasonableness", "Reasonableness"], ["effort", "Effort (cost)"], ["safety", "Safety"]];
+  const VERDICT = { "go": ["v-go", "go"], "go after changes": ["v-change", "go after changes"], "park": ["v-park", "park"], "drop": ["v-drop", "drop"] };
+  const num = (x) => (typeof x === "number" ? x : null);
+  const open = new Set();
+  function scoreBlock(i) {
+    const sc = i.scores || {}, a = i.judge_a || {}, b = i.judge_b || {};
+    return `<div class="scores">${AXES.map(([k, label]) => {
+      const v = num(sc[k]); if (v === null) return "";
+      const ab = num(a[k]) !== null && num(b[k]) !== null ? `A ${a[k]} · B ${b[k]}` : "";
+      return `<div class="sc"><div class="sc-top"><span>${label}</span><b>${v}/5</b></div><div class="bar-t"><div class="bar-f ${k === "effort" ? "cost" : ""}" style="width:${Math.max(0, Math.min(5, v)) * 20}%"></div></div><span class="sc-ab">${ab}</span></div>`;
+    }).join("")}</div>`;
+  }
+  function judgeBlock(title, j, extra) {
+    const notes = j.notes || {};
+    const rows = AXES.filter(([k]) => num(j[k]) !== null).map(([k, l]) => `<tr><td>${l}</td><td>${j[k]}/5</td><td>${esc(notes[k] || "")}</td></tr>`).join("");
+    return `<div><b>${title}</b><div class="tblwrap"><table class="tbl"><thead><tr><th>Axis</th><th>Score</th><th>Why</th></tr></thead><tbody>${rows}</tbody></table></div>${extra}</div>`;
+  }
+  const list = (arr) => (arr && arr.length ? `<ul class="plain">${arr.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : "");
+  function renderIdeas() {
+    const el = $("ideas");
+    const items = S.ideas.slice().sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+    if (!items.length) { el.innerHTML = `<div class="empty"><strong>${S.loaded.ideas ? "No ideas yet" : "Loading ideas…"}</strong>${S.loaded.ideas ? "Run /idea-judge in Claude Code to add one." : ""}</div>`; return; }
+    el.innerHTML = items.map((i) => {
+      const v = VERDICT[i.verdict] || ["", i.verdict || ""];
+      const a = i.judge_a || {}, b = i.judge_b || {};
+      return `<article class="idea" data-id="${esc(i.id)}">
+        <div class="idea-head"><h3>${esc(i.title)}</h3>${i.verdict ? `<span class="chip ${v[0]}">${esc(v[1])}</span>` : ""}${i.status ? `<span class="chip st-${esc(i.status)}">${esc(i.status)}</span>` : ""}${i.module ? `<span class="chip k-check">${esc(i.module)}</span>` : ""}${i.tier ? `<span class="chip k-check">${esc(i.tier)}</span>` : ""}${i.reviewed_at ? `<span class="mono">${esc(String(i.reviewed_at).slice(0, 10))}</span>` : ""}</div>
+        <p class="concept">${esc(i.concept)}</p>
+        ${i.verdict_reason ? `<p class="why" style="margin:0"><b>Verdict:</b> ${esc(i.verdict_reason)}</p>` : ""}
+        ${scoreBlock(i)}
+        ${i.effort_summary ? `<p class="why" style="margin:0"><b>Effort:</b> ${esc(i.effort_summary)}</p>` : ""}
+        ${i.disagreement ? `<p class="why" style="margin:0"><b>Judges disagree:</b> ${esc(i.disagreement)}</p>` : ""}
+        ${(i.docs || []).length ? `<div class="docbtns">${i.docs.map((d) => `<button class="btn small" type="button" data-doc="${esc(d.path)}" data-dt="${esc(d.title)}">Open: ${esc(d.title)}</button>`).join("")}</div>` : ""}
+        ${(i.blocks || []).length ? `<details data-k="${esc(i.id)}:b" ${open.has(i.id + ":b") ? "open" : ""}><summary>Initial building blocks (${i.blocks.length})</summary><div class="tblwrap"><table class="tbl"><thead><tr><th>Block</th><th>What</th><th>Days</th><th>Depends on</th></tr></thead><tbody>${i.blocks.map((x) => `<tr><td>${esc(x.name)}${x.slice ? ' <span class="chip s-done">slice</span>' : ""}</td><td>${esc(x.what)}</td><td>${esc(x.effort_days ?? "")}</td><td>${esc(x.depends_on || "")}</td></tr>`).join("")}</tbody></table></div></details>` : ""}
+        <details data-k="${esc(i.id)}:j" ${open.has(i.id + ":j") ? "open" : ""}><summary>Judge A and Judge B</summary><div class="two">
+          ${judgeBlock("Judge A (supportive)", a, `${a.strongest_version ? `<p><b>Strongest version:</b> ${esc(a.strongest_version)}</p>` : ""}${a.surprise ? `<p><b>More surprising:</b> ${esc(a.surprise)}</p>` : ""}`)}
+          ${judgeBlock("Judge B (strict)", b, `${(b.failure_reasons || []).length ? `<p><b>Likeliest failures:</b></p>${list(b.failure_reasons)}` : ""}${b.cheapest_experiment ? `<p><b>Cheapest experiment:</b> ${esc(b.cheapest_experiment)}</p>` : ""}`)}
+        </div></details>
+        ${(i.related || []).length ? `<details data-k="${esc(i.id)}:r" ${open.has(i.id + ":r") ? "open" : ""}><summary>Related work (${i.related.length})</summary>
+          ${i.related.map((r) => `<div class="rel"><b>${r.url ? `<a href="${esc(r.url)}" target="_blank" rel="noopener">${esc(r.name)}</a>` : esc(r.name)}</b> <span class="chip ${r.tag === "verified" ? "s-done" : "k-check"}">${esc(r.tag || "")}</span>${r.read ? ` <span class="mono">${esc(r.read)}</span>` : ""}
+            <dl class="kv"><dt>Question</dt><dd>${esc(r.question || "")}</dd><dt>Method</dt><dd>${esc(r.method || "")}</dd><dt>Results</dt><dd>${esc(r.results || "")}</dd><dt>Limits</dt><dd>${esc(r.limitations || "")}</dd><dt>Gaps</dt><dd>${esc(r.gaps || "")}</dd></dl></div>`).join("")}
+          ${i.overall_gap ? `<p><b>Overall gap:</b> ${esc(i.overall_gap)}</p>` : ""}${i.search_limits ? `<p class="why"><b>Limits of this search:</b> ${esc(i.search_limits)}</p>` : ""}</details>` : ""}
+        ${i.fit ? `<details data-k="${esc(i.id)}:f" ${open.has(i.id + ":f") ? "open" : ""}><summary>Fit with ANTS rules</summary><p>${esc(i.fit)}</p></details>` : ""}
+      </article>`;
+    }).join("");
+  }
+  $("ideas").addEventListener("toggle", (e) => { const d = e.target; if (d.tagName !== "DETAILS" || !d.dataset.k) return; if (d.open) open.add(d.dataset.k); else open.delete(d.dataset.k); }, true);
+
+  // document viewer (markdown files published next to this page)
+  let mdLibs = null;
+  function loadLibs() {
+    if (mdLibs) return mdLibs;
+    const add = (src) => new Promise((ok, no) => { const s = document.createElement("script"); s.src = src; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
+    mdLibs = add("https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js").then(() => add("https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"));
+    return mdLibs;
+  }
+  async function openDoc(path, title) {
+    $("docTitle").textContent = title || path; $("docBody").textContent = "Loading…"; $("docview").hidden = false;
+    try {
+      const res = await fetch(path); if (!res.ok) throw new Error(res.status);
+      const text = await res.text();
+      try { await loadLibs(); $("docBody").innerHTML = DOMPurify.sanitize(marked.parse(text)); }
+      catch { const pre = document.createElement("pre"); pre.style.whiteSpace = "pre-wrap"; pre.textContent = text; $("docBody").replaceChildren(pre); }
+    } catch { $("docBody").textContent = "This document could not be loaded. It is in the repo at " + path + "."; }
+  }
+  $("ideas").addEventListener("click", (e) => { const b = e.target.closest("[data-doc]"); if (b) openDoc(b.dataset.doc, b.dataset.dt); });
+  $("docClose").addEventListener("click", () => { $("docview").hidden = true; });
+  $("docview").addEventListener("click", (e) => { if (e.target === $("docview")) $("docview").hidden = true; });
 
   function renderTodos() {
     const shown = S.items.filter((i) => S.show === "all" || (S.show === "done" ? i.done : !i.done)).sort((a, b) => (a.order ?? 999) - (b.order ?? 999));
@@ -271,10 +391,10 @@ form.add input, form.add select { border: 1px solid var(--line); border-radius: 
     $("lbImg").src = img.src; $("lbImg").alt = img.alt; $("lbCap").textContent = img.dataset.cap; $("lightbox").hidden = false;
   });
   $("lightbox").addEventListener("click", () => { $("lightbox").hidden = true; });
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") $("lightbox").hidden = true; });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") { $("lightbox").hidden = true; $("docview").hidden = true; } });
 
   // ---------- data ----------
-  function renderAll() { counts(); renderSteps(); renderNext(); const a = document.activeElement; if (!(a && a.dataset && a.dataset.note)) renderTodos(); }
+  function renderAll() { counts(); renderSteps(); renderNext(); renderIdeas(); const a = document.activeElement; if (!(a && a.dataset && a.dataset.note)) renderTodos(); }
   view(); renderAll();
   const c = window.claude;
   if (!c) { Object.keys(S.loaded).forEach((k) => { S.loaded[k] = true; }); $("banner").hidden = false; $("banner").textContent = "Open this page on claude.ai to load the shared data."; renderAll(); return; }
@@ -287,7 +407,7 @@ form.add input, form.add select { border: 1px solid var(--line); border-radius: 
       if (!snap.metadata.fromCache) { clearTimeout(timer); $("banner").hidden = true; }
       S[key] = snap.docs.map((x) => ({ id: x.id, ...x.data() })); S.loaded[coll] = true; renderAll();
     }, fail);
-    sub("todos", "items"); sub("steps", "steps"); sub("next", "next");
+    sub("todos", "items"); sub("steps", "steps"); sub("next", "next"); sub("ideas", "ideas");
   });
 })();
 </script>
