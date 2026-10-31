@@ -16,6 +16,21 @@ One robot, one task, one policy. Every new task, scenario or robot embodiment ne
 - **Memory:** past policies are stored and retrieved by similarity, weighted by how often they helped; unused ones fade. This is how skills are shared.
 - **Stop or escalate:** stop when every category is confidently robust. If the generator stalls, ask a human for one targeted demonstration.
 
+## Positioning
+
+Closest published work (details in [synthesizer/aspire-assessment.md](synthesizer/aspire-assessment.md) §2.3):
+
+| | ASPIRE / CaP-X (NVIDIA) | RAPID (MIT, NUS) | ANTS |
+|---|---|---|---|
+| One demonstration as input | no | yes | yes |
+| Frozen coding agent writes the program | yes | yes | yes |
+| Test scenes | fixed seeds from the training sampler | randomly sampled variants + feasibility filter | **adversary-chosen** within a severity bound, focused on weak categories |
+| Never regresses on a case seen before | no (accepts a better aggregate) | not stated | **yes** (per-case gate) |
+| Memory | skill library | primitive library | library with help counts and decay |
+| Escalation to a targeted human demo | no | not stated | **yes** |
+
+The claim is therefore the loop (System 2, the gate and escalation), not demo-to-program synthesis alone.
+
 ## Evaluation
 
 Tune only on an acceptance set. Report on a held-out test set that is never used for tuning. All reported numbers come from logged runs.

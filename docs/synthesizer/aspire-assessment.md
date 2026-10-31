@@ -83,6 +83,27 @@ Both freeze the model and improve only through context. Both use code-as-policy 
 ### 2.4 Is it reasonable to base the project on ASPIRE?
 **Yes for the substrate, no for the brain.** It is Apache-2.0, maintained (last push 2026-10-16), already has LIBERO-Pro with our split, and its trace and run directory are what the diagnoser needs. Its agent layer assumes a frontier model with subagents, image input, a 258k–1M context and prompt caching. Muse has not been shown to meet any of these. Our own client and orchestrator should drive it.
 
+### 2.5 What to reuse from CaP-X (CaP-Agent0)
+
+[CaP-X](https://github.com/capgym/cap-x) (NVIDIA, Berkeley, Stanford, CMU; MIT licence; repo read at `53e9966`, 2026-04-09). CaP-X and ASPIRE share a lineage: both pin the same SAM 3 fork commit (`Max-Fu/sam3@6fe87d6`), and ASPIRE reports CaP-Agent0 as its baseline [read].
+
+| CaP-X part | Where | Reuse for ANTS |
+|---|---|---|
+| **CaP-Agent0**: multi-turn loop where the model writes code, sees stdout/stderr (and optionally a text description of visual change), then answers `REGENERATE` + new code or `FINISH`; optional parallel ensemble | `capx/envs/trial.py`, `env_configs/libero/franka_libero_cap_agent0.yaml` | **The no-demo baseline arm (M4).** ASPIRE and RAPID both report against it, so our numbers stay comparable. Hackathon: port the prompt and loop onto our API. Research: run CaP-X itself for an exact baseline |
+| **API tiers** per task: `privileged` → `reduced` → `reduced_exampleless`, plus `reduced_skill_library` | `capx/integrations/franka/*_{privileged,reduced,…}.py` | **Abstraction ablation for Muse** (Q7): which API level Muse needs before it writes working programs |
+| **Visual differencing (VDM)**: a VLM describes what changed between frames, in text | `trial.py::_get_visual_differencing_feedback` | The diagnoser's feedback format (text, not raw images) |
+| **Human oracle programs** (nut assembly, cube stack/restack, two-arm, LIBERO object swap 7) | `env_configs/human_oracle_code/` | **Oracle arm** (upper bound), especially for T3 nut assembly |
+| **LLM client**: OpenAI-compatible `server_url`, OpenRouter, ensembles | `capx/llm/client.py` | Pattern for our Muse client (Meta API + OpenRouter) |
+| **Skill library**: functions extracted from successful code, counted, promoted when they recur across tasks | `capx/skills/library.py` (211 lines) | Seed of the C1 memory |
+| **LIBERO-PRO suites beyond swap/task** (Obj, Sem, Env) | `docs/libero-tasks.md`, `third_party/LIBERO-PRO` | Extra fixed perturbation sets for held-out reporting |
+
+**Do not reuse:**
+- The RL stack (`verl`, GRPO): it trains a model.
+- Its program execution: programs get full Python (they may `import numpy`), with no sandbox like ASPIRE's, and API results are untyped dicts.
+- Its LIBERO seed mapping `state_idx = (seed - 1) % len(init_states)`: with 50 stored states, seed 51 equals seed 1, the same wrap as ASPIRE's `saved` mode [read, `capx/envs/simulators/libero.py`].
+
+**Verdict:** ASPIRE stays the executor, because the gate and the diagnoser need the sandbox, typed statuses and traces. CaP-X supplies the baseline arm, the API-tier ablation, the oracle programs and the text visual-diff format.
+
 ---
 
 ## 3. Primitive or function?
@@ -147,6 +168,10 @@ Setup: one **RTX A5500 Laptop, 16 GB, Ampere sm_86**, 62 GB RAM, Linux; LLMs/VLM
 | Local VLM (Qwen3-VL-8B 4-bit ≈ 7.3 GB, agentic-robot) | GPU | 7.3 GB | only without SAM 3 + sim | API |
 
 **Recommended live configuration:** SAM 3 + 1–2 LIBERO workers + PyRoki on the CPU ≈ 8–10 GB; add Contact-GraspNet if needed (~9–13 GB) [est]. The laptop display also takes VRAM. Wrap every run in a timeout, because orphan sim processes can starve SAM 3 into out-of-memory errors [read, ASPIRE docs].
+
+**SAM 3 vs SAM 3.1** [read, code]. ASPIRE and CaP-X both call `build_sam3_image_model()` from the same fork, which always downloads `facebook/sam3` / `sam3.pt`. In Meta's upstream `sam3` package, the 3.1 checkpoint (`facebook/sam3.1`, `sam3.1_multiplex.pt`) is used only by `build_sam3_multiplex_video_model`, the video multi-object tracker. The image model still loads `sam3.pt`. So:
+- **Inside the harness:** SAM 3 is required (per-frame segmentation of the sim camera). 3.1 would add nothing there, and loading its checkpoint into the image model is unverified.
+- **For System 1 demo perception** (tracking hand, bowl and plate through a phone clip): use SAM 3.1's video predictor in its own environment with upstream `sam3`. It needs access to `facebook/sam3.1` as well.
 
 **Install gaps on this machine:**
 - add an `sm_86` arch entry plus an `a5500` profile (a copy of `rtx4090`); torch cu128 supports sm_86, but the cuRobo build is unverified
@@ -236,6 +261,14 @@ The principle is a thin vertical slice first, with contracts that System 2 plugs
 4. **DemoSpec from simulator ground truth** (LIBERO demo hdf5: gripper events, object poses, object-frame EE path). The no-demo arm and the demo arm run on the same task, chosen by Q1.
 5. **Generator.** Muse client with a call cache; prompt = API docs + examples + DemoSpec tools + constraints. Plan gate before every rollout; nominal replay with bounded repair.
 6. **System 2 seam.** An `env_factory` perturbation wrapper (friction, mass, pose, camera, light, actuation), so System 2 only adds a planner, a diagnoser and the gate.
+
+**Decided 2026-10-31 (by the user):**
+- Harness: ASPIRE `cap-harness` approved, checkout at `../ASPIRE`. SAM 3 access available; SAM 3.1 wanted for demo tracking (see §5).
+- Budget: Muse via the Meta API, $15 total. Other models via OpenRouter, $5 total. No reference model for now.
+- Tasks: T1 (hurobo scaled bowl → plate, real phone clips; hurobo reused read-only) and T2 (LIBERO "book under the shelf") are the main experiments; T0 is the smoke test.
+- T1 demo: process the newer clips in `hurobo/data/raw/e1/clips/`, with a 6.0 cm marker size until it is measured.
+- README and concept.md restated against RAPID, ASPIRE and CaP-X.
+- Ask the user before any run longer than about 15 minutes.
 
 **Decisions needed (default in bold):**
 1. **Harness = ASPIRE `cap-harness` in its own venv, driven by our client (not its Claude Code agent layer).** Large dependency; needs your approval (AGENTS.md).
