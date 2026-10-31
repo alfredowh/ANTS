@@ -165,11 +165,12 @@ uniform, cost per cycle).
 
 ## Open decisions
 
-1. **Primitive API.** The paper defines four primitives: `locate(name) → pose`,
-   `move_to(pose, clearance)`, `grasp(width, force) → bool`, `place(pose)`. Contracts v0 follows
-   ASPIRE names from `docs/synthesizer/discussion.md` (`localize_object`, `generate_grasps`,
-   `select_grasp`, `move_to_pose`, `close_gripper`, `open_gripper`). Pick one before the runner and
-   backend are built.
+1. **Primitive API: decided 2026-11-01, ASPIRE is the priority.** Programs call ASPIRE-style
+   primitives (`localize_object`, `generate_grasps`, `select_grasp`, `move_to_pose`,
+   `close_gripper`, `open_gripper`, plus our `phase`), as in contracts v0, and the execution
+   substrate is ASPIRE `cap_harness` (LIBERO-Pro). The paper's four primitives (`locate`,
+   `move_to`, `grasp`, `place`) and its v0/v4 listings need updating to match. Exact signatures are
+   pinned against `cap_harness` in the contracts PR.
 2. **Prototype numbers.** The paper reports offline results (adaptive 14.9 vs uniform 11.4 failures
    per 20 attacks; held-out 42% to 100%) and says the offline loop is covered by tests. No such loop
    or run log is in this repo. Per AGENTS.md, do not quote these numbers in repo docs until they are
@@ -178,4 +179,4 @@ uniform, cost per cycle).
    Synthesis.
 4. **Gate strictness.** Paper: no worse on every case *and better on at least one*. AGENTS.md: at
    least as good on every case. The strict version can reject a rewrite that only adds a skill.
-5. **Escalation window W** and the harness (ASPIRE `cap_harness` vs CaP-X) are not fixed yet.
+5. **Escalation window W** is not fixed yet. CaP-X stays the fallback harness if `cap_harness` blocks us.

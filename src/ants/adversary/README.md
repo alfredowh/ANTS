@@ -74,7 +74,7 @@ Every proposal passes through here: unknown settings are dropped, missing ones a
 
 Where the program meets the perturbed world. Two layers:
 
-- **Backend (LIBERO or the mock world)** builds one episode. It resets the scene with the seed and applies the perturbation: moves the bowl, scales friction, spawns distractors, shifts the camera, dims the lights. It then hands over a robot object with the shared primitives `locate`, `move_to`, `grasp` and `place`. Each primitive logs events as it runs (`grasp_slip`, `collision`, `object_dropped`) and records the last step that completed.
+- **Backend (ASPIRE `cap_harness` on LIBERO-Pro, or the mock world)** builds one episode. It resets the scene with the seed and applies the perturbation: moves the bowl, scales friction, spawns distractors, shifts the camera, dims the lights. It then hands over a robot object with the shared ASPIRE-style primitives (`localize_object`, `generate_grasps`, `select_grasp`, `move_to_pose`, `close_gripper`, `open_gripper`, `phase`). Each primitive logs events as it runs (`grasp_slip`, `collision`, `object_dropped`) and records the last step that completed.
 - **Runner** executes System 1's code against that robot in a sandbox: only a whitelist of basic builtins, the robot as the only thing in scope, and a wall-clock timeout.
   - A crash in the generated code is an **error**, not a failure, so broken code never inflates the failure statistics.
   - A timeout is a **failure**.

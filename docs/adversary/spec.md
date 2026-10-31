@@ -124,7 +124,7 @@ adversary/
 │   ├── backend.py           SimBackend, Episode protocols
 │   ├── runner.py            sandboxed execution, timeout, evidence packaging
 │   ├── mock_backend.py      toy world, one failure mechanism per category
-│   └── libero_backend.py    LIBERO implementation
+│   └── aspire_backend.py    ASPIRE cap_harness (LIBERO-Pro) implementation
 ├── diagnosis/
 │   └── diagnoser.py         model diagnoser + RuleDiagnoser, failure-mode list
 ├── history/
@@ -156,13 +156,14 @@ Build in this order. Each step must pass its tests before the next one starts.
 5. **Runner and mock backend.** Sandbox and timeout, with a toy world in which each category has a
    failure mechanism that the matching robust coding pattern defeats.
 6. **Diagnoser and history.** At this point the whole loop runs offline (`test_loop.py`).
-7. **LIBERO backend.** The largest piece (see below).
+7. **ASPIRE backend.** The largest piece (see below).
 8. **Muse Spark adapter.** Swap the mock for the real model.
 9. **Prompt tuning.** Use real programs and real failures.
 
 ## What still has to be built, and how
 
-### LIBERO backend (`rollout/libero_backend.py`)
+### ASPIRE backend (`rollout/aspire_backend.py`)
+- Run on ASPIRE `cap_harness` (LIBERO-Pro); its seed split maps onto our acceptance and held-out sets.
 - Load the LIBERO scene matching the recorded demo (Franka Panda, bowl and plate, OSC_POSE controller).
 - Use one applier per category, run after `reset(seed)`, then step a few no-ops to settle physics:
   - **pose:** set the object's free-joint position (x, y, yaw).
@@ -172,12 +173,13 @@ Build in this order. Each step must pass its tests before the next one starts.
   - **camera:** offset the agent-view camera pose (yaw, pitch, distance).
   - **occlusion:** place a box between camera and target, sized to `coverage`.
   - **actuation:** wrap `env.step` with Gaussian action noise and a latency queue.
-- `RobotAPI` over OSC:
-  - `locate`: start with privileged simulator state; then add camera perception (SAM 3.1 mask, depth,
-    centroid) so lighting, camera and occlusion attacks matter.
-  - `move_to`: closed-loop motion, routing via a waypoint when `clearance > 0`.
-  - `grasp`: returns held or not from finger contact.
-  - `place`.
+- `RobotAPI` as a thin adapter over `cap_harness` primitives:
+  - `localize_object`: harness perception (SAM 3, RGB-D); privileged state only as a debug mode, so
+    lighting, camera and occlusion attacks matter.
+  - `generate_grasps` / `select_grasp`: harness grasp generation (Contact-GraspNet).
+  - `move_to_pose`: harness motion planning (PyRoki / cuRobo).
+  - `close_gripper` / `open_gripper`: report held or not from finger contact.
+  - `phase`: recorded by the adapter, not the harness.
   - Every primitive logs events (`grasp_slip`, `collision`, `object_dropped`) and the last phase reached.
 - `success()`: the LIBERO task predicate plus a no-collision flag.
 - When recording: an mp4, plus keyframes at the start, the grasp, the failure moment and the end.
@@ -198,8 +200,8 @@ Build in this order. Each step must pass its tests before the next one starts.
 ## Conventions
 
 - Python 3.10+, type hints everywhere, frozen dataclasses for anything that crosses a boundary.
-- No hard dependencies in the core: standard library only; LIBERO and robosuite only inside
-  `libero_backend.py`.
+- No hard dependencies in the core: standard library only; `cap_harness`, LIBERO and robosuite only inside
+  `aspire_backend.py`.
 - Log every decision with its inputs: selector draws, proposals, validated perturbation, diagnosis.
   A judge should be able to replay why each test was chosen.
 - Commit or delete; no dead code. No secrets in the repo: API keys come from environment variables
@@ -216,6 +218,6 @@ Build in this order. Each step must pass its tests before the next one starts.
 
 - `test_loop.py` passes offline: the adversary finds failures, rewrites pass a gate, and the posterior
   failure rate falls.
-- With the LIBERO backend, one real program fails under at least two categories, gets diagnosed, and
+- With the ASPIRE backend, one real program fails under at least two categories, gets diagnosed, and
   a constraint-guided rewrite passes all discovered cases.
 - Switching between `model="mock"` and `model="muse-spark"` needs no code change.
