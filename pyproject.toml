@@ -30,3 +30,7 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint.per-file-ignores]
+# Prompt text: hard-wrapping it would change what the model reads.
+"src/ants/synthesizer/generator.py" = ["E501"]
