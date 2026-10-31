@@ -27,6 +27,7 @@ from pathlib import Path
 
 from ants.adversary.rollout import feedback
 from ants.evalkit.runlog import unified_diff
+from ants.evalkit.system2_view import JS as SYSTEM2_JS
 
 
 def _read(path: Path) -> str | None:
@@ -355,7 +356,9 @@ def build(root: Path) -> Path:
     payload = {"runs": [collect(r, root) for r in runs]}
     data = json.dumps(payload).replace("</", "<\\/")
     out = root / "report.html"
-    out.write_text(TEMPLATE.replace("__DATA__", data), encoding="utf-8")
+    out.write_text(
+        TEMPLATE.replace("__SYSTEM2_JS__", SYSTEM2_JS).replace("__DATA__", data), encoding="utf-8"
+    )
     return out
 
 
@@ -431,6 +434,7 @@ h3.t{margin:0 0 6px;font-size:13px;color:var(--mute);font-weight:600}
 <div class="layout"><nav id="nav"></nav><main id="main"></main></div>
 <div id="lb" onclick="this.style.display='none'"><img id="lbi"></div>
 <script>
+__SYSTEM2_JS__
 const ALL=__DATA__;let D=ALL.runs[0],cur="dash";
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -612,10 +616,7 @@ function compare(){const vr=RO().filter(r=>Object.keys(r.videos||{}).length);
 
 /* ---------- System 2 tab: extension point. Reads D.system2 (one object per cycle from <run>/system2.jsonl).
    Replace the body of system2() to build the real view; the nav entry and routing exist already. ---------- */
-function system2(){const c=D.system2||[];
- if(!c.length)return `<h2>System 2</h2><p class="muted">No <code>system2.jsonl</code> in this run yet (one JSON object per adversary cycle).</p>`;
- const keys=[...new Set(c.flatMap(Object.keys))];
- return `<h2>System 2</h2><div class="card"><table><tr>${keys.map(k=>`<th>${esc(k)}</th>`).join("")}</tr>${c.map(o=>`<tr>${keys.map(k=>`<td>${esc(typeof o[k]==="object"?JSON.stringify(o[k]):o[k])}</td>`).join("")}</tr>`).join("")}</table></div>`}
+function system2(){return system2View(D.system2||[])}
 
 /* ---------- events, samples (program trace) ---------- */
 function events(){return `<h3>Events</h3><div class="card"><table><tr><th>Time</th><th>Kind</th><th>Details</th></tr>${D.events.map(e=>{const{time,kind,...r}=e;return `<tr><td class="muted">${esc(time.slice(11))}</td><td>${chip(kind,/stop/.test(kind)?"bad":"")}</td><td>${esc(JSON.stringify(r))}</td></tr>`}).join("")||"<tr><td colspan=3 class=muted>no events recorded (older run)</td></tr>"}</table></div>`}

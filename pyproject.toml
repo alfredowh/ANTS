@@ -35,3 +35,4 @@ testpaths = ["tests"]
 # Prompt text: hard-wrapping it would change what the model reads.
 "src/ants/synthesizer/generator.py" = ["E501"]
 "src/ants/evalkit/report.py" = ["E501"]
+"src/ants/evalkit/system2_view.py" = ["E501"]

@@ -56,3 +56,13 @@ def test_a_folder_of_runs_gives_one_report_with_a_run_choice(tmp_path):
     html = build(tmp_path).read_text(encoding="utf-8")
     assert '"name": "run_a"' in html and '"name": "run_b"' in html
     assert (tmp_path / "report.html").exists()
+
+
+def test_system2_tab_data_and_view_are_embedded(tmp_path):
+    run = tmp_path / "s2"
+    run.mkdir()
+    (run / "config.json").write_text("{}", encoding="utf-8")
+    row = {"cycle": 0, "tests": [], "decision": "no_failure"}
+    (run / "system2.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
+    html = build(run).read_text(encoding="utf-8")
+    assert "function system2View" in html and '"decision": "no_failure"' in html
