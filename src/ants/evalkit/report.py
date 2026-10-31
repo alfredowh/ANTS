@@ -23,6 +23,7 @@ import json
 import os
 import re
 import webbrowser
+from datetime import datetime
 from pathlib import Path
 
 from ants.adversary.rollout import feedback
@@ -330,6 +331,9 @@ def collect(root: Path, base: Path | None = None) -> dict:
         )
     return {
         "name": root.name,
+        "date": str(
+            config.get("started") or datetime.fromtimestamp(root.stat().st_mtime).isoformat()
+        )[:16].replace("T", " "),
         "config": config,
         "events": events,
         "samples": samples,
@@ -639,7 +643,7 @@ function sample(s){const e=s.evaluation;
 /* ---------- shell ---------- */
 function pick(i){D=ALL.runs[i];F={arm:"",scene:"",outcome:"",cause:"",q:""};C={a:"",b:"",cam:"agentview"};header();show("dash")}
 function header(){const n=D.samples.reduce((a,s)=>a+s.tokens_new,0);
- $("#rn").innerHTML=`<select onchange="pick(this.value)" title="Run">${ALL.runs.map((r,i)=>`<option value="${i}" ${r===D?"selected":""}>${esc(r.name)} (${r.samples.length} samples)</option>`).join("")}</select>`;$("#hd").innerHTML=chip(RO().length+" rollouts")+chip(n.toLocaleString()+" new tokens")+chip("≈ "+usd(n),"acc")}
+ $("#rn").innerHTML=`<select onchange="pick(this.value)" title="Run">${ALL.runs.map((r,i)=>`<option value="${i}" ${r===D?"selected":""}>${esc(r.name)} · ${esc(r.date)} · ${r.samples.length} samples</option>`).join("")}</select>`;$("#hd").innerHTML=chip(RO().length+" rollouts")+chip(n.toLocaleString()+" new tokens")+chip("≈ "+usd(n),"acc")}
 function nav(c){const by={};D.samples.forEach(s=>(by[s.arm]??=[]).push(s));const sel=c.startsWith("r:")?"rollouts":c;
  const b=(id,t)=>`<button class="${sel===id?"on":""}" onclick="show('${id}')">${t}</button>`;
  let h=b("dash","Dashboard")+b("rollouts","Rollouts ("+RO().length+")")+b("compare","Compare")+b("system2","System 2"+((D.system2||[]).length?" ("+D.system2.length+")":""))+b("events","Events ("+D.events.length+")");
