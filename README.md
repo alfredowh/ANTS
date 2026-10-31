@@ -41,6 +41,7 @@ uv run pytest
 
 - [Concept and evaluation](docs/concept.md)
 - [System 1 discussion: stack, method, policy format](docs/synthesizer/discussion.md)
+- [Should System 1 build on ASPIRE? Assessment, checklist and build plan](docs/synthesizer/aspire-assessment.md)
 - [Instructions for AI coding agents](AGENTS.md)
 
 ## License
