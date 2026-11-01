@@ -671,7 +671,7 @@ const PD={full:false};
 function progOf(r){const s=smp(r.sample);if(!s||!s.attempts.length)return null;const a=s.attempts[Math.min(r.attempt??s.attempts.length-1,s.attempts.length-1)];return{s,a,label:r.sample+" · attempt "+a.attempt}}
 function policyDiff(A,B){const pa=progOf(A),pb=progOf(B);
  if(!pa||!pb)return `<div class="card pad"><h3 class="t">Policy comparison</h3><p class="muted">No program recorded for one of the rollouts.</p></div>`;
- const hdr=`<div class="card pad"><h3 class="t">Policy comparison ${chip(pa.label)}${chip(pb.label)}<button class="chip ${PD.full?"acc":""}" onclick="PD.full=!PD.full;show('compare',true)">${PD.full?"full programs":"changed lines only"}</button></h3>`;
+ const hdr=`<div class="card pad"><h3 class="t">Policy comparison ${chip(pa.label)}${chip(pb.label)}<button class="chip ${PD.full?"acc":""}" onclick="PD.full=!PD.full;show('compare',true)">${PD.full?"full programs":"changed lines only"}</button><button class="chip acc" onclick="show('policies')">compare more programs ▸</button></h3>`;
  if(pa.a===pb.a)return hdr+`<p class="muted">A and B ran the same program, so the difference is down to the scene or seed.</p></div>`;
  const ops=lineDiff(pa.a.program.split("\n"),pb.a.program.split("\n")),ch=ops.filter(o=>o[0]!=="=").length;
  let ln=0,rn=0;const rows=[];ops.forEach((o,k)=>{const l=o[0]!=="+"?++ln:0,r=o[0]!=="-"?++rn:0;rows.push({o,l,r,k})});
@@ -681,6 +681,33 @@ function policyDiff(A,B){const pa=progOf(A),pb=progOf(B);
   h+=`<tr><td class="n">${l||""}</td><td class="${c1}">${o[1]==null?"":esc(o[1])}</td><td class="n">${r||""}</td><td class="${c2}">${o[2]==null?"":esc(o[2])}</td></tr>`});flush();
  const add=ops.filter(o=>o[0]==="+").length,del=ops.filter(o=>o[0]==="-").length;
  return hdr+`<p class="muted" style="margin-top:0"><span style="color:var(--bad)">${del} lines only in A</span> · <span style="color:var(--ok)">${add} lines only in B</span>${ch?"":" · programs are identical"}</p><div style="overflow:auto;max-height:640px"><table class="pd"><colgroup><col style="width:38px"><col><col style="width:38px"><col></colgroup><tr><th></th><th style="color:var(--s1)">A · ${esc(pa.label)}</th><th></th><th style="color:var(--s2)">B · ${esc(pb.label)}</th></tr>${h}</table></div></div>`}
+
+
+/* ---------- Policies tab: pick any number of programs, differences shown against a reference ---------- */
+let PL={sel:null,ref:"",full:false};
+const pkey=(s,a)=>s.id+"#"+a.attempt,allPol=()=>D.samples.flatMap(s=>s.attempts.map(a=>({key:pkey(s,a),s,a,label:s.arm+" s"+s.sample+" (T "+s.temperature+") · attempt "+a.attempt})));
+function polDefault(){const last=s=>s.attempts.length?pkey(s,s.attempts[s.attempts.length-1]):null,sm=D.samples,d=sm.find(s=>s.arm==="demo"),n=sm.find(s=>s.arm==="nodemo");
+ PL.sel=(d&&n?[last(n),last(d)]:sm.slice(0,2).map(last)).filter(Boolean);PL.ref=PL.sel[0]||""}
+function polToggle(k,on){if(on&&!PL.sel.includes(k))PL.sel.push(k);if(!on)PL.sel=PL.sel.filter(x=>x!==k);if(!PL.sel.includes(PL.ref))PL.ref=PL.sel[0]||"";show("policies",true)}
+function polAlign(ref,others){const N=ref.length,gaps=others.map(()=>Array.from({length:N+1},()=>[])),match=others.map(()=>new Array(N).fill(null));
+ others.forEach((o,k)=>{let ri=0;lineDiff(ref,o).forEach(op=>{if(op[0]==="=")match[k][ri++]=op[2];else if(op[0]==="-")ri++;else gaps[k][ri].push(op[2])})});return{gaps,match}}
+function policies(){if(!PL.sel)polDefault();const all=allPol(),by={};all.forEach(x=>(by[x.s.arm]??=[]).push(x));
+ const pick=`<div class="card pad"><h3 class="t">Choose programs to compare ${chip(PL.sel.length+" selected")}<button class="chip" onclick="PL.sel=[];PL.ref='';show('policies',true)">clear</button><button class="chip" onclick="PL.sel=allPol().map(x=>x.key);PL.ref=PL.ref||PL.sel[0];show('policies',true)">all</button></h3>
+  <table><tr><th>compare</th><th>reference</th><th>program</th><th>lines</th><th>outcome</th></tr>${all.map(x=>`<tr><td><input type="checkbox" ${PL.sel.includes(x.key)?"checked":""} onchange="polToggle('${x.key}',this.checked)"></td><td><input type="radio" name="polref" ${PL.ref===x.key?"checked":""} ${PL.sel.includes(x.key)?"":"disabled"} onchange="PL.ref='${x.key}';show('policies',true)"></td><td>${esc(x.label)}</td><td>${x.a.program.split("\n").length}</td><td>${chip(x.a.success?"solved debug":"debug failed",okc(x.a.success))}</td></tr>`).join("")}</table>
+  <p class="muted">Every other selected program is aligned to the reference line by line: <span style="color:var(--ok)">green</span> = line not in the reference, <span style="color:var(--bad)">red</span> = reference line missing in that program (also marked in the reference column).</p></div>`;
+ if(PL.sel.length<2)return `<h2 style="margin:0 0 10px">Policies</h2>${pick}<p class="muted">Select at least two programs.</p>`;
+ const pol=PL.sel.map(k=>all.find(x=>x.key===k)).filter(Boolean),ri=Math.max(0,pol.findIndex(x=>x.key===PL.ref)),R=pol[ri],oth=pol.filter((_,i)=>i!==ri),
+  refL=R.a.program.split("\n"),{gaps,match}=polAlign(refL,oth.map(x=>x.a.program.split("\n"))),N=refL.length,cols=[R,...oth];
+ const rows=[],cell=(t,c)=>({t,c});
+ for(let g=0;g<=N;g++){const m=Math.max(0,...gaps.map(x=>x[g].length));for(let j=0;j<m;j++)rows.push({ch:true,c:[cell(null,"emp"),...gaps.map(x=>x[g][j]!=null?cell(x[g][j],"add"):cell(null,"emp"))]});
+  if(g<N){const del=match.some(x=>x[g]===null);rows.push({ch:del,c:[cell(refL[g],del?"del":""),...match.map(x=>x[g]===null?cell(null,"emp"):cell(x[g],""))]})}}
+ const near=new Array(rows.length).fill(PL.full);if(!PL.full)rows.forEach((r,k)=>{if(r.ch)for(let d=-3;d<=3;d++)if(near[k+d]!==undefined)near[k+d]=true});
+ const cnt=cols.map(()=>0);let h="",skip=0;const flush=()=>{if(skip){h+=`<tr><td class="gap" colspan="${cols.length*2}">… ${skip} unchanged lines</td></tr>`;skip=0}};
+ rows.forEach((r,k)=>{r.c.forEach((c,i)=>{if(c.t!=null)cnt[i]++;c.n=c.t!=null?cnt[i]:""});if(!near[k]){skip++;return}flush();h+="<tr>"+r.c.map(c=>`<td class="n">${c.n}</td><td class="${c.c}">${c.t==null?"":esc(c.t)}</td>`).join("")+"</tr>"});flush();
+ const stat=oth.map((x,k)=>{const a=gaps[k].reduce((n,g)=>n+g.length,0),d=match[k].filter(v=>v===null).length;return `<tr><td>${esc(x.label)}</td><td style="color:var(--ok)">+${a}</td><td style="color:var(--bad)">−${d}</td><td>${a+d?"":chip("identical","acc")}</td></tr>`}).join("");
+ return `<h2 style="margin:0 0 10px">Policies</h2>${pick}
+ <div class="card pad"><h3 class="t">Differences vs reference ${chip(R.label,"acc")}</h3><table><tr><th>program</th><th>lines added</th><th>lines removed</th><th></th></tr>${stat}</table></div>
+ <div class="card pad"><h3 class="t">Code<button class="chip ${PL.full?"acc":""}" onclick="PL.full=!PL.full;show('policies',true)">${PL.full?"full programs":"changed lines only"}</button></h3><div style="overflow:auto;max-height:720px"><table class="pd" style="min-width:${cols.length*420}px"><colgroup>${cols.map(()=>'<col style="width:38px"><col>').join("")}</colgroup><tr>${cols.map((x,i)=>`<th></th><th style="color:${i?"var(--ink)":"var(--s1)"}">${i?"":"reference · "}${esc(x.label)}</th>`).join("")}</tr>${h}</table></div></div>`}
 
 /* ---------- System 2 tab: extension point. Reads D.system2 (one object per cycle from <run>/system2.jsonl).
    Replace the body of system2() to build the real view; the nav entry and routing exist already. ---------- */
@@ -741,17 +768,17 @@ function sample(s){const e=s.evaluation;
  ${s.attempts.map(attempt).join("")}<h3>Evaluation of the final program <span class="muted" style="font-weight:400">(click a row to watch)</span></h3>${ev}`}
 
 /* ---------- shell ---------- */
-function pick(i){D=ALL.runs[i];F={arm:"",scene:"",outcome:"",cause:"",q:""};C={a:"",b:"",cam:"agentview"};header();show("dash")}
+function pick(i){D=ALL.runs[i];F={arm:"",scene:"",outcome:"",cause:"",q:""};PL={sel:null,ref:"",full:false};C={a:"",b:"",cam:"agentview"};header();show("dash")}
 function header(){const n=D.samples.reduce((a,s)=>a+s.tokens_new,0);
  $("#rn").innerHTML=`<select onchange="pick(this.value)" title="Run">${ALL.runs.map((r,i)=>`<option value="${i}" ${r===D?"selected":""}>${esc(r.name)} · ${esc(r.date)} · ${r.samples.length} samples</option>`).join("")}</select>`;$("#hd").innerHTML=chip(RO().length+" rollouts")+chip(n.toLocaleString()+" new tokens")+chip("≈ "+usd(n),"acc")}
 function nav(c){const by={};D.samples.forEach(s=>(by[s.arm]??=[]).push(s));const sel=c.startsWith("r:")?"rollouts":c;
  const b=(id,t)=>`<button class="${sel===id?"on":""}" onclick="show('${id}')">${t}</button>`;
- let h=b("dash","Dashboard")+b("rollouts","Rollouts ("+RO().length+")")+b("compare","Compare")+b("matched","Matched")+b("system2","System 2"+((D.system2||[]).length?" ("+D.system2.length+")":""))+b("events","Events ("+D.events.length+")");
+ let h=b("dash","Dashboard")+b("rollouts","Rollouts ("+RO().length+")")+b("compare","Compare")+b("matched","Matched")+b("policies","Policies")+b("system2","System 2"+((D.system2||[]).length?" ("+D.system2.length+")":""))+b("events","Events ("+D.events.length+")");
  for(const arm in by){h+=`<h4>${esc(arm)} · trace</h4>`+by[arm].map(s=>{const e=evalSum(s);return `<button class="${c===s.id?"on":""}" onclick="show('${s.id}')">sample ${s.sample} · T ${s.temperature}<div class="sub">${solved(s)?"✓ solved debug":"✗ not solved"} · ${Object.entries(e).map(([k,v])=>k+" "+v.ok+"/"+v.n).join(" · ")||"no eval"}</div></button>`}).join("")}
  $("#nav").innerHTML=h}
 function show(id,keep){const y=window.scrollY;stopPlayer();if(id==="overview")id="dash";cur=id;location.hash=encodeURIComponent(D.name)+"|"+id;nav(id);const m=$("#main");
  if(id==="dash")m.innerHTML=dash();else if(id==="rollouts")m.innerHTML=rollouts();else if(id==="events")m.innerHTML=events();else if(id==="system2")m.innerHTML=system2();
- else if(id==="matched")m.innerHTML=matched();else if(id==="compare"){m.innerHTML=compare();mount([byId(C.a),byId(C.b)].filter(Boolean),"cmp")}
+ else if(id==="matched")m.innerHTML=matched();else if(id==="policies")m.innerHTML=policies();else if(id==="compare"){m.innerHTML=compare();mount([byId(C.a),byId(C.b)].filter(Boolean),"cmp")}
  else if(id.startsWith("r:")){const r=byId(id.slice(2));if(!r){m.innerHTML="<p>rollout not found</p>";return}m.innerHTML=explorer(r);mount([r],"single")}
  else{const s=smp(id);m.innerHTML=s?sample(s):"<p>not found</p>"}
  updCnt();
