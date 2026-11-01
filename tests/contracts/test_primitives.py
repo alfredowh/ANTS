@@ -7,8 +7,11 @@ from ants.contracts import (
     GraspSet,
     LocalizationResult,
     ObjectGeometry,
+    PointCloud,
     Pose,
     RobotAPI,
+    RobotState,
+    TaskContext,
 )
 
 
@@ -19,11 +22,24 @@ class FakeRobot:
     def phase(self, name: str) -> None:
         self.phases.append(name)
 
+    def get_task_context(self) -> TaskContext:
+        return TaskContext("libero", 0, "bowl_on_plate", "put the bowl on the plate", "pick_place")
+
+    def get_robot_state(self) -> RobotState:
+        pose = Pose((0.4, 0.0, 0.3))
+        return RobotState(
+            joint_positions={"primary": (0.0,) * 7},
+            joint_velocities={"primary": (0.0,) * 7},
+            end_effector_poses={"primary": pose},
+            gripper_positions={"primary": 1.0},
+        )
+
     def localize_object(
         self, query: str, *, camera_name: str | None = None, target_frame: str | None = None
     ) -> LocalizationResult:
         geometry = ObjectGeometry(Pose((0.5, 0.0, 0.1)), (0.14, 0.14, 0.07))
-        return LocalizationResult(True, geometry, segmentation=f"mask:{query}")
+        cloud = PointCloud(((0.45, -0.05, 0.05), (0.55, 0.05, 0.12)))
+        return LocalizationResult(True, geometry, segmentation=f"mask:{query}", point_cloud=cloud)
 
     def generate_grasps(
         self,
@@ -116,3 +132,14 @@ def test_failed_results_carry_an_error():
     err = ApiError("point_cloud_failed", "no points", {"query": "bowl"})
     assert not LocalizationResult(False, error=err).ok
     assert not GraspSet(False, error=err).grasps
+
+
+def test_observe_primitives_and_point_cloud():
+    robot = FakeRobot()
+    assert isinstance(robot, RobotAPI)
+    assert robot.get_task_context().language == "put the bowl on the plate"
+    state = robot.get_robot_state()
+    assert state.end_effector_poses["primary"].position == (0.4, 0.0, 0.3)
+    assert state.gripper_positions["primary"] == 1.0
+    points = robot.localize_object("bowl").point_cloud.points
+    assert [p[2] for p in points] == [0.05, 0.12]

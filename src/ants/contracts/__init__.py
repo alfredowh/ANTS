@@ -7,8 +7,11 @@ from ants.contracts.primitives import (
     GraspSet,
     LocalizationResult,
     ObjectGeometry,
+    PointCloud,
     Pose,
     RobotAPI,
+    RobotState,
+    TaskContext,
 )
 from ants.contracts.types import (
     CONTRACTS_VERSION,
@@ -48,12 +51,15 @@ __all__ = [
     "Outcome",
     "Perturbation",
     "Policy",
+    "PointCloud",
     "Pose",
     "RobotAPI",
+    "RobotState",
     "RolloutResult",
     "Skill",
     "SkillKind",
     "SkillRef",
+    "TaskContext",
     "failure_signature",
     "to_dict",
 ]

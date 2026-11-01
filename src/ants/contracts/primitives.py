@@ -52,12 +52,46 @@ class ObjectGeometry:
 
 
 @dataclass(frozen=True)
+class PointCloud:
+    """XYZ points (metres) in `frame`, optional RGB `colors` of the same length."""
+
+    points: Sequence[tuple[float, float, float]]
+    frame: str = "robot_base"
+    colors: Sequence[tuple[float, float, float]] | None = None
+
+
+@dataclass(frozen=True)
+class RobotState:
+    """Per-arm state keyed by arm name (`"primary"` on a single-arm robot)."""
+
+    joint_positions: Mapping[str, tuple[float, ...]]
+    joint_velocities: Mapping[str, tuple[float, ...]]
+    end_effector_poses: Mapping[str, Pose]
+    gripper_positions: Mapping[str, float]
+    base_frame: str = "robot_base"
+    timestamp_s: float | None = None
+
+
+@dataclass(frozen=True)
+class TaskContext:
+    """Task identity and the natural-language instruction; never the success predicate."""
+
+    suite: str
+    task_id: int
+    task_name: str
+    language: str
+    family: str
+    metadata: Mapping[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class LocalizationResult:
     """`segmentation` is the backend's mask handle: pass it on to `generate_grasps` unchanged."""
 
     ok: bool
     geometry: ObjectGeometry | None = None
     segmentation: object | None = None
+    point_cloud: PointCloud | None = None
     error: ApiError | None = None
     diagnostics: Mapping[str, object] = field(default_factory=dict)
 
@@ -103,6 +137,10 @@ class RobotAPI(Protocol):
     def phase(self, name: str) -> None:
         """ANTS only. Optional hint that a named step starts; never required, never trusted."""
         ...
+
+    def get_task_context(self) -> TaskContext: ...
+
+    def get_robot_state(self) -> RobotState: ...
 
     def localize_object(
         self,
