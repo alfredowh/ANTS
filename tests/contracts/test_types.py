@@ -67,6 +67,29 @@ def test_policy_round_trip():
     assert Policy.from_dict(_json(p)) == p
 
 
+def test_policy_system1_fields_round_trip_and_defaults():
+    plain = Policy("p", 0, "t", "def run(robot, params): ...")
+    assert plain.deterministic is False
+    assert plain.entry_format == "run_function"
+    p = Policy(
+        "p",
+        1,
+        "t",
+        "result = 1",
+        params={"grasp_offset": 0.02},
+        deterministic=True,
+        metadata={"model": "m", "tokens": 1200},
+        attack_ranges={"grasp_offset": (-0.03, 0.03)},
+        entry_format="script",
+    )
+    assert Policy.from_dict(_json(p)) == p
+
+
+def test_policy_rejects_inverted_attack_range():
+    with pytest.raises(ValueError):
+        Policy("p", 0, "t", "x", attack_ranges={"a": (1.0, 0.0)})
+
+
 def test_attack_report_round_trip(report):
     assert AttackReport.from_dict(_json(report)) == report
 
