@@ -1,10 +1,12 @@
 """Shared contracts: the only module both systems and the orchestrator import."""
 
 from ants.contracts.primitives import (
-    Grasp,
-    GripperResult,
-    MotionResult,
-    ObjectEstimate,
+    ApiError,
+    ExecutionResult,
+    GraspCandidate,
+    GraspSet,
+    LocalizationResult,
+    ObjectGeometry,
     Pose,
     RobotAPI,
 )
@@ -29,17 +31,19 @@ from ants.contracts.types import (
 
 __all__ = [
     "CONTRACTS_VERSION",
+    "ApiError",
     "AttackReport",
     "BlameTarget",
     "Constraint",
     "Event",
+    "ExecutionResult",
     "Failure",
     "FailureMode",
     "Feedback",
-    "Grasp",
-    "GripperResult",
-    "MotionResult",
-    "ObjectEstimate",
+    "GraspCandidate",
+    "GraspSet",
+    "LocalizationResult",
+    "ObjectGeometry",
     "Outcome",
     "Perturbation",
     "Policy",
