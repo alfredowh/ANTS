@@ -17,6 +17,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "tools"))
 import aspire_launch  # noqa: E402
+import numpy as np  # noqa: E402
 
 LIVE: dict = {}
 ROBOT_PROMPTS = ("robot arm", "robot gripper")
@@ -89,9 +90,46 @@ class ContactEnv(aspire_launch.PerturbedEnv):
                 for n in ("akita_black_bowl_1_main", "plate_1_main")
             ],
         }
+        rec["ontop"] = self._ontop_state(mujoco, model, data)
         with self._log.open("a", encoding="utf-8") as f:
             f.write(json.dumps(rec) + "\n")
+        if self._n == 1 and os.environ.get("ANTS_ONTOP_TEST"):
+            import ontop_test
+
+            scale = (self._spec.get("scale") or {}).get("bodies") or {}
+            ontop_test.run(
+                self, Path(os.environ["ANTS_ONTOP_TEST"]), {k: float(v) for k, v in scale.items()}
+            )
         return out
+
+    def _ontop_state(self, mujoco, model, data) -> dict:
+        """The parts of LIBERO's On(bowl, plate) check, plus the harness's own verdict.
+
+        `On(bowl, plate)` calls `plate.check_ontop(bowl)`: plate z <= bowl z, bowl-plate contact,
+        and horizontal distance below a tolerance. tools/aspire_launch.py scales that tolerance by
+        the factor of the *other* object, which in this call is the bowl; the plate's factor is
+        what its docstring intends.
+        """
+        scale = (self._spec.get("scale") or {}).get("bodies") or {}
+        bowl = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "akita_black_bowl_1_main")
+        plate = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "plate_1_main")
+        names = {"akita_black_bowl_1_main", "plate_1_main"}
+        touching = any(
+            {
+                mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, int(model.geom_bodyid[c.geom1])),
+                mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, int(model.geom_bodyid[c.geom2])),
+            }
+            == names
+            for c in data.contact[: data.ncon]
+        )
+        return {
+            "contact": touching,
+            "z_ok": bool(data.xpos[plate][2] <= data.xpos[bowl][2]),
+            "xy": round(float(np.linalg.norm(data.xpos[bowl][:2] - data.xpos[plate][:2])), 4),
+            "tol_launcher": round(0.03 * float(scale.get("akita_black_bowl_1_main", 1.0)), 4),
+            "tol_intended": round(0.03 * float(scale.get("plate_1_main", 1.0)), 4),
+            "harness_success": bool(self._inner.check_success()),
+        }
 
     def _inner_step(self, action):
         return super().step(action)
