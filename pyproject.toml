@@ -24,6 +24,8 @@ packages = ["src/ants"]
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+# generated robot programs are logged artifacts, kept byte-identical; they use the harness globals
+extend-exclude = ["examples/*/policy.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
