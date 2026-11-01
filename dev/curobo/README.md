@@ -19,21 +19,27 @@ plate x1.855). The logged program gets stuck at the placement: the gripper press
 ## Comparison (same scene, seed 51, one run each)
 
 Rack contact = simulator steps in which the gripper touches the wine rack (from the contact log, used for
-evaluation only). Bowl-plate = horizontal distance of the body centres at the end; LIBERO's on-top check
-(scaled plate) needs it below 0.056 m and the bowl body z at or below the plate body z.
+evaluation only). Bowl-plate = horizontal distance of the body centres at the end of the run.
 
-| # | Configuration | task_success | Sim steps | Rack contact | Bowl-plate xy (m) | Bowl z - plate z (m) |
+`On(bowl, plate)` calls `plate.check_ontop(bowl)`: bowl touches plate, plate origin z <= bowl origin z, and
+distance < tolerance. `tools/aspire_launch.py` scales the tolerance by the factor of the other object in that
+call, which is the bowl (1.227, giving 0.037 m), not the plate (1.855, giving 0.056 m) as its docstring says.
+
+| # | Configuration | harness task_success | Sim steps | Rack contact | Bowl-plate xy (m) | Passes with plate-scaled tolerance |
 |---|---|---|---|---|---|---|
-| 1 | Default planner, logged program | False | 886 | 477 | 0.060 | +0.020 |
-| 2 | cuRobo stock service, every move | False | 1086 | 410 | 0.061 | +0.020 |
-| 3 | cuRobo stock service + orbit skill | False | 959 | 478 | 0.055 | +0.019 |
-| 4 | Tight carve, no robot mask | False | 192 (stopped) | 0 | 0.182 | +0.075 |
-| 5 | Scene-aware, simulator robot mask (privileged) | False | 696 | 0 | 0.040 | +0.012 |
-| 6 | Scene-aware, SAM3 robot mask (no simulator state) | False | 696 | 0 | 0.040 | +0.012 |
+| 1 | Default planner, logged program | False | 886 | 477 | 0.060 | no |
+| 2 | cuRobo stock service, every move | False | 1086 | 410 | 0.061 | no |
+| 3 | cuRobo stock service + orbit skill | False | 959 | 478 | 0.056 | yes, by 0.0001 m |
+| 4 | Tight carve, no robot mask | False | 192 (stopped) | 0 | 0.182 | no (no contact) |
+| 5 | Scene-aware, simulator robot mask (privileged) | False | 696 | 0 | 0.040 | yes |
+| 6 | Scene-aware, SAM3 robot mask (no simulator state) | False | 696 | 0 | 0.040 | yes |
 
 Config 4 stops at the first grasp: without a robot mask, the robot's own depth pixels stay in the world
 and the grasp goal is rejected. Configs 5 and 6 pick the same orbit angle (90 degrees), so their runs match.
-All six fail `task_success`; in 5 and 6 only the z rule fails.
+All six fail the harness check as the launcher computes it. Under the plate-scaled tolerance 3, 5 and 6 would
+pass; the check ignores collisions, so 3 would pass although its gripper pressed on the rack. The earlier claim
+that the height rule fails was wrong (argument order). The launcher has not been changed; that is a decision for
+the owner, because it changes every result on a scaled scene.
 
 ## Tools
 
@@ -44,7 +50,8 @@ All six fail `task_success`; in 5 and 6 only the z rule fails.
   - `ANTS_EXCLUDE_RADIUS_M`: drop scene points within r of the manipulated object (replaces the 1-99% quantile box).
   - `ANTS_PROBE_XYZ=x,y,z`: print, per scene body, how close its points get to a goal.
 - `service_dev.py`: the cuRobo service with `ANTS_CARVE_MARGIN_M` instead of the fixed 5 cm.
-- `carve_check.py`, `probe_goal.py`: offline replays of the carve and of goal feasibility on a dumped cloud.
+- `carve_check.py`, `carve_curve.py`, `probe_goal.py`: offline replays of the carve (one margin, or a sweep) and of goal feasibility on a dumped cloud.
+- `ontop_test.py`: drops the bowl on the plate and records what the on-top check sees (`ANTS_ONTOP_TEST=out.json`).
 - `programs/`: the test programs (`exp3_a2_curobo_all.py`: logged program with cuRobo on every move;
   `exp3_a2_orbit.py`: scene-aware transit, default planner for contact, and the orbit skill).
 
