@@ -18,6 +18,7 @@ from ants.contracts import (
     Skill,
     SkillKind,
     SkillRef,
+    failure_signature,
 )
 
 
@@ -44,7 +45,7 @@ def report() -> AttackReport:
         failure=Failure(FailureMode.GRASP_SLIP, "Bowl moved after localise.", 0.8, "model"),
         constraint=Constraint(
             "c3",
-            "grasp_slip | pose",
+            "pose:close_gripper:failed",
             "the target may have moved since it was localised",
             "Re-localise the bowl after a failed grasp before retrying.",
             code_sketch="bowl = robot.localize_object('bowl')",
@@ -157,7 +158,7 @@ def test_policy_records_skills_used():
 def test_constraint_can_blame_a_skill():
     c = Constraint(
         "c9",
-        "grasp_slip | physics",
+        "physics:close_gripper:failed",
         "low friction",
         "Raise grasp force when the object is light.",
         target=BlameTarget.SKILL,
@@ -171,3 +172,22 @@ def test_skill_target_and_ref_must_agree():
         Constraint("c", "s", "w", "r", target=BlameTarget.SKILL)
     with pytest.raises(ValueError):
         Constraint("c", "s", "w", "r", skill=GRASP_SKILL.ref)
+
+
+def test_failure_mode_is_an_open_string():
+    f = Failure("spill", "Liquid left the cup during transport.", 0.6)
+    assert Failure.from_dict(_json(f)) == f
+    assert Failure(FailureMode.TIMEOUT, "x", 0.5).mode == "timeout"
+
+
+def test_failure_signature_format():
+    assert failure_signature("size", "move_to_pose", "timeout") == "size:move_to_pose:timeout"
+    for bad in (("", "a", "b"), ("a:b", "c", "d")):
+        with pytest.raises(ValueError):
+            failure_signature(*bad)
+
+
+def test_perturbation_seed_is_optional_and_part_of_the_key():
+    p = Perturbation("size", {"bowl_scale": 1.1}, 0.4)
+    assert p.seed is None and Perturbation.from_dict(_json(p)) == p
+    assert p.key != Perturbation("size", {"bowl_scale": 1.1}, 0.4, seed=3).key
