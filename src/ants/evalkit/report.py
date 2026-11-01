@@ -439,6 +439,7 @@ th.s{cursor:pointer;user-select:none}th.s:hover{color:var(--ink)}tr.row{cursor:p
 .frames{display:flex;gap:8px;overflow:auto;padding:4px 0}.frames figure{margin:0;flex:none;width:200px}.frames img{width:200px;border-radius:8px;border:1px solid var(--line);cursor:zoom-in}.frames figcaption{font-size:11px;color:var(--mute)}
 .muted{color:var(--mute)}.mono{font:12px ui-monospace,Menlo,Consolas,monospace}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px}.stat b{display:block;font-size:22px}
+.pd{width:100%;table-layout:fixed;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;border-collapse:collapse}.pd td{padding:0 6px;border:0;white-space:pre-wrap;word-break:break-all;vertical-align:top}.pd td.n{width:34px;color:var(--mute);text-align:right;user-select:none}.pd td.del{background:color-mix(in srgb,var(--bad) 22%,transparent)}.pd td.add{background:color-mix(in srgb,var(--ok) 22%,transparent)}.pd td.gap{color:var(--mute);text-align:center;background:var(--code)}.pd td.emp{background:var(--code)}
 .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(420px,1fr));gap:12px;margin-bottom:12px}.two>.card{margin:0}
 .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
 h3.t{margin:0 0 6px;font-size:13px;color:var(--mute);font-weight:600}
@@ -655,7 +656,31 @@ function compare(){const vr=RO().filter(r=>Object.keys(r.videos||{}).length);
  <div class="vids">${side(A,0)}${side(B,1)}</div>${controls([A,B])}
  <div class="card pad viz"><h3 class="t">Signals overlaid · blue = A, orange = B · click or drag to seek both videos</h3>${plot([A,B],"cmp")}<div id="readout" class="mono muted"></div></div>
  <div class="two"><div class="card pad"><h3 class="t">A · tool calls</h3>${spanTable(A)}</div><div class="card pad"><h3 class="t">B · tool calls</h3>${spanTable(B)}</div></div>
+ ${policyDiff(A,B)}
  <p class="muted">Pairs are preselected as a success and a failure on the same scene and seed when one exists, so the difference is down to the program.</p>`}
+
+
+/* ---------- policy (program) comparison with line diff ---------- */
+function lineDiff(a,b){let i=0;while(i<a.length&&i<b.length&&a[i]===b[i])i++;let ea=a.length,eb=b.length;while(ea>i&&eb>i&&a[ea-1]===b[eb-1]){ea--;eb--}
+ const x=a.slice(i,ea),y=b.slice(i,eb),n=x.length,m=y.length,L=Array.from({length:n+1},()=>new Uint16Array(m+1));
+ for(let p=n-1;p>=0;p--)for(let q=m-1;q>=0;q--)L[p][q]=x[p]===y[q]?L[p+1][q+1]+1:Math.max(L[p+1][q],L[p][q+1]);
+ const ops=[];for(let k=0;k<i;k++)ops.push(["=",a[k],b[k]]);
+ let p=0,q=0;while(p<n||q<m){if(p<n&&q<m&&x[p]===y[q]){ops.push(["=",x[p],y[q]]);p++;q++}else if(q<m&&(p>=n||L[p][q+1]>=L[p+1][q])){ops.push(["+",null,y[q]]);q++}else{ops.push(["-",x[p],null]);p++}}
+ for(let k=ea;k<a.length;k++)ops.push(["=",a[k],b[eb+k-ea]]);return ops}
+const PD={full:false};
+function progOf(r){const s=smp(r.sample);if(!s||!s.attempts.length)return null;const a=s.attempts[Math.min(r.attempt??s.attempts.length-1,s.attempts.length-1)];return{s,a,label:r.sample+" · attempt "+a.attempt}}
+function policyDiff(A,B){const pa=progOf(A),pb=progOf(B);
+ if(!pa||!pb)return `<div class="card pad"><h3 class="t">Policy comparison</h3><p class="muted">No program recorded for one of the rollouts.</p></div>`;
+ const hdr=`<div class="card pad"><h3 class="t">Policy comparison ${chip(pa.label)}${chip(pb.label)}<button class="chip ${PD.full?"acc":""}" onclick="PD.full=!PD.full;show('compare',true)">${PD.full?"full programs":"changed lines only"}</button></h3>`;
+ if(pa.a===pb.a)return hdr+`<p class="muted">A and B ran the same program, so the difference is down to the scene or seed.</p></div>`;
+ const ops=lineDiff(pa.a.program.split("\n"),pb.a.program.split("\n")),ch=ops.filter(o=>o[0]!=="=").length;
+ let ln=0,rn=0;const rows=[];ops.forEach((o,k)=>{const l=o[0]!=="+"?++ln:0,r=o[0]!=="-"?++rn:0;rows.push({o,l,r,k})});
+ const near=new Array(ops.length).fill(PD.full);if(!PD.full)ops.forEach((o,k)=>{if(o[0]!=="=")for(let d=-3;d<=3;d++)if(near[k+d]!==undefined)near[k+d]=true});
+ let h="",skip=0;const flush=()=>{if(skip){h+=`<tr><td class="gap" colspan="4">… ${skip} unchanged lines</td></tr>`;skip=0}};
+ rows.forEach(({o,l,r,k})=>{if(!near[k]){skip++;return}flush();const t=o[0],c1=t==="-"?"del":t==="+"?"emp":"",c2=t==="+"?"add":t==="-"?"emp":"";
+  h+=`<tr><td class="n">${l||""}</td><td class="${c1}">${o[1]==null?"":esc(o[1])}</td><td class="n">${r||""}</td><td class="${c2}">${o[2]==null?"":esc(o[2])}</td></tr>`});flush();
+ const add=ops.filter(o=>o[0]==="+").length,del=ops.filter(o=>o[0]==="-").length;
+ return hdr+`<p class="muted" style="margin-top:0"><span style="color:var(--bad)">${del} lines only in A</span> · <span style="color:var(--ok)">${add} lines only in B</span>${ch?"":" · programs are identical"}</p><div style="overflow:auto;max-height:640px"><table class="pd"><colgroup><col style="width:38px"><col><col style="width:38px"><col></colgroup><tr><th></th><th style="color:var(--s1)">A · ${esc(pa.label)}</th><th></th><th style="color:var(--s2)">B · ${esc(pb.label)}</th></tr>${h}</table></div></div>`}
 
 /* ---------- System 2 tab: extension point. Reads D.system2 (one object per cycle from <run>/system2.jsonl).
    Replace the body of system2() to build the real view; the nav entry and routing exist already. ---------- */
