@@ -1,0 +1,42 @@
+{
+  "_note": "Sidecar for policy.py (sha256 prefix 5ac3b80d432fa321). policy.py is byte-identical to the logged run and hardcodes these values; this file only DECLARES them so System 2 knows what the policy assumed. Overriding params here does not change policy.py. Nominals are read from policy.py lines 120-129; ranges are a proposal, not measured. Replaced by the program's own params after regeneration.",
+  "policy_id": "bowl_on_plate",
+  "version": 0,
+  "task": "put the bowl on the plate",
+  "entry_format": "script",
+  "deterministic": false,
+  "params": {
+    "pinch_height_over_bowl_h": 0.82,
+    "approach_sideways_m_per_scale": 0.041,
+    "approach_down_m_per_scale": 0.027,
+    "carry_height_over_bowl_d": 0.23,
+    "release_height_over_bowl_d": 0.14,
+    "release_dist_over_plate_r": 0.67
+  },
+  "attack_ranges": {
+    "pinch_height_over_bowl_h": [
+      0.6,
+      1.0
+    ],
+    "approach_sideways_m_per_scale": [
+      0.0,
+      0.08
+    ],
+    "approach_down_m_per_scale": [
+      0.01,
+      0.05
+    ],
+    "carry_height_over_bowl_d": [
+      0.15,
+      0.35
+    ],
+    "release_height_over_bowl_d": [
+      0.08,
+      0.22
+    ],
+    "release_dist_over_plate_r": [
+      0.0,
+      0.9
+    ]
+  }
+}

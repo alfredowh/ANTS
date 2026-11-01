@@ -18,6 +18,10 @@
 
 Re-checked with `policy_run.py` on 2026-11-01: seed 52, stock scene, success.
 
+## Declared assumptions
+
+`policy_meta.json` lists the demo-derived values `policy.py` hardcodes (`params`) and the range System 2 may vary each over (`attack_ranges`), with `entry_format: script`. It is a declaration only: `policy.py` does not read it, so changing it does not change the program. The ranges are a proposal, not measured. A regenerated policy that reads its own `params` replaces it.
+
 ## Limits
 
 - One task, one seed range; seeds 51-55 are acceptance seeds, not held-out.
