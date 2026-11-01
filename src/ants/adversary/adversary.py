@@ -127,6 +127,8 @@ class Adversary:
                 ],
                 "usage": dict(proposal.usage),
             }
+        chosen = self.planner.last_selection
+        notes["selection"] = {"explored": bool(chosen and chosen.explored)}
         result = run_policy(policy.code, self.backend, perturbation, seed, self.config.line_budget)
 
         failure = constraint = None
@@ -136,7 +138,7 @@ class Adversary:
             if self.diagnoser is None:
                 failure = classify(perturbation, fb)
                 constraint = diagnose(perturbation, fb, n_failures)
-                notes["diagnosis"] = {"source": "rules"}
+                notes["diagnosis"] = {"source": "rules", "rule_mode": failure.mode}
             else:
                 events = [
                     {"kind": e.kind, **dict(e.detail)}
@@ -147,7 +149,12 @@ class Adversary:
                     perturbation, fb, n_failures, policy.code, policy.task, events, result.metrics
                 )
                 failure, constraint = d.failure, d.constraint
-                notes["diagnosis"] = {"source": d.source, "usage": dict(d.usage)}
+                notes["diagnosis"] = {
+                    "source": d.source,
+                    "rule_mode": d.rule_mode,
+                    "code_sketch": d.code_sketch,
+                    "usage": dict(d.usage),
+                }
             constraint = dataclasses.replace(constraint, evidence=(attack_id, *constraint.evidence))
 
         self.history.append(

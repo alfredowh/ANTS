@@ -157,6 +157,16 @@ calls, aperture actual vs nominal, markers for perturbation, divergence and fail
 history (diffs, gate verdicts, motivating constraint), robustness board (per-category posteriors and
 stop criterion), skill library view, data view. It never influences decisions.
 
+**ANTS studio (`src/ants/studio/`, built from the ANTS Observability design, dark Harden and Replay
+views).** `uv run python -m ants.studio.run --attacks 20 [--model muse-spark]` runs System 2 and
+writes `data/runs/<name>/studio.html`, one self-contained page: the attack strip and log, the
+certification board, usage and cost; per attack, why it was chosen (selector draws and every Muse
+Spark proposal with its target assumption), a call timeline with perturbation, divergence-from-
+nominal and failure flags, the diagnosis (mode, confidence, model or rules, rule agreement), the
+plain-language explanation, the root-cause line and the constraint. Only logged data is shown;
+rewrites, gate verdicts and video appear once they exist. It complements System 1's run viewer
+(`evalkit/report.py` on `synthesizer`), which shows rollout videos and signals.
+
 ## Models
 
 | Stage | Role | Model (mode) |

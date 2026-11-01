@@ -19,8 +19,9 @@ PROMPT = Template((Path(__file__).parent / "prompts" / "explain.md").read_text(e
 def _template(report: AttackReport) -> str:
     p, c = report.perturbation, report.constraint
     cause = report.failure.root_cause if report.failure else ""
+    values = ", ".join(f"{k.replace('_', ' ')} {v:.3g}" for k, v in p.params.items())
     return (
-        f"The scene was changed ({p.category}: {dict(p.params)}). "
+        f"The scene was changed ({p.category}: {values}). "
         f"The program did not finish the task: {cause} "
         f"Fix: {c.rule if c else 'none'}"
     ).strip()

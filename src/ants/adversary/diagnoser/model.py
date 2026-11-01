@@ -30,6 +30,7 @@ class Diagnosis:
     failure: Failure
     constraint: Constraint
     source: str  # "model" or "rules: <reason>"
+    rule_mode: str = ""  # what the rule diagnoser said, to show agreement
     code_sketch: str = ""
     usage: Mapping[str, int] = field(default_factory=dict)
 
@@ -71,16 +72,21 @@ class ModelDiagnoser:
             rule = str(reply.get("rule", "")).strip()
             cause = str(reply.get("root_cause", "")).strip()
         except (ModelError, ValueError, TypeError, IndexError) as exc:
-            return Diagnosis(rule_failure, rule_constraint, f"rules: {exc}")
+            return Diagnosis(rule_failure, rule_constraint, f"rules: {exc}", rule_failure.mode)
         if not rule or not cause:
             return Diagnosis(
-                rule_failure, rule_constraint, "rules: incomplete model answer", usage=resp.usage
+                rule_failure,
+                rule_constraint,
+                "rules: incomplete model answer",
+                rule_failure.mode,
+                usage=resp.usage,
             )
         if confidence < self.confidence_floor:
             return Diagnosis(
                 rule_failure,
                 rule_constraint,
                 f"rules: model confidence {confidence:.2f}",
+                rule_failure.mode,
                 usage=resp.usage,
             )
         target = str(reply.get("target", "program"))
@@ -100,4 +106,4 @@ class ModelDiagnoser:
             target=target,
             code_sketch=sketch[:800] or None,
         )
-        return Diagnosis(failure, constraint, "model", sketch, resp.usage)
+        return Diagnosis(failure, constraint, "model", rule_failure.mode, sketch, resp.usage)
