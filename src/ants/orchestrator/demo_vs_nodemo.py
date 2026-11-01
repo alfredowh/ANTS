@@ -67,6 +67,7 @@ def run_sample(
         tokens = reply.prompt_tokens + reply.completion_tokens
         log.write_json(f"{rel}/messages_attempt{attempt}.json", messages)
         log.write(f"{rel}/reply_attempt{attempt}.md", reply.text)
+        log.write_json(f"{rel}/api_response_attempt{attempt}.json", reply.raw)
         text = extract_code(reply.text)
         program = log.write(f"{rel}/program_attempt{attempt}.py", text)
         diff = ""
@@ -76,10 +77,11 @@ def run_sample(
         previous_text = text
         log.event(
             "program", arm=arm, sample=sample, attempt=attempt, role=role, tokens=tokens,
+            reasoning_tokens=reply.reasoning_tokens,
             from_cache=reply.from_cache, lines=len(text.splitlines()),
             diff_lines=len(diff.splitlines()),
         )  # fmt: skip
-        trace = harnesses["stock"].run(
+        trace = harnesses[args.debug_scene].run(
             debug_case, program, out / f"debug_attempt{attempt}", f"{arm}-s{sample}-a{attempt}"
         )
         record["attempts"].append(
@@ -160,7 +162,7 @@ def summarise(records: list[dict]) -> str:
     scenes = sorted({e.get("scene", "stock") for r in records for e in r.get("evaluation", [])})
     head = "| Arm | Sample | T | Debug attempts | Solved debug seed |"
     head += "".join(f" Eval {s} |" for s in scenes) + " Tokens (uncached) |"
-    lines = [head, "|" + "---|" * (5 + len(scenes) + 1 - 1)]
+    lines = [head, "|" + "---|" * (5 + len(scenes) + 1)]
     for r in records:
         evals = r.get("evaluation", [])
         solved = any(a["trace"]["task_success"] for a in r["attempts"])
@@ -198,8 +200,13 @@ def main(argv: list[str] | None = None) -> int:
     )  # fmt: skip
     p.add_argument("--usd-per-mtok", type=float, default=13.5, help="for the cost estimate only")
     p.add_argument(
-        "--scenes", default="stock,scaled",
-        help="scenes each final program is evaluated in; debug and repair always use stock",
+        "--scenes",
+        default="stock,scaled",
+        help="scenes each final program is evaluated in",
+    )
+    p.add_argument(
+        "--debug-scene", default="stock", choices=["stock", "scaled"],
+        help="scene where programs are debugged and repaired (scaled: grown on-top tolerance)",
     )  # fmt: skip
     p.add_argument("--scale-json", default=json.dumps(REAL_SIZE), help="body name -> scale factor")
     p.add_argument(
@@ -229,6 +236,8 @@ def main(argv: list[str] | None = None) -> int:
         else:
             raise SystemExit(f"unknown scene {scene!r} (stock, scaled)")
     harnesses.setdefault("stock", CapHarness(args.aspire))
+    if args.debug_scene not in harnesses:
+        raise SystemExit(f"--debug-scene {args.debug_scene!r} must be one of --scenes")
     log = RunLog(args.out)
     if args.eval_only:
         records = reevaluate(args, harnesses, log)
@@ -252,6 +261,11 @@ def main(argv: list[str] | None = None) -> int:
         for arm in args.arms.split(","):
             if any(r.get("stopped") for r in records):
                 break  # the budget is used up; do not start new samples
+            done = args.out / arm / f"sample{sample}" / "record.json"
+            prior = json.loads(done.read_text(encoding="utf-8")) if done.exists() else None
+            if prior is not None and not prior.get("stopped"):
+                records.append(prior)  # resumed run: a finished sample is kept, not redone
+                continue
             records.append(
                 run_sample(
                     arm, sample, temp, args, client, harnesses, demo if arm == "demo" else None, log

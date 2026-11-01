@@ -28,8 +28,10 @@ class Reply:
     prompt_tokens: int
     completion_tokens: int
     cached_tokens: int
+    reasoning_tokens: int  # part of completion_tokens spent on chain of thought
     seconds: float
     from_cache: bool
+    raw: dict = field(default_factory=dict)  # full API response, not only the text
 
 
 @dataclass
@@ -91,6 +93,7 @@ class ChatClient:
                         "prompt_tokens": reply.prompt_tokens,
                         "completion_tokens": reply.completion_tokens,
                         "cached_tokens": reply.cached_tokens,
+                        "reasoning_tokens": reply.reasoning_tokens,
                         "seconds": reply.seconds,
                     }
                 )
@@ -123,8 +126,12 @@ def _reply_from(data: dict, seconds: float, from_cache: bool) -> Reply:
         prompt_tokens=int(usage.get("prompt_tokens", 0)),
         completion_tokens=int(usage.get("completion_tokens", 0)),
         cached_tokens=int((usage.get("prompt_tokens_details") or {}).get("cached_tokens", 0)),
+        reasoning_tokens=int(
+            (usage.get("completion_tokens_details") or {}).get("reasoning_tokens", 0)
+        ),
         seconds=seconds,
         from_cache=from_cache,
+        raw=data,
     )
 
 
