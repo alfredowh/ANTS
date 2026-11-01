@@ -91,3 +91,54 @@ def test_loop_refuses_overlapping_splits_and_a_policy_that_fails_nominal(tmp_pat
     )
     assert res.stopped == "no_working_policy"
     assert set(CATEGORIES) >= {"pose", "size"}
+
+
+def test_human_text_answer_becomes_a_constraint_and_the_loop_continues(tmp_path):
+    from ants.orchestrator.human_gate import GateAnswer, read_answer, write_request
+
+    run_case = _world(tmp_path, {"v0": "size", "v1": "pose", "v2": "none"})
+    seen = []
+
+    def gen(inc, cons, fbs):
+        seen.append([c.rule for c in cons])
+        fixed = any(c.evidence and c.evidence[0] == "human gate" for c in cons)
+        return (tmp_path / ("v2.py" if fixed else "v1.py"), 100)
+
+    asked = []
+
+    def ask(esc):
+        asked.append(esc)
+        write_request(tmp_path, esc)
+        return GateAnswer("text", "Measure the plate before releasing")
+
+    cfg = HardenConfig(cycles=12, tests_per_cycle=10, stall_limit=2, min_tests_robust=1)
+    res = harden(tmp_path / "v0.py", cfg, run_case, gen, RunLog(tmp_path / "run"), ask)
+    assert len(asked) == 1 and (tmp_path / "gate_request.json").exists()
+    assert res.stopped == "robust" and res.incumbent.name == "v2.py"
+    assert any("Measure the plate" in r for r in seen[-1])
+    assert read_answer(tmp_path) is None
+
+
+def test_video_answer_is_not_wired_and_still_escalates(tmp_path):
+    from ants.orchestrator.human_gate import GateAnswer
+
+    run_case = _world(tmp_path, {"v0": "size", "v1": "pose"})
+    gen = lambda inc, cons, fbs: (tmp_path / "v1.py", 100)  # noqa: E731
+    cfg = HardenConfig(cycles=10, tests_per_cycle=10, stall_limit=2, min_tests_robust=1)
+    ask = lambda esc: GateAnswer("video", file_name="fix.mp4")  # noqa: E731
+    res = harden(tmp_path / "v0.py", cfg, run_case, gen, RunLog(tmp_path / "run"), ask)
+    assert res.stopped == "escalate" and res.escalation
+
+
+def test_read_answer_parses_the_json_file_and_rejects_unknown_channels(tmp_path):
+    import pytest
+
+    from ants.orchestrator.human_gate import read_answer
+
+    (tmp_path / "gate_answer.json").write_text(
+        '{"channel": "text", "text": "tilt it"}', encoding="utf-8"
+    )
+    assert read_answer(tmp_path).text == "tilt it"
+    (tmp_path / "gate_answer.json").write_text('{"channel": "smoke"}', encoding="utf-8")
+    with pytest.raises(ValueError):
+        read_answer(tmp_path)

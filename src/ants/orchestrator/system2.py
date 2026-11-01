@@ -27,6 +27,7 @@ from ants.adversary.planner import TestPlanner
 from ants.contracts import CaseSpec, Constraint, to_json
 from ants.evalkit.runlog import RunLog
 from ants.orchestrator.gate import regression_gate
+from ants.orchestrator.human_gate import GateAnswer, answer_to_constraint
 
 
 @dataclass
@@ -39,6 +40,8 @@ class CaseResult:
 RunCase = Callable[[CaseSpec, Path], CaseResult]
 #: (incumbent program, all constraints, failure feedbacks) -> (candidate program, tokens) or None
 Generate = Callable[[Path, list[Constraint], list[dict]], "tuple[Path, int] | None"]
+#: escalation request -> the person's answer, or None when nobody answered
+AskHuman = Callable[[dict], "GateAnswer | None"]
 
 
 @dataclass
@@ -51,6 +54,7 @@ class HardenConfig:
     acceptance_seeds: tuple[int, ...] = tuple(range(51, 66))
     held_out_seeds: tuple[int, ...] = tuple(range(1, 51))
     stall_limit: int = 2
+    max_human_asks: int = 1  # how often a stall may be handed to a person before the loop stops
     min_tests_robust: int = 3
     strategy: str = "thompson"
     seed: int = 0
@@ -67,7 +71,12 @@ class HardenResult:
 
 
 def harden(
-    incumbent: Path, cfg: HardenConfig, run_case: RunCase, generate: Generate, log: RunLog
+    incumbent: Path,
+    cfg: HardenConfig,
+    run_case: RunCase,
+    generate: Generate,
+    log: RunLog,
+    ask_human: AskHuman | None = None,
 ) -> HardenResult:
     if set(cfg.acceptance_seeds) & set(cfg.held_out_seeds):
         raise ValueError("acceptance and held-out seeds must be disjoint")
@@ -93,7 +102,7 @@ def harden(
     if not nominal_ok:
         return HardenResult(incumbent, "no_working_policy", constraints, rows)
 
-    stopped, escalation, counter = "cycles", None, 0
+    stopped, escalation, counter, asks = "cycles", None, 0, 0
     for cycle in range(cfg.cycles):
         tests, failures = [], []
         for i in range(cfg.tests_per_cycle):
@@ -166,6 +175,17 @@ def harden(
             }
             log.event("escalate", **escalation)
             log.append_json("system2.jsonl", {"cycle": cycle, "escalation": escalation})
+            answer = ask_human(escalation) if ask_human and asks < cfg.max_human_asks else None
+            asks += 1
+            hint = answer_to_constraint(answer, escalation, len(constraints)) if answer else None
+            if answer and not hint:
+                log.event("human_answer_unused", channel=answer.channel, reason="not wired yet")
+            if hint:
+                constraints.append(hint)
+                log.event("human_answer", channel=answer.channel, signature=worst)
+                stalls = {}
+                escalation = None
+                continue
             stopped = "escalate"
             break
     log.event("system2_end", stopped=stopped, incumbent=str(incumbent))
