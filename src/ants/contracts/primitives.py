@@ -1,77 +1,140 @@
 """Robot primitives: the only API a generated policy can call.
 
-Primitive names follow the ASPIRE harness (localize_object, generate_grasps, select_grasp,
-move_to_pose, close_gripper). Signatures and result types are ours (v0) and still under review.
-Every primitive returns a typed result with a status instead of raising, so a policy can branch on
+Names, parameters and result fields mirror the ASPIRE harness (`cap_harness.api.CapAPI` and
+`cap_harness.contracts`, checked against the ASPIRE checkout) so the LIBERO backend is a thin
+adapter. Differences from ASPIRE, on purpose:
+
+- plain tuples instead of numpy arrays, so this module stays standard-library only; the adapter
+  converts;
+- only the result fields a policy or the diagnoser reads (ASPIRE also carries point clouds,
+  observations and so on);
+- `phase()` exists only in ANTS. It is an optional hint; nothing may depend on it.
+
+Every primitive returns a result with `ok` and `error` instead of raising, so a policy can branch on
 failure and the backend can log what happened.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from typing import Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
 class Pose:
-    """Position in metres (world frame) and orientation as a unit quaternion (x, y, z, w)."""
+    """Position in metres and a unit quaternion (w, x, y, z) in a named frame (ASPIRE order)."""
 
     position: tuple[float, float, float]
-    orientation: tuple[float, float, float, float] = (0.0, 0.0, 0.0, 1.0)
+    quaternion_wxyz: tuple[float, float, float, float] = (1.0, 0.0, 0.0, 0.0)
+    frame: str = "robot_base"
 
     def offset(self, x: float = 0.0, y: float = 0.0, z: float = 0.0) -> Pose:
-        """Same orientation, position shifted in the world frame."""
+        """Same orientation and frame, position shifted along the frame axes."""
         px, py, pz = self.position
-        return Pose((px + x, py + y, pz + z), self.orientation)
+        return Pose((px + x, py + y, pz + z), self.quaternion_wxyz, self.frame)
 
 
 @dataclass(frozen=True)
-class ObjectEstimate:
-    name: str
-    ok: bool
-    pose: Pose | None = None
-    confidence: float = 0.0
+class ApiError:
+    code: str
+    message: str
+    details: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
-class Grasp:
+class ObjectGeometry:
+    """Where an object is and how big: `extents` are the full box sizes in metres."""
+
     pose: Pose
-    pre_pose: Pose
-    score: float = 0.0
+    extents: tuple[float, float, float]
+    point_count: int | None = None
 
 
 @dataclass(frozen=True)
-class MotionResult:
+class LocalizationResult:
+    """`segmentation` is the backend's mask handle: pass it on to `generate_grasps` unchanged."""
+
     ok: bool
-    reason: str = ""
+    geometry: ObjectGeometry | None = None
+    segmentation: object | None = None
+    error: ApiError | None = None
+    diagnostics: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
-class GripperResult:
+class GraspCandidate:
+    pose: Pose
+    score: float
+    width_m: float
+    approach_distance_m: float = 0.0
+    metadata: Mapping[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class GraspSet:
     ok: bool
-    holding: bool = False
-    width: float = 0.0
+    grasps: Sequence[GraspCandidate] = ()
+    error: ApiError | None = None
+    diagnostics: Mapping[str, object] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class ExecutionResult:
+    """Result of a motion or gripper command. `status` is ASPIRE's ExecutionStatus value
+    ("success", "timeout", "planner_failed", ...) as a plain string."""
+
+    ok: bool
+    steps_executed: int = 0
+    status: str | None = None
+    terminated: bool = False
+    truncated: bool = False
+    error: ApiError | None = None
+    diagnostics: Mapping[str, object] = field(default_factory=dict)
 
 
 @runtime_checkable
 class RobotAPI(Protocol):
-    """What a policy's `run(robot, params)` receives. Backends (LIBERO, mock) implement it.
+    """What a policy receives. Backends (LIBERO via ASPIRE, mock) implement it.
 
     Policies get no simulator state, success predicate, imports or I/O: only these calls.
     """
 
     def phase(self, name: str) -> None:
-        """Mark the start of a named step; the last phase reached is reported on failure."""
+        """ANTS only. Optional hint that a named step starts; never required, never trusted."""
         ...
 
-    def localize_object(self, name: str) -> ObjectEstimate: ...
+    def localize_object(
+        self,
+        query: str,
+        *,
+        camera_name: str | None = None,
+        target_frame: str | None = None,
+    ) -> LocalizationResult: ...
 
-    def generate_grasps(self, target: ObjectEstimate) -> tuple[Grasp, ...]: ...
+    def generate_grasps(
+        self,
+        camera_name: str,
+        mask: object,
+        *,
+        backend: str = "contact-graspnet",
+        max_candidates: int = 5,
+    ) -> GraspSet: ...
 
-    def select_grasp(self, grasps: tuple[Grasp, ...]) -> Grasp | None: ...
+    def select_grasp(
+        self, grasps: GraspSet, strategy: str = "top_down"
+    ) -> GraspCandidate | None: ...
 
-    def move_to_pose(self, pose: Pose) -> MotionResult: ...
+    def move_to_pose(
+        self,
+        target_pose: Pose,
+        tolerance: float = 0.01,
+        max_steps: int = 120,
+        *,
+        arm: str = "primary",
+        strategy: object | None = None,
+    ) -> ExecutionResult: ...
 
-    def close_gripper(self, force: float) -> GripperResult: ...
+    def close_gripper(self, *, arm: str = "primary") -> ExecutionResult: ...
 
-    def open_gripper(self) -> GripperResult: ...
+    def open_gripper(self, *, arm: str = "primary") -> ExecutionResult: ...

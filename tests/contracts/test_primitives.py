@@ -1,8 +1,12 @@
+import inspect
+
 from ants.contracts import (
-    Grasp,
-    GripperResult,
-    MotionResult,
-    ObjectEstimate,
+    ApiError,
+    ExecutionResult,
+    GraspCandidate,
+    GraspSet,
+    LocalizationResult,
+    ObjectGeometry,
     Pose,
     RobotAPI,
 )
@@ -15,36 +19,59 @@ class FakeRobot:
     def phase(self, name: str) -> None:
         self.phases.append(name)
 
-    def localize_object(self, name: str) -> ObjectEstimate:
-        return ObjectEstimate(name, True, Pose((0.5, 0.0, 0.1)), 0.9)
+    def localize_object(
+        self, query: str, *, camera_name: str | None = None, target_frame: str | None = None
+    ) -> LocalizationResult:
+        geometry = ObjectGeometry(Pose((0.5, 0.0, 0.1)), (0.14, 0.14, 0.07))
+        return LocalizationResult(True, geometry, segmentation=f"mask:{query}")
 
-    def generate_grasps(self, target: ObjectEstimate) -> tuple[Grasp, ...]:
-        return (Grasp(target.pose, target.pose.offset(z=0.1), 1.0),)
+    def generate_grasps(
+        self,
+        camera_name: str,
+        mask: object,
+        *,
+        backend: str = "contact-graspnet",
+        max_candidates: int = 5,
+    ) -> GraspSet:
+        return GraspSet(True, (GraspCandidate(Pose((0.5, 0.0, 0.14)), 0.9, 0.04, 0.1),))
 
-    def select_grasp(self, grasps: tuple[Grasp, ...]) -> Grasp | None:
-        return grasps[0] if grasps else None
+    def select_grasp(self, grasps: GraspSet, strategy: str = "top_down") -> GraspCandidate | None:
+        return grasps.grasps[0] if grasps.ok and grasps.grasps else None
 
-    def move_to_pose(self, pose: Pose) -> MotionResult:
-        return MotionResult(True)
+    def move_to_pose(
+        self,
+        target_pose: Pose,
+        tolerance: float = 0.01,
+        max_steps: int = 120,
+        *,
+        arm: str = "primary",
+        strategy: object | None = None,
+    ) -> ExecutionResult:
+        return ExecutionResult(True, 10, "success")
 
-    def close_gripper(self, force: float) -> GripperResult:
-        return GripperResult(True, holding=True, width=0.04)
+    def close_gripper(self, *, arm: str = "primary") -> ExecutionResult:
+        return ExecutionResult(True, 5, "success")
 
-    def open_gripper(self) -> GripperResult:
-        return GripperResult(True)
+    def open_gripper(self, *, arm: str = "primary") -> ExecutionResult:
+        return ExecutionResult(True, 5, "success")
 
 
+# The same shape of program the generator writes today, wrapped as run(robot, params).
 POLICY = """
 def run(robot, params):
     robot.phase("locate")
     bowl = robot.localize_object("bowl")
+    if not bowl.ok:
+        return False
     robot.phase("grasp")
-    grasp = robot.select_grasp(robot.generate_grasps(bowl))
-    robot.move_to_pose(grasp.pre_pose)
+    grasp = robot.select_grasp(robot.generate_grasps("agentview", bowl.segmentation))
+    if grasp is None:
+        return False
+    robot.move_to_pose(grasp.pose.offset(z=grasp.approach_distance_m))
     robot.move_to_pose(grasp.pose)
-    held = robot.close_gripper(force=params["grasp_force"]).holding
+    held = robot.close_gripper().ok
     robot.phase("place")
-    robot.move_to_pose(bowl.pose.offset(x=0.2, z=params["release_height"]))
+    robot.move_to_pose(bowl.geometry.pose.offset(x=0.2, z=params["release_height"]))
     robot.open_gripper()
     return held
 """
@@ -58,11 +85,34 @@ def test_example_policy_runs_against_api():
     scope: dict = {}
     exec(POLICY, scope)
     robot = FakeRobot()
-    assert scope["run"](robot, {"grasp_force": 20.0, "release_height": 0.06}) is True
+    assert scope["run"](robot, {"release_height": 0.06}) is True
     assert robot.phases == ["locate", "grasp", "place"]
 
 
-def test_pose_offset_keeps_orientation():
-    p = Pose((0.0, 0.0, 0.0), (0.0, 0.0, 0.7071, 0.7071))
+def test_pose_offset_keeps_orientation_and_frame():
+    p = Pose((0.0, 0.0, 0.0), (0.7071, 0.0, 0.0, 0.7071), frame="world")
     q = p.offset(x=0.1, z=0.2)
-    assert q.position == (0.1, 0.0, 0.2) and q.orientation == p.orientation
+    assert q.position == (0.1, 0.0, 0.2)
+    assert q.quaternion_wxyz == p.quaternion_wxyz and q.frame == "world"
+
+
+def test_signatures_match_aspire_cap_api():
+    """Parameter names and kinds of the ASPIRE primitives we mirror (api.py, checked by hand)."""
+    expected = {
+        "localize_object": ["query", "camera_name", "target_frame"],
+        "generate_grasps": ["camera_name", "mask", "backend", "max_candidates"],
+        "select_grasp": ["grasps", "strategy"],
+        "move_to_pose": ["target_pose", "tolerance", "max_steps", "arm", "strategy"],
+        "close_gripper": ["arm"],
+        "open_gripper": ["arm"],
+    }
+    for name, params in expected.items():
+        sig = inspect.signature(getattr(RobotAPI, name))
+        assert [p for p in sig.parameters if p != "self"] == params, name
+    assert "force" not in inspect.signature(RobotAPI.close_gripper).parameters
+
+
+def test_failed_results_carry_an_error():
+    err = ApiError("point_cloud_failed", "no points", {"query": "bowl"})
+    assert not LocalizationResult(False, error=err).ok
+    assert not GraspSet(False, error=err).grasps
