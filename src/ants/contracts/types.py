@@ -46,6 +46,9 @@ class Outcome(StrEnum):
 
 
 class FailureMode(StrEnum):
+    """Recommended vocabulary, not a closed set: `Failure.mode` is any string, so a new task can
+    add modes without a contract change. PROGRAM_ERROR is the one value with special meaning."""
+
     MISSED_OBJECT = "missed_object"
     GRASP_SLIP = "grasp_slip"
     COLLISION = "collision"
@@ -53,6 +56,19 @@ class FailureMode(StrEnum):
     TIMEOUT = "timeout"
     WRONG_PLACEMENT = "wrong_placement"
     PROGRAM_ERROR = "program_error"
+
+
+def failure_signature(category: str, primitive: str, status: str) -> str:
+    """The one failure-signature format: `<category>:<failing primitive>:<status>`.
+
+    Stall counting, memory retrieval and escalation all key on it, so both systems build it here.
+    Example: `size:move_to_pose:timeout`. With no failing call, pass the termination reason as
+    `primitive` and `not_scored` as `status`.
+    """
+    parts = (category, primitive, status)
+    if any(not p or ":" in p for p in parts):
+        raise ValueError(f"signature parts must be non-empty and contain no ':', got {parts}")
+    return ":".join(parts)
 
 
 class BlameTarget(StrEnum):
@@ -151,7 +167,7 @@ class Perturbation:
     category: str
     params: Mapping[str, float]
     severity: float  # 0 = nominal scene, 1 = edge of the allowed range
-    seed: int
+    seed: int | None = None  # None when the test case carries the seed
     rationale: str = ""
 
     def __post_init__(self) -> None:
@@ -219,7 +235,7 @@ class RolloutResult:
 class Failure:
     """The diagnosis of one failed rollout."""
 
-    mode: FailureMode
+    mode: str  # open string; see FailureMode for the recommended vocabulary
     root_cause: str  # one causal sentence tied to the code
     confidence: float
     source: str = "rules"  # "model" or "rules"
@@ -236,7 +252,7 @@ class Failure:
         return cls(
             **{
                 **d,
-                "mode": FailureMode(d["mode"]),
+                "mode": str(d["mode"]),
                 "target": BlameTarget(d.get("target", BlameTarget.PROGRAM.value)),
             }
         )
@@ -247,7 +263,7 @@ class Constraint:
     """A failure turned into one rule System 1 must satisfy from now on (ASPIRE skill entry)."""
 
     constraint_id: str
-    failure_signature: str  # "<mode> | <category>": used to dedupe and to count stalls
+    failure_signature: str  # from failure_signature(): "<category>:<primitive>:<status>"
     when_to_apply: str
     rule: str  # one imperative sentence
     target: BlameTarget = BlameTarget.PROGRAM

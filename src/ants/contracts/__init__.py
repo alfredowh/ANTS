@@ -26,6 +26,7 @@ from ants.contracts.types import (
     Skill,
     SkillKind,
     SkillRef,
+    failure_signature,
     to_dict,
 )
 
@@ -53,5 +54,6 @@ __all__ = [
     "Skill",
     "SkillKind",
     "SkillRef",
+    "failure_signature",
     "to_dict",
 ]
