@@ -75,6 +75,9 @@ Agreed with System 1 on 2026-11-01, arriving as follow-up contracts PRs (both ap
 - One failure-signature helper in contracts, format `<category>:<failing primitive>:<status>`,
   e.g. `size:move_to_pose:timeout`. Stall counting, memory and escalation all key on it.
 - `GateDecision` and `PolicyStage` (draft, attackable, incumbent, certified).
+- Found by running the PR #5 policy offline: the robot API also needs `get_robot_state()` (base
+  frame, end-effector poses, gripper positions), `get_task_context()` (language), and a
+  `point_cloud` on `LocalizationResult`, which the policy reads to measure object sizes.
 
 ### System 1: synthesizer (Alfredo)
 
@@ -190,7 +193,7 @@ uniform, cost per cycle).
 | Piece | State |
 |---|---|
 | contracts | PR #3 with cap_harness signatures (#4) merged in; System 1 follow-up PRs agreed |
-| adversary | `feature/system2`: model layer, perturbation space, category selector; rebuilding on System 1's rollout, launcher and rule diagnoser |
+| adversary | `feature/system2`: full cycle offline (`Adversary.attack/replay/discovered_failures/status`) on System 1's launcher mapping, planner interface and rule diagnoser, with history, sandboxed runner and a mock world that runs the PR #5 v0 policy; cap_harness backend and model proposer/diagnoser next |
 | synthesizer | branch `synthesizer`: Muse client with cache and token budget, prompt builder, develop-and-repair loop, DemoSpec converters, demo vs no-demo experiment with logged runs |
 | orchestrator | System 1's experiment loop and gate on `synthesizer`; the shared gate moves to `orchestrator/gate.py` |
 | evalkit, observability | System 1: run logging, report viewer with a System 2 tab, on `synthesizer` |
