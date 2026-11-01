@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -34,6 +34,7 @@ class AttackRecord:
     outcome: Outcome
     failure_signature: str | None = None
     failure_mode: str | None = None
+    notes: Mapping[str, Any] = field(default_factory=dict)  # why: proposals, diagnosis, tokens
 
     def to_dict(self) -> dict[str, Any]:
         return to_dict(self)
@@ -45,6 +46,7 @@ class AttackRecord:
                 **d,
                 "perturbation": Perturbation.from_dict(d["perturbation"]),
                 "outcome": Outcome(d["outcome"]),
+                "notes": dict(d.get("notes", {})),
             }
         )
 

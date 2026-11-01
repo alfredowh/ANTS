@@ -6,19 +6,30 @@ accepts rewrites or escalates.
     results = adv.replay(policy, cases)    # fixed cases: gate, acceptance, held-out
     cases = adv.discovered_failures()      # every failing perturbation so far
     status = adv.status(policy)            # stop rule for the current version
+    text, source = adv.explain(report, policy)  # plain-language account of a failure
+
+With `model="muse-spark"`, M proposer agents choose each perturbation from the program's code, the
+model diagnoser explains each failure, and the explainer writes for people; every model step falls
+back to rules on any error. With `model="mock"` everything is rule-based and deterministic.
 """
 
 from __future__ import annotations
 
 import dataclasses
+import math
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
 from ants.adversary.config import AdversaryConfig
 from ants.adversary.diagnoser import classify, diagnose
+from ants.adversary.diagnoser.model import ModelDiagnoser
+from ants.adversary.explainer import explain
 from ants.adversary.history import AttackRecord, FailureHistory, policy_key
+from ants.adversary.models import ReasoningModel, get_model
+from ants.adversary.perturbations import DEFAULT_SPACE
 from ants.adversary.planner import TestPlanner
+from ants.adversary.planner.proposer import Proposer
 from ants.adversary.rollout import Backend, MockBackend, run_policy, to_feedback
 from ants.contracts import AttackReport, Outcome, Perturbation, Policy, RolloutResult, to_dict
 
@@ -41,10 +52,14 @@ class Adversary:
         config: AdversaryConfig,
         backend: Backend,
         history: FailureHistory | None = None,
+        model: ReasoningModel | None = None,
     ) -> None:
         self.config = config
         self.backend = backend
         self.history = history if history is not None else FailureHistory(config.history_path)
+        self.model = model
+        self.proposer = Proposer(model, DEFAULT_SPACE, config.n_agents) if model else None
+        self.diagnoser = ModelDiagnoser(model, config.confidence_floor) if model else None
         self.planner = TestPlanner(
             categories=config.categories,
             bounds=config.bounds,
@@ -56,8 +71,9 @@ class Adversary:
 
     @classmethod
     def from_config(cls, config: AdversaryConfig) -> Adversary:
+        model = None if config.model == "mock" else get_model(config.model)
         if config.backend == "mock":
-            return cls(config, MockBackend())
+            return cls(config, MockBackend(), model=model)
         if config.backend == "cap_harness":
             raise NotImplementedError(
                 "the cap_harness backend waits on CaseSpec and EpisodeTrace in contracts"
@@ -76,15 +92,62 @@ class Adversary:
         self._sync_planner(policy)
         attack_id = f"atk-{len(self.history):05d}"
         seed = self.config.seed * 1_000_003 + len(self.history)
-        perturbation = dataclasses.replace(self.planner.propose(), seed=seed)
+        key = policy_key(policy.policy_id, policy.version)
+        notes: dict[str, Any] = {}
+        if self.proposer is None:
+            perturbation = dataclasses.replace(self.planner.propose(), seed=seed)
+            notes["proposal"] = {"source": "scalar sampler"}
+        else:
+            category = self.planner.select_category()
+            recent = [
+                (r.perturbation, r.outcome.value) for r in self.history.recent(key, category, n=5)
+            ]
+            proposal = self.proposer.propose(
+                category,
+                policy.code,
+                policy.task,
+                recent,
+                self.config.bounds.limit(category),
+                self.planner.rng,
+                seed,
+            )
+            perturbation = proposal.perturbation
+            notes["proposal"] = {
+                "source": proposal.source,
+                "assumption": proposal.assumption,
+                "candidates": [
+                    {
+                        "params": dict(c.perturbation.params),
+                        "severity": c.perturbation.severity,
+                        "assumption": c.assumption,
+                        "rationale": c.perturbation.rationale,
+                        "novelty": None if math.isinf(c.novelty) else round(c.novelty, 4),
+                    }
+                    for c in proposal.candidates
+                ],
+                "usage": dict(proposal.usage),
+            }
         result = run_policy(policy.code, self.backend, perturbation, seed, self.config.line_budget)
 
         failure = constraint = None
         if result.outcome is Outcome.FAILURE:
             fb = to_feedback(result)
-            failure = classify(perturbation, fb)
             n_failures = sum(r.outcome is Outcome.FAILURE for r in self.history.records)
-            constraint = diagnose(perturbation, fb, n_failures)
+            if self.diagnoser is None:
+                failure = classify(perturbation, fb)
+                constraint = diagnose(perturbation, fb, n_failures)
+                notes["diagnosis"] = {"source": "rules"}
+            else:
+                events = [
+                    {"kind": e.kind, **dict(e.detail)}
+                    for e in result.events
+                    if e.kind != "call" or not e.detail.get("ok", True)
+                ]
+                d = self.diagnoser.diagnose(
+                    perturbation, fb, n_failures, policy.code, policy.task, events, result.metrics
+                )
+                failure, constraint = d.failure, d.constraint
+                notes["diagnosis"] = {"source": d.source, "usage": dict(d.usage)}
             constraint = dataclasses.replace(constraint, evidence=(attack_id, *constraint.evidence))
 
         self.history.append(
@@ -95,6 +158,7 @@ class Adversary:
                 result.outcome,
                 constraint.failure_signature if constraint else None,
                 failure.mode if failure else None,
+                notes,
             )
         )
         selection = self.planner.last_selection
@@ -124,6 +188,10 @@ class Adversary:
             )
             for p in cases
         ]
+
+    def explain(self, report: AttackReport, policy: Policy) -> tuple[str, str]:
+        """Plain-language account of a failed attack: (text, "model" | "template" | "none")."""
+        return explain(report, self.model, policy.task)
 
     def discovered_failures(self) -> list[Perturbation]:
         return self.history.discovered_failures()

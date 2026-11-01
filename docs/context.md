@@ -117,6 +117,8 @@ repo docs or results until a logged run here produces them** (decision D4).
 | D12 | 2026-11-01 | System 2 is built on System 1's v0 (rollout, launcher, rule diagnoser); no competing implementation. |
 | D13 | 2026-11-01 | Escalation window W = 3. Hackathon scope: v0, ANTS and no-demo arms first; `min_tests` stop mode for demo runs. |
 | D14 | 2026-11-01 | DemoSpecs come from hurobo markers and LIBERO demo files; SAM 3.1 tracking is a stretch goal. |
+| D15 | 2026-11-01 | Deliverable: a 3 to 5 minute visual demo video showing explainability and Meta's models. Combined Meta credits: $270, enough for the paper's Muse Spark roles in System 2 (4 proposer agents, diagnoser, explainer), all sharing one token ledger with System 1. |
+| D16 | 2026-11-01 | Follow the paper's plan with these deviations: ASPIRE primitives (paper text to be updated), SAM 3.1 as stretch, evaluation scaled to the simulator time available and stated as such. |
 
 Still open (see `architecture.md`): project name (Alfredo proposes Agentic Task Synthesis
 everywhere, paper to align), and the source of the paper's prototype numbers.

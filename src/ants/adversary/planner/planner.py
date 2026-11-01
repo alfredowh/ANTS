@@ -44,10 +44,18 @@ class TestPlanner:
             for c in self.categories
         }
 
+    @property
+    def rng(self) -> random.Random:
+        return self._rng
+
+    def select_category(self) -> str:
+        """Thompson draw (or uniform pick) over the categories; the draws are kept for the log."""
+        self.last_selection = self.selector.select(self.counts, self._rng)
+        return self.last_selection.category
+
     def propose(self) -> Perturbation:
         """One perturbation: a category from the selector, a severity in [min_severity, bound]."""
-        self.last_selection = self.selector.select(self.counts, self._rng)
-        category = self.last_selection.category
+        category = self.select_category()
         limit = self.bounds.limit(category)
         severity = self._rng.uniform(min(self.min_severity, limit), limit) if limit > 0 else 0.0
         return make(category, severity, self._rng, self.bounds)

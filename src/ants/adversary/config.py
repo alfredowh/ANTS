@@ -11,9 +11,9 @@ from ants.adversary.rollout.runner import DEFAULT_LINE_BUDGET
 
 @dataclass
 class AdversaryConfig:
-    model: str = (
-        "mock"  # "muse-spark", "provider:model" or "mock"; used by the proposer and diagnoser
-    )
+    model: str = "mock"  # "muse-spark" enables the model proposer, diagnoser and explainer
+    n_agents: int = 4  # parallel proposer agents (PARALLEL effort)
+    confidence_floor: float = 0.5  # below it the rule diagnosis is used
     backend: str = "mock"  # "mock" now; "cap_harness" once System 1's contracts land
     categories: tuple[str, ...] = CATEGORIES
     eta: float = 0.2  # uniform share of picks; 1.0 is the uniform baseline

@@ -168,7 +168,11 @@ stop criterion), skill library view, data view. It never influences decisions.
 | Explanation | plain-language failure report | Muse Spark (Instant) |
 
 All model access goes through adapters (`FAST`, `DELIBERATE`, `PARALLEL` effort levels); a mock
-model and mock world keep the loop testable offline.
+model and mock world keep the loop testable offline. The Meta adapter (`adversary/models/meta.py`)
+calls `https://api.meta.ai/v1/chat/completions` with `META_API_KEY`, caches every reply and logs
+tokens to `data/llm_ledger.jsonl`, the same ledger System 1 uses, under a hard token budget. How the
+API selects Muse Spark's Instant / Thinking / Contemplating modes is still to confirm with
+`uv run python -m ants.adversary.models.probe`; until then PARALLEL is four independent calls.
 
 ## Evaluation protocol (paper, Section IX)
 
