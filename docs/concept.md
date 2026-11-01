@@ -12,7 +12,7 @@ One robot, one task, one policy. Every new task, scenario or robot embodiment ne
 - **System 2, adversary:** a test planner proposes perturbations within a bounded severity, a simulator runs them, and a diagnoser explains each failure.
 - **Closed loop:** every failure becomes a constraint added to the generator's context, and the generator proposes a new candidate policy.
 - **Adaptive testing:** the test budget goes to the failure categories most likely to break the policy, not to uniform sampling.
-- **Gate:** a candidate is accepted only if it does at least as well as the current best on every case seen so far, so robustness never regresses.
+- **Gate:** a candidate is accepted only if it is no worse than the current best on every case seen so far and better on at least one, so robustness never regresses and every accepted version is a real improvement.
 - **Memory:** past policies are stored and retrieved by similarity, weighted by how often they helped; unused ones fade. This is how skills are shared.
 - **Stop or escalate:** stop when every category is confidently robust. If the generator stalls, ask a human for one targeted demonstration.
 
