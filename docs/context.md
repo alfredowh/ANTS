@@ -107,11 +107,19 @@ repo docs or results until a logged run here produces them** (decision D4).
 | D2 | 2026-11-01 | Skill library holds CODE and GUIDANCE skills only (no model-written prompts). System 1 retrieves and proposes; the orchestrator admits after a gate pass. |
 | D3 | 2026-10-31 | Daniel owns System 2 and the orchestrator; Alfredo owns System 1. |
 | D4 | 2026-11-01 | Paper prototype numbers are not quoted in the repo until reproduced from a logged run. |
-| D5 | 2026-10-28 | Policies are code (`run(robot, params)`), deterministic per seed, demo values in `params`. |
+| D5 | 2026-11-01 | Policies are plain `cap_harness` scripts (API functions in scope, top-level `result`); the backend provides `params` and `phase()`. Deterministic per seed. Replaces the earlier `run(robot, params)` shape. |
 | D6 | 2026-10-29 | Module context lives in `docs/<module>/spec.md`, imported from the root `CLAUDE.md`. |
+| D7 | 2026-11-01 | Contracts mirror the real `cap_harness` signatures (PR #4): `wxyz` quaternions, `ExecutionResult`, no grasp force. |
+| D8 | 2026-11-01 | Failure modes and categories are open strings with a recommended vocabulary; one shared failure signature `<category>:<primitive>:<status>`. |
+| D9 | 2026-11-01 | Gate: no worse on every case and better on at least one; compares outcomes; one function in `orchestrator/gate.py`; mode logged. |
+| D10 | 2026-11-01 | Policy stages draft, attackable, incumbent, certified; System 2 only attacks attackable policies. |
+| D11 | 2026-11-01 | Alfredo owns `evalkit/` and the replay viewer; System 2 supplies per-step traces and the nominal run. |
+| D12 | 2026-11-01 | System 2 is built on System 1's v0 (rollout, launcher, rule diagnoser); no competing implementation. |
+| D13 | 2026-11-01 | Escalation window W = 3. Hackathon scope: v0, ANTS and no-demo arms first; `min_tests` stop mode for demo runs. |
+| D14 | 2026-11-01 | DemoSpecs come from hurobo markers and LIBERO demo files; SAM 3.1 tracking is a stretch goal. |
 
-Still open (see `architecture.md`): gate strictness, project name, escalation window W, owners of
-`evalkit/` and observability.
+Still open (see `architecture.md`): project name (Alfredo proposes Agentic Task Synthesis
+everywhere, paper to align), and the source of the paper's prototype numbers.
 
 ## 8. How we work
 

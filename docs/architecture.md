@@ -20,8 +20,8 @@ model weights are updated anywhere.
 | `synthesizer/` | Alfredo Wijaya | System 1: video to program, experience memory, skill proposals |
 | `adversary/` | Daniel Totolici | System 2: attack, diagnose, constrain |
 | `orchestrator/` | Daniel Totolici | closed loop, regression gate, escalation, skill admission |
-| `evalkit/` | open | acceptance / held-out suites, metrics, logs |
-| observability | open | read-only replay and explanation UI over the logs |
+| `evalkit/` | Alfredo Wijaya | acceptance / held-out suites, metrics, run logs |
+| observability | Alfredo Wijaya | read-only run report and replay viewer (System 2 tab); System 2 supplies per-step traces and the nominal run |
 
 Package specs: [`docs/adversary/spec.md`](adversary/spec.md). Others get a `docs/<module>/spec.md`
 when work starts, imported from the root `CLAUDE.md`.
@@ -56,26 +56,50 @@ constraint for good, reset posteriors → check stop rule → check escalation.
 
 ## Components
 
-### Contracts (`src/ants/contracts/`, PR #3)
+### Contracts (`src/ants/contracts/`, PR #3 with #4 merged into it)
 
 `Policy`, `Perturbation`, `RolloutResult` + `Event`, `Failure`, `Constraint`, `AttackReport`,
-`Feedback`, `Skill` + `SkillRef`, and the `RobotAPI` protocol. Frozen dataclasses, JSON
-round-trippable, standard library only. A `DemoSpec` type is still to be added by System 1.
+`Feedback`, `Skill` + `SkillRef`, and the `RobotAPI` protocol, whose signatures mirror
+`cap_harness` (`localize_object(query, *, camera_name, target_frame)`,
+`generate_grasps(camera_name, mask, ...)`, `close_gripper(*, arm)` without force, results with
+`ok` / `error`, quaternions in `wxyz`). Frozen dataclasses, JSON round-trippable, standard library
+only.
+
+Agreed with System 1 on 2026-11-01, arriving as follow-up contracts PRs (both approve):
+- System 1: `DemoSpec`; `Policy.deterministic` and metadata (model, prompt hash, tokens); a case
+  type that carries suite, task id, seed and the acceptance / held-out `split`; a free `details`
+  mapping on rollout and feedback types; `Constraint.check_code` and optional `phase`;
+  `Policy.params` with optional `attack_ranges` (which values the program assumed, over what range).
+- Failure modes and categories become open strings with a recommended vocabulary
+  (`program_error` is the one special value).
+- One failure-signature helper in contracts, format `<category>:<failing primitive>:<status>`,
+  e.g. `size:move_to_pose:timeout`. Stall counting, memory and escalation all key on it.
+- `GateDecision` and `PolicyStage` (draft, attackable, incumbent, certified).
 
 ### System 1: synthesizer (Alfredo)
 
-1. **Perception.** SAM 3.1 segments hand and objects; hand keypoints give grasp moment and aperture.
-2. **Demonstration abstraction z (DemoSpec).** Phases (approach, grasp, transport, place),
-   landmarks (object and target centroids), gripper aperture.
-3. **Program generation.** Muse Wonder (via Muse Code) writes `run(robot, params)` over the
-   primitive API only. Context: task, z, API signatures, all active constraints, top-k retrieved
-   programs and skills.
-4. **Static checks.** Syntax and an API whitelist; any call outside the primitives is rejected.
-5. **Nominal replay.** One unperturbed LIBERO run; on failure, regenerate with the error, so the
-   adversary never attacks code that fails on its own.
+1. **Perception.** For the hackathon, DemoSpecs come from hurobo marker tracks (real phone clips)
+   and from LIBERO human-demo files. SAM 3.1 hand and object tracking is a stretch goal; it is not
+   in the pipeline yet.
+2. **Demonstration abstraction z (DemoSpec).** Keyframes (approach, grasp, lift, transport,
+   release, retreat), object tracks, object-frame end-effector paths, gripper aperture, step list,
+   extraction quality scores.
+3. **Program generation.** Muse Wonder writes a plain `cap_harness` script: API functions in scope,
+   a top-level `result`. The backend also puts `params` (object-relative values from the DemoSpec)
+   and `phase()` in scope. Context: task, z, API signatures, all active constraints, retrieved
+   guidance skills.
+4. **Static checks.** Pre-flight AST check: syntax, call whitelist, no imports except `math`.
+5. **Nominal replay.** A develop-and-repair loop on the nominal seed, up to K attempts. Only a
+   policy that passes is `attackable`; otherwise the run ends as `no_working_policy` and escalates.
+6. **Entry point.** `synthesize(demo, constraints, skills, memory, *, task, incumbent=None) ->
+   Policy`; a spent token budget raises `BudgetExceeded`, which the orchestrator maps to a budget
+   stop. A deterministic mock `synthesize()` maps failure signatures to code patches for offline
+   tests.
 
 ### System 2: adversary (Daniel)
 
+Built on System 1's early System 2 v0 (branch `synthesizer`): its `cap_harness` rollout and
+launcher become the LIBERO backend and its per-category rule diagnoser becomes the fallback.
 Spec and status: [`docs/adversary/spec.md`](adversary/spec.md),
 [`src/ants/adversary/README.md`](../src/ants/adversary/README.md). Failure history, Thompson
 category selector (η = 0.2), M = 4 proposers with novelty filter and uniform fallback, perturbation
@@ -89,16 +113,24 @@ first diverged from nominal.
 
 ### Orchestrator (Daniel)
 
-- **Regression gate.** Replay candidate and current best on An = Pacc ∪ Fn. Accept only if the
-  candidate is no worse on every case and better on at least one. Robustness is therefore monotone.
-- **Stop.** Robust when every category's 0.95 posterior quantile is below τ = 0.1. With no
-  failures this needs at least 28 clean rollouts per category (derived from Beta(1, n + 1)).
-- **Escalation.** If no rewrite was accepted for W cycles while some category's mean failure rate is
-  still ≥ τ, ask a human for one demonstration targeted at the diagnosed failure.
+- **Policy stages.** draft → attackable (passes its nominal cases) → incumbent (accepted by the
+  gate) → certified (stop rule met). System 2 only attacks attackable or incumbent policies.
+- **Regression gate.** One pure function in `orchestrator/gate.py`, starting from System 1's
+  version. Replay candidate and current best on An = Pacc ∪ Fn. Accept only if the candidate is no
+  worse on every case and better on at least one. It compares outcomes, not booleans: a crash on a
+  case the incumbent passed is a regression, and an incumbent crash is not a pass. Its mode
+  (`strict`, or `off` for the without-gate arm) is logged in every `GateDecision`.
+- **Stop.** Two configurable modes. `posterior` (for reported numbers): every category's 0.95
+  posterior quantile below τ = 0.1, which needs at least 28 clean rollouts per category (derived
+  from Beta(1, n + 1)). `min_tests` (cheap, for demo runs under the token cap): every category
+  tested at least k times with no failure. The mode is logged.
+- **Escalation.** If the same failure signature stalls for W = 3 cycles (configurable, logged),
+  ask a human for one demonstration targeted at that failure. Also when a draft never becomes
+  attackable.
 - **Skill admission.** After a gate pass, promote the skills the accepted policy used (or proposed)
   into the library and increment their help counts.
 - **Split enforcement.** Only acceptance-set failures produce `Feedback`; held-out cases never reach
-  System 1.
+  System 1. A test asserts that a held-out case cannot produce `Feedback`.
 
 ### Skill library (System 1 retrieves and proposes, orchestrator admits)
 
@@ -157,11 +189,12 @@ uniform, cost per cycle).
 
 | Piece | State |
 |---|---|
-| contracts | draft in PR #3, skills included; awaiting System 1 review |
-| adversary | model layer, perturbation space, category selector done; proposer, runner, mock world, diagnoser, history, facade not started |
-| synthesizer | discussion doc on branch `synthesizer`; no code |
-| orchestrator, evalkit, observability | not started |
-| LIBERO integration | demo replay on a simulated Franka exists on System 1's side (paper Fig. 5), not in this repo |
+| contracts | PR #3 with cap_harness signatures (#4) merged in; System 1 follow-up PRs agreed |
+| adversary | `feature/system2`: model layer, perturbation space, category selector; rebuilding on System 1's rollout, launcher and rule diagnoser |
+| synthesizer | branch `synthesizer`: Muse client with cache and token budget, prompt builder, develop-and-repair loop, DemoSpec converters, demo vs no-demo experiment with logged runs |
+| orchestrator | System 1's experiment loop and gate on `synthesizer`; the shared gate moves to `orchestrator/gate.py` |
+| evalkit, observability | System 1: run logging, report viewer with a System 2 tab, on `synthesizer` |
+| LIBERO integration | runs on System 1's `cap_harness` checkout (RTX A5500), not in CI |
 
 ## Open decisions
 
@@ -177,6 +210,11 @@ uniform, cost per cycle).
    reproduced from a logged run here (or the source run is linked).
 3. **Project name.** Paper: Adversarial Neuro-symbolic Task Synthesis. AGENTS.md: Agentic Task
    Synthesis.
-4. **Gate strictness.** Paper: no worse on every case *and better on at least one*. AGENTS.md: at
-   least as good on every case. The strict version can reject a rewrite that only adds a skill.
-5. **Escalation window W** is not fixed yet. CaP-X stays the fallback harness if `cap_harness` blocks us.
+4. **Gate strictness: decided 2026-11-01.** The paper's rule: no worse on every case and better on
+   at least one. AGENTS.md, README and concept updated.
+5. **Escalation window: decided 2026-11-01,** W = 3, configurable and logged. CaP-X stays the
+   fallback harness if `cap_harness` blocks us.
+6. **Hackathon scope (submission 2026-11-04): decided 2026-11-01.** The token cap (about $15,
+   observed about $13.5 per million tokens) rules out the full ablation table. Log v0 without
+   adversary, ANTS and no-demo first; add other arms only if budget remains. Demo runs use the
+   `min_tests` stop mode.
