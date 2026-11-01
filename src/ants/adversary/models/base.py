@@ -49,3 +49,24 @@ class ReasoningModel(Protocol):
     ) -> ModelResponse:
         """Return `n` completions. Raise `ModelError` on any failure."""
         ...
+
+
+def extract_json(text: str) -> Any:
+    """The first JSON object in a model reply, after stripping reasoning blocks and code fences.
+
+    Raises `ModelError` when there is none, so callers fall back instead of guessing.
+    """
+    import json
+    import re
+
+    cleaned = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
+    cleaned = re.sub(r"```(?:json)?", "", cleaned)
+    decoder = json.JSONDecoder()
+    for start in (m.start() for m in re.finditer(r"\{", cleaned)):
+        try:
+            value, _ = decoder.raw_decode(cleaned[start:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            return value
+    raise ModelError("no JSON object in the model reply")
