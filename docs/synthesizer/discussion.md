@@ -140,7 +140,7 @@ ASPIRE's API makes this concrete [read, `docs/api-reference.md`]. Generated prog
 
 ### 3.3 Machenta "Instant Robot Learning" and the Imperial line of work (Edward Johns)
 
-[blog](https://machenta.com/blog/instant-robot-learning), 2026-10-27 · [read]. The blog index had one post.
+[blog](https://machenta.com/blog/instant-robot-learning), 2026-10-27 · [read]. The blog index had one post. **Deeper note (all five Imperial works, SynthICL as the likely basis of the "VDA", licences, what ANTS covers): [instant-learning.md](../dev/instant-learning.md).**
 
 **Policy.** L8 in-context neural. A "vision-demo-action" model replaces the language input of a VLA with one demonstration. It is meta-trained on simulation data so that it "learns how to learn a task", then runs closed-loop on six robots and four teaching modes, including the teacher's own hands.
 
@@ -368,33 +368,43 @@ Keep the formats as dataclasses serialized to JSON. Every frame is named explici
 
 ```python
 @dataclass
-class DemoSpec:                     # System 1 perception output; scored against sim ground truth
-    source: str                     # "libero_render:<task>/<demo_id>" | "phone:<clip_id>"
+class DemoSpec:  # System 1 perception output; scored against sim ground truth
+    source: str  # "libero_render:<task>/<demo_id>" | "phone:<clip_id>"
     task_text: str
-    objects: list[ObjectTrack]      # name, SAM 3.1 track id, pose per keyframe in T_world_obj (if known)
-    keyframes: list[Keyframe]       # t_s, kind in {"approach","grasp","lift","transport","release","retreat"}
-    ee_path_obj: dict[str, Array]   # per segment: TCP path expressed in the frame of its anchor object
-    aperture: Array                 # gripper/pinch aperture over time, normalized 0..1
-    steps: list[str]                # L6 step list, e.g. ["grasp bowl rim", "place on plate center"]
-    quality: dict[str, float]       # track coverage, keyframe confidence; low values trigger escalation
+    objects: list[
+        ObjectTrack
+    ]  # name, SAM 3.1 track id, pose per keyframe in T_world_obj (if known)
+    keyframes: list[
+        Keyframe
+    ]  # t_s, kind in {"approach","grasp","lift","transport","release","retreat"}
+    ee_path_obj: dict[
+        str, Array
+    ]  # per segment: TCP path expressed in the frame of its anchor object
+    aperture: Array  # gripper/pinch aperture over time, normalized 0..1
+    steps: list[str]  # L6 step list, e.g. ["grasp bowl rim", "place on plate center"]
+    quality: dict[str, float]  # track coverage, keyframe confidence; low values trigger escalation
+
 
 @dataclass
-class Policy:                       # System 1 output, one accepted or candidate version
+class Policy:  # System 1 output, one accepted or candidate version
     policy_id: str
     parent_id: str | None
-    code: str                       # policy.py: def run(api, spec) -> None; only allowlisted API calls
-    spec_ref: str                   # which DemoSpec it uses
-    constraints_used: list[str]     # Constraint ids in the prompt
-    model: str; prompt_hash: str; tokens: int
+    code: str  # policy.py: def run(api, spec) -> None; only allowlisted API calls
+    spec_ref: str  # which DemoSpec it uses
+    constraints_used: list[str]  # Constraint ids in the prompt
+    model: str
+    prompt_hash: str
+    tokens: int
+
 
 @dataclass
-class Constraint:                   # System 2 -> System 1, ASPIRE skill-entry shape
+class Constraint:  # System 2 -> System 1, ASPIRE skill-entry shape
     constraint_id: str
-    failure_signature: str          # e.g. "grasp_miss: gripper closed on empty, object yaw > 30 deg"
-    when_to_apply: str              # scope: category, task, object
-    rule: str                       # natural-language repair, e.g. "re-localize after approach; align yaw"
-    check_code: str | None          # optional Code-as-Monitor-style predicate over API results
-    evidence: list[str]             # run ids, keyframe paths
+    failure_signature: str  # e.g. "grasp_miss: gripper closed on empty, object yaw > 30 deg"
+    when_to_apply: str  # scope: category, task, object
+    rule: str  # natural-language repair, e.g. "re-localize after approach; align yaw"
+    check_code: str | None  # optional Code-as-Monitor-style predicate over API results
+    evidence: list[str]  # run ids, keyframe paths
 ```
 
 `Failure`, `Perturbation` and `GateDecision` belong to System 2 and the orchestrator. The cross-system rule: a Constraint is the only thing System 2 sends to System 1.
@@ -431,3 +441,123 @@ Primary sources read for this note:
 - 2026 citation counts are small and change fast.
 - OpenAlex gave much lower counts for the same papers (for example, MimicGen 11 against 558), so only Semantic Scholar counts are used.
 - Muse model capabilities and prices come from agentic-robot's notes, not from Meta's documentation.
+
+---
+
+## 10. Reusing a ran project: agentic-robot build order against this note
+
+Added 2026-10-30. Sections 0 to 9 are unchanged. This section checks a six-step build order, taken from [reuse-from-agentic-robot.md](../dev/reuse-from-agentic-robot.md) (§6 there), against what this note already decides. Nothing here is decided. For each step it says what is **covered** already, what **conflicts**, and a **proposal**. Evidence tags: **[read]** is the text of this note or the linked doc. The V/P/U levels are agentic-robot's own (measured / partly / unverified); none was re-run.
+
+The order under review:
+
+1. Port the VLM client.
+2. Run the no-demo arm.
+3. Build the gate and the feasibility check.
+4. Build the baseline harness.
+5. Add the disagreement-based escalation trigger.
+6. Add evidence export.
+
+### 10.1 Step by step
+
+| # | Step | Covered already here | Conflict with this note | Net |
+|---|---|---|---|---|
+| 1 | VLM client | §3.5(d) Muse via OpenRouter; §5.1 both harnesses use an OpenAI-compatible client; Q7 smoke test (decision 5) | Overlaps harness clients; no video input there | Keep, but small |
+| 2 | No-demo arm | Q1, Q12a, M4 "required baseline" (§6), §0 point 4 | Needs a runner and an executor that step 4 and Q6 only provide later | Covered; reorder |
+| 3 | Plan gate and feasibility check | Plan gate: §5.2 row "Plan gate before rollout", §3.5(b). Feasibility: not covered | "Gate" means two things here; module placement | Half new |
+| 4 | Baseline harness | Q12 (four baselines), Q10, §6 M1 to M4, CaP-X tiers (§3.2) | Extra arms; where it lives; overlap with ASPIRE's seed protocol | Mostly covered |
+| 5 | Disagreement trigger | Q11, §3.5(c), §5.2 Escalation row | Q11's default has no disagreement term; a third trigger exists; K programs are not independent | Covered, needs a decision |
+| 6 | Evidence export | Not in this note (AGENTS.md rule: numbers come from logged runs) | Two tag systems | New |
+
+### 10.2 Step 1: port the VLM client
+
+**Covered.** Muse Spark 1.3 works through OpenRouter and takes video (§3.5(d)). CaP-X already has `capx/llm/client.py` plus an OpenRouter server, and both harnesses make the model a configuration change (§5.1). Q7 asks for a 1-day Muse smoke test on 3 LIBERO-Pro tasks before the loop (decision 5), which is what agentic-robot's order calls step 1.
+
+**Conflict or overlap.**
+- ASPIRE drives Claude Code or Codex agents and CaP-X's client is text-in, code-out. Neither feeds frames or video to a model, which DemoSpec extraction needs. So the client is not redundant, but it should cover only perception and spec calls, not code writing.
+- Only Muse **Spark** compile was measured there. Muse **Wonder** (the code writer in §5.2) and the write-run-debug loop (Q7) are still unmeasured.
+- Traps recorded there (V): reasoning tokens count against `max_tokens`; `<think>` blocks must be stripped before JSON parsing; a looping local model needs a guard; a salvaged parse is not a good plan.
+
+**Proposal.** One `ask(backend, frames, prompt)` returning a typed object with tokens and seconds, plus a call cache keyed by `(model, prompt_hash, input_hashes)`. Merge it with the Q7 smoke test: the first call it makes is that test.
+
+### 10.3 Step 2: run the no-demo arm
+
+**Covered.** This is the warning that opens §0 (point 4), Q1, Q12a and the "required baseline" row M4 in §6. The agentic-robot textspec result (§3.5) is the evidence: Muse 1.00 / Qwen 0.80 / Cosmos 0.65 with no video, matching video compile for the strong models (V, 5 synthetic videos). ASPIRE's 99% with no demonstration points the same way.
+
+**Conflict.** Order, not content. The arm needs an executor and a runner, but the order builds the harness at step 4, and Q6 (which harness, a large dependency needing approval, decision 4) is still open. So step 2 cannot run before either of those.
+
+**Proposal.**
+- Do Q6 first, or run step 2 on a stub executor, then fold it into the harness as one arm.
+- Choose the task by Q1 before measuring: if the no-demo arm already solves it, change the task, not the claim.
+- Report "tokens to robust, with and without the demonstration" (§6 item 5) as the fallback metric.
+
+### 10.4 Step 3: gate and feasibility check
+
+**Covered.** The pre-rollout program check is §5.2 row "Plan gate before rollout" (AST check: allowed calls only, no imports, parameter ranges) and §3.5(b). ASPIRE's "no imports, no success-predicate access" rule is quoted in §2.
+
+**Not covered.** The feasibility check: every perturbation must be solvable (by a scripted oracle or an IK reachability check), otherwise it is discarded and logged. §4.4 mentions LIBERO-PRO's bound `dist_k ≤ δ_k` and a requirement that behaviour changes, but nothing says the case must be winnable. This matters here because the gate (Q10) requires "at least as good on every case seen so far, and the set only grows". An unwinnable case in that set makes the gate unsatisfiable or meaningless. In agentic-robot a `missing` perturbation scored 0.00 for every arm by construction, which capped the full-suite mean at 0.83 even for the oracle (V).
+
+**Conflicts.**
+- **Two meanings of "gate".** Here (Q10, §5.2 row "Gate") it is the **regression gate** between candidate policies. The order means the **plan gate** before a rollout. Name them separately in code and docs.
+- **Placement.** The reuse doc puts the plan gate at `adversary/gate.py`. AGENTS.md assigns the regression gate to `orchestrator/`, which is also the only package that knows both systems. A plan gate checks a System 1 output before a System 2 rollout, so it sits between them. A feasibility check is System 2 only.
+- ASPIRE's own LIBERO-Pro seeds are fixed, so feasibility is only needed once our adversary chooses perturbations. That is the ANTS delta (§3.1), so the check is a cost of the delta, not an extra.
+- **Severity bound δ.** §4.4 gives LIBERO-PRO's bound but not a method to set it. agentic-robot's tray shifts of 30 to 80 mm against a ~10 mm tolerance made the oracle score 0.00 (V). Calibrate δ per category against measured task tolerance and log both.
+
+**Proposal.** `orchestrator/plan_gate.py` (pure function: code string, allow-list, DemoSpec ranges), `adversary/feasibility.py` (oracle or IK check), and keep the regression gate as a separate module. Report `held` (program refused or aborted safely) beside `failed`, never `safe` alone.
+
+### 10.5 Step 4: baseline harness
+
+**Covered.** Q12 lists four baselines (no demo; one-shot without the adversary; uniform instead of adaptive testing; retarget replay). §6 lists M1 to M4. CaP-X's tiers S1 to S4 (§3.2) already express "arms differ in what the model sees". Q10 fixes the per-case, per-seed gate comparison.
+
+**New arms from agentic-robot.**
+- **oracle** (hand-written DemoSpec and program): the upper bound.
+- **textspec**: a text description of the demo's content (separate from M4, which gets only the task text).
+- **with vs without a re-localization primitive**.
+- **gate on/off** and **memory on/off** as ablations.
+
+**Conflicts.**
+- **Overlap with ASPIRE.** Its harness already has the acceptance and held-out seed protocol (§3.1). Our harness should run arms on top of it, not re-implement the protocol.
+- **Placement.** An arm run calls both systems, so by AGENTS.md it belongs in `orchestrator/`. `evalkit/` (split, metrics, logging) should hold only arm configs, the call cache, metrics, Wilson intervals and rescore, with no import of either system.
+- **Seeds.** agentic-robot used 3 seeds per cell. A code policy is deterministic for a given seed (Q10), so repeating a seed adds nothing. Fix the number of **cases** up front (the reuse doc suggests e.g. 50 held-out) and put the intervals over cases.
+- **Three metrics** are not yet in this note: DemoSpec accuracy (against LIBERO ground truth), program validity (passes the plan gate), rollout success. They extend the "two blame points" argument for M2 (§6).
+
+**Proposal.** Arms as config. One frozen model and one executor per row. Success always from the benchmark's own predicate, never from a policy report or a VLM (FailBench, §4.3). A rescore script from day one, because two scoring bugs in agentic-robot invalidated its first numbers.
+
+### 10.6 Step 5: disagreement-based escalation trigger
+
+**Covered.** Q11 sets escalation after K=3 cycles with no gate pass on the same failure signature. §3.5(c) says to use disagreement across samples or models, or a verifier failure, instead of self-report, and §5.2 lists "agentic-robot disagreement trigger".
+
+**Conflicts.**
+- **Q11's default is failure-only.** The reuse doc requires failure recurrence **and** step disagreement. That changes Q11 and should be a decision, not a silent edit.
+- **A third trigger already exists.** `DemoSpec.quality` (§7) says low values trigger escalation. Three signals now exist (stalled cycles, disagreement, low spec quality) and nothing says how they combine.
+- **Independence.** ASPIRE samples K programs **conditioned on the top three so far** (§3.1), so they share context and their disagreement is correlated. Independent candidates need extra calls, extra models, or both, and a second model may need credentials or paid APIs (AGENTS.md: ask first).
+- **Inflated evidence.** The 0.98 AUROC came from four sources, two of them always right. Across configs of one model it fell to 0.73 to 0.83 (V). It was not tested where strong models share an error, nor on real footage. A shared wrong step gets high support and no flag.
+- **Unit.** The source compared `(part, slot)` strings. Here the unit should be the primitive-call sequence or the keyframe list, normalised (rounded poses, aliased objects).
+
+**Proposal.** `orchestrator/escalation.py`. Tune the threshold on the acceptance set only. Measure precision and recall against simulator ground truth, include a shared-error case, and compare with two simple triggers (failure count only; self-report). K, thresholds and the failure signature definition go in the logged config.
+
+### 10.7 Step 6: evidence export
+
+**Covered.** Not in this note. AGENTS.md covers it: results in the README must come from logged runs, with a link to the run or doc.
+
+**Conflicts.**
+- **Two tag systems.** This note uses [read] / [summary] / [abstract] for sources. agentic-robot uses V / P / U for results. Keep both and say so, since they describe different things (how a source was read vs how a result was verified).
+- The source exporter deletes `results/` before writing. Use a versioned run directory instead.
+
+**Proposal.** `evalkit/export.py` writing one results file per run from logs, a README beside it, and raw runs and videos kept out of git. Every number in `docs/` and the README links to it.
+
+### 10.8 Cross-cutting
+
+- **Dependency order.** Steps 2, 4 and 5 all need Q6 (harness choice, decision 4) settled. Until then only steps 1, 3 (pure parts) and 6 can start.
+- **Out-of-order risk.** Step 5 multiplies model calls per cycle. With the budget in agentic-robot's notes (about 50 EUR total; OpenRouter capped at 5 USD, 2.06 USD spent as of 2026-10-27; recheck), build the call cache before it, so disagreement can be evaluated by re-sampling and rescoring cached outputs.
+- **Not in this order, still open.** The retrieval-time validity check for stored policies (skill staleness, ASPIRE's stated limitation in §3.1) and the Q9 memory design are not covered by these six steps.
+
+### 10.9 Decisions needed (default in bold)
+
+1. **Order.** Move Q6 (harness) and a stub executor **before** step 2, or accept that step 2 waits for step 4.
+2. **Naming.** **"plan gate" for the pre-rollout check, "regression gate" for Q10.** Alternatively keep "gate" for both.
+3. **Placement.** **Plan gate and escalation in `orchestrator/`, feasibility in `adversary/`, arm configs, metrics and cache in `evalkit/` (no system imports).** The reuse doc's `adversary/gate.py` would change.
+4. **Q11.** **Escalate when the failure signature recurs for K=3 cycles AND candidates disagree on the implicated step.** Alternative: keep failure-only.
+5. **Trigger precedence.** **Low `DemoSpec.quality` escalates immediately, before any rollout cycles are spent;** the other two combine as in decision 4.
+6. **Independent candidates for disagreement.** **Re-sample the same Muse model with different seeds,** accepting that errors are correlated. Alternative: a second model, which needs approval.
+7. **Case count.** **Fix N (e.g. 50 held-out cases) up front, with Wilson intervals over cases.**
+8. **Tags.** **Keep [read]/[summary]/[abstract] for sources and add V/P/U for our own results.**

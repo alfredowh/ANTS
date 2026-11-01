@@ -1,6 +1,6 @@
 # ANTS System 1: module radar (2025–2026), 2026-10-31
 
-Scope: candidate modules for System 1 (one video demo → DemoSpec → frozen code generator → plan gate → nominal replay), plus memory and escalation. Hardware: one RTX A5500 laptop GPU (16 GB), 62 GB RAM; APIs allowed; nothing trained. This note builds on `docs/synthesizer/discussion.md` §4 and §4.5 and on `docs/reuse-from-hurobo.md`, and says explicitly whether an existing pick still stands.
+Scope: candidate modules for System 1 (one video demo → DemoSpec → frozen code generator → plan gate → nominal replay), plus memory and escalation. Hardware: one RTX A5500 laptop GPU (16 GB), 62 GB RAM; APIs allowed; nothing trained. This note builds on `docs/synthesizer/discussion.md` §4 and §4.5 and on `docs/dev/reuse-from-hurobo.md`, and says explicitly whether an existing pick still stands.
 
 **Counts.** Cit. comes from the Semantic Scholar batch API and ★ from the GitHub API, both queried on 2026-10-31. The exceptions are ASPIRE and CaP-X, whose counts are copied from discussion.md (2026-10-28). Counts for 2026 papers change weekly. "–" means no public repo was found.
 **Evidence tags.** **[read]**: the primary text was read. **[summary]**: a model-extracted summary of the paper's HTML or docs page. **[abstract]**: the arXiv abstract page or project page only. **[search summary]**: a search-engine snippet only, so treat it as unverified. Affiliations marked "(inferred)" come from author names, not from the paper. Numbers are the authors' own and were not reproduced.

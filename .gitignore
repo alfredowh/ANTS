@@ -221,3 +221,6 @@ __marimo__/
 
 # Local datasets and run outputs (never committed)
 /data/
+
+# Local dev notes (not committed)
+/docs/dev/
