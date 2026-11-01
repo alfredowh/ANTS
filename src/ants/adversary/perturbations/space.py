@@ -71,7 +71,7 @@ class PerturbationSpace:
         self,
         category: str,
         raw: Mapping[str, object],
-        seed: int,
+        seed: int | None = None,
         rationale: str = "",
     ) -> Perturbation:
         """Turn any proposal into a legal perturbation inside the bounds with severity <= rho."""
@@ -111,37 +111,34 @@ class PerturbationSpace:
         return f"category {category}, max severity {self.rho}:\n" + "\n".join(lines)
 
 
-# LIBERO bowl-and-plate scene. Bounds are design choices, not measurements: tune them on the scene
-# so that nominal passes and the edge of each range is hard but physically plausible.
+# LIBERO bowl-and-plate scene (libero_goal_swap 8). Only parameters that tools/aspire_launch.py
+# applies are listed, with names matching `launcher.to_launcher_spec`. The edges equal System 1's v0
+# values at severity 1; size at the edge matches the real hurobo objects (bowl x1.227, plate
+# x1.855, measured). Other bounds are design choices to tune on the scene, not measurements.
+# Clutter and occlusion are left out until the launcher can apply them.
 DEFAULT_SPACE = PerturbationSpace(
     {
         "pose": (
-            Param("dx", 0.0, -0.15, 0.15, unit="m"),
-            Param("dy", 0.0, -0.15, 0.15, unit="m"),
-            Param("dyaw", 0.0, -math.pi / 2, math.pi / 2, unit="rad"),
+            Param("dx_m", 0.0, -0.08, 0.08, unit="m"),
+            Param("dy_m", 0.0, -0.08, 0.08, unit="m"),
         ),
         "physics": (
-            Param("friction_scale", 1.0, 0.2, 2.0),
-            Param("mass_scale", 1.0, 0.5, 3.0),
+            Param("friction_scale", 1.0, 0.3, 1.0),  # only lower friction is harder
+            Param("mass_scale", 1.0, 1.0, 3.0),  # only a heavier bowl is harder
         ),
-        "clutter": (
-            Param("n_distractors", 0.0, 0.0, 5.0, integer=True),
-            Param("min_gap", 0.20, 0.03, 0.20, unit="m"),  # only tighter gaps are harder
+        "size": (
+            Param("bowl_scale", 1.0, 1.0, 1.25),
+            Param("plate_scale", 1.0, 1.0, 1.9),
         ),
-        "camera": (
-            Param("yaw", 0.0, -15.0, 15.0, unit="deg"),
-            Param("pitch", 0.0, -10.0, 10.0, unit="deg"),
-            Param("distance_scale", 1.0, 0.85, 1.15),
-        ),
-        "lighting": (
-            Param("intensity_scale", 1.0, 0.3, 1.5),
-            Param("azimuth", 0.0, -90.0, 90.0, unit="deg"),
-        ),
-        "occlusion": (Param("coverage", 0.0, 0.0, 0.6),),
         "actuation": (
-            Param("action_noise_std", 0.0, 0.0, 0.05),
+            Param("noise_std", 0.0, 0.0, 0.02),
             Param("latency_steps", 0.0, 0.0, 3.0, integer=True),
         ),
+        "camera": (
+            Param("dy_m", 0.0, -0.05, 0.05, unit="m"),
+            Param("fovy_delta_deg", 0.0, -4.0, 4.0, unit="deg"),
+        ),
+        "lighting": (Param("diffuse_scale", 1.0, 0.3, 1.5),),
     },
     rho=0.8,
 )
