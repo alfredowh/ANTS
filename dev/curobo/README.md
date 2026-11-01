@@ -51,9 +51,23 @@ the owner, because it changes every result on a scaled scene.
   - `ANTS_PROBE_XYZ=x,y,z`: print, per scene body, how close its points get to a goal.
 - `service_dev.py`: the cuRobo service with `ANTS_CARVE_MARGIN_M` instead of the fixed 5 cm.
 - `carve_check.py`, `carve_curve.py`, `probe_goal.py`: offline replays of the carve (one margin, or a sweep) and of goal feasibility on a dumped cloud.
+- `collision_validator.py`: second success validator. Reads the contact log and flags any contact that is not part of the task (robot with anything but the bowl, bowl with anything but plate, table or robot). A run is a clean success when the task check passes and nothing is flagged. Tested in `tests/dev/`.
 - `ontop_test.py`: drops the bowl on the plate and records what the on-top check sees (`ANTS_ONTOP_TEST=out.json`).
 - `programs/`: the test programs (`exp3_a2_curobo_all.py`: logged program with cuRobo on every move;
   `exp3_a2_orbit.py`: scene-aware transit, default planner for contact, and the orbit skill).
+
+## Collision validator results
+
+| # | Forbidden-contact steps | First step | What was touched |
+|---|---|---|---|
+| 1 | 478 | 323 | robot with wine rack (477), bowl with wine rack (1) |
+| 2 | 416 | 564 | robot with wine rack (410), bowl with wine rack (6) |
+| 3 | 478 | 385 | robot with wine rack (478) |
+| 4 | 0 | | |
+| 5 | 0 | | |
+| 6 | 0 | | |
+
+Only 5 and 6 are clean, and with the plate-scaled tolerance only 5 and 6 are clean successes. Config 4 is clean but never placed the bowl. The Run walkthrough program (seed 51, nominal scene) replays with 0 forbidden steps in 496.
 
 ## Limits
 
