@@ -2,7 +2,7 @@
 
 System 2 takes a robot program written by System 1 and tries to make it fail in simulation. It explains each failure and hands it back as a constraint System 1 can follow. It only reports. It never edits code, never accepts or rejects rewrites, and never decides to escalate.
 
-> Status: model layer (`models/`), perturbation space (`perturbations/`) and category selector (`planner/selector`) are implemented and tested; the rest is spec. Nothing is measured yet. Full-system context: [`docs/architecture.md`](../../../docs/architecture.md). Hard rules, layout and build order are in [`docs/adversary/spec.md`](../../../docs/adversary/spec.md).
+> Status: model layer (`models/`), perturbation space wired to the ASPIRE launcher (`perturbations/`), category selector and test planner (`planner/`), and rule diagnoser (`diagnoser/`) are implemented and tested, building on System 1's v0. The cap_harness runner, model proposer and diagnoser, history and `Adversary` facade are next. Nothing is measured yet. Full-system context: [`docs/architecture.md`](../../../docs/architecture.md). Hard rules, layout and build order are in [`docs/adversary/spec.md`](../../../docs/adversary/spec.md).
 
 ## One adversarial cycle
 

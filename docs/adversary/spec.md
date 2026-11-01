@@ -115,18 +115,21 @@ adversary/
 │   ├── mock.py              deterministic offline model
 │   └── __init__.py          get_model(spec)
 ├── perturbations/
-│   └── space.py             Param, PerturbationSpace, DEFAULT_SPACE
+│   ├── space.py             Param, PerturbationSpace, DEFAULT_SPACE (launcher-wired categories)
+│   ├── launcher.py          to_launcher_spec for tools/aspire_launch.py (from System 1's v0)
+│   └── scalar.py            make, Bounds, CATEGORIES: System 1's scalar-severity interface
 ├── planner/
 │   ├── selector.py          Thompson sampling, posterior mean and quantiles
 │   ├── proposer.py          model agents + validation + novelty + fallback
-│   └── planner.py           TestPlanner = selector + proposer
+│   └── planner.py           TestPlanner (System 1's v0 interface) = selector + proposer
 ├── rollout/
 │   ├── backend.py           SimBackend, Episode protocols
 │   ├── runner.py            sandboxed execution, timeout, evidence packaging
 │   ├── mock_backend.py      toy world, one failure mechanism per category
-│   └── aspire_backend.py    ASPIRE cap_harness (LIBERO-Pro) implementation
-├── diagnosis/
-│   └── diagnoser.py         model diagnoser + RuleDiagnoser, failure-mode list
+│   └── aspire_backend.py    cap_harness runner, from System 1's rollout.py (needs CaseSpec, EpisodeTrace)
+├── diagnoser/
+│   ├── rules.py             RULES, signature, classify, diagnose (from System 1's v0)
+│   └── model.py             model diagnoser with the rules as fallback
 ├── history/
 │   └── store.py             FailureHistory, AttackRecord
 └── prompts/
@@ -134,12 +137,22 @@ adversary/
     └── diagnose.md
 ```
 
+System 1's v0 on branch `synthesizer` has `adversary/perturbations.py`, `planner.py` and
+`diagnoser.py` as single modules. The packages above export the same names (`CATEGORIES`,
+`Bounds`, `make`, `to_launcher_spec`, `TestPlanner`, `diagnose`, `signature`, `RULES`), so its
+experiment loop keeps working. **When `synthesizer` merges, delete those three module files:** a
+package and a module with the same name do not conflict in git, and Python silently imports the
+package.
+
 Tests live in the repo-level `tests/`, mirroring the package (see AGENTS.md):
 
 ```
 tests/adversary/
 ├── test_space.py            clamping, severity ≤ ρ
-├── test_selector.py         posteriors, exploration, reset on new policy
+├── test_launcher.py         scalar severity, launcher spec per category
+├── test_selector.py         posteriors, exploration
+├── test_planner.py          TestPlanner interface, both stop modes, reset on new policy
+├── test_diagnoser.py        signature format, modes, constraints
 ├── test_runner.py           sandbox, timeout, crash → ERROR
 └── test_loop.py             full loop offline: finds failures, rewrites pass a gate, failure rate drops
 ```
