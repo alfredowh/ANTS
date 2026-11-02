@@ -18,7 +18,9 @@ from dataclasses import dataclass, field, fields, is_dataclass
 from enum import Enum, StrEnum
 from typing import Any
 
-CONTRACTS_VERSION = "0.1"
+CONTRACTS_VERSION = "0.2"
+
+FAILURE_SOURCES = ("model", "rules", "human")  # who produced a Failure diagnosis
 
 
 def to_dict(obj: Any) -> Any:
@@ -129,7 +131,7 @@ class Skill:
 
 @dataclass(frozen=True)
 class Policy:
-    """System 1's output: a program defining `run(robot, params)` plus its demo data."""
+    """System 1's output: a program (see `entry_format`) plus its demo data."""
 
     policy_id: str  # stable across versions of one skill
     version: int
@@ -140,10 +142,21 @@ class Policy:
     constraints: tuple[str, ...] = ()  # constraint ids this version claims to satisfy
     skills_used: tuple[SkillRef, ...] = ()  # library skills inlined in `code` or read as guidance
     demo_id: str | None = None
+    # False = outcomes can vary run to run, so the gate must use several rollouts per case.
+    deterministic: bool = False
+    metadata: Mapping[str, Any] = field(default_factory=dict)  # model, prompt hash, tokens, ...
+    # (min, max) per key of `params` that is worth attacking; System 2 stays inside it.
+    attack_ranges: Mapping[str, tuple[float, float]] = field(default_factory=dict)
+    # Open string. "run_function": `def run(robot, params)`. "script": top-level code that sets
+    # a top-level `result`; the backend wraps it.
+    entry_format: str = "run_function"
 
     def __post_init__(self) -> None:
         if self.version < 0:
             raise ValueError(f"version must be >= 0, got {self.version}")
+        for name, (lo, hi) in self.attack_ranges.items():
+            if lo > hi:
+                raise ValueError(f"attack_ranges[{name!r}] has min {lo} > max {hi}")
 
     def to_dict(self) -> dict[str, Any]:
         return to_dict(self)
@@ -154,6 +167,10 @@ class Policy:
             **{
                 **d,
                 "params": dict(d.get("params", {})),
+                "metadata": dict(d.get("metadata", {})),
+                "attack_ranges": {
+                    k: (float(r[0]), float(r[1])) for k, r in d.get("attack_ranges", {}).items()
+                },
                 "constraints": tuple(d.get("constraints", ())),
                 "skills_used": tuple(SkillRef(**s) for s in d.get("skills_used", ())),
             }
@@ -190,6 +207,44 @@ class Perturbation:
         return cls(**{**d, "params": {k: float(v) for k, v in d["params"].items()}})
 
 
+class Split(StrEnum):
+    """Acceptance cases tune and gate; held-out cases only report and never reach System 1."""
+
+    ACCEPTANCE = "acceptance"
+    HELD_OUT = "held_out"
+
+
+@dataclass(frozen=True)
+class CaseSpec:
+    """One test case: task, seed and perturbations, with its split visible in every log."""
+
+    case_id: str
+    suite: str
+    task_id: int
+    seed: int
+    split: Split
+    perturbations: tuple[Perturbation, ...] = ()
+
+    @property
+    def held_out(self) -> bool:
+        return self.split is Split.HELD_OUT
+
+    def to_dict(self) -> dict[str, Any]:
+        return to_dict(self)
+
+    @classmethod
+    def from_dict(cls, d: Mapping[str, Any]) -> CaseSpec:
+        return cls(
+            **{
+                **d,
+                "split": Split(d["split"]),
+                "perturbations": tuple(
+                    Perturbation.from_dict(p) for p in d.get("perturbations", ())
+                ),
+            }
+        )
+
+
 @dataclass(frozen=True)
 class Event:
     """Something a primitive observed during a rollout, e.g. `grasp_slip` in phase `lift`."""
@@ -214,6 +269,7 @@ class RolloutResult:
     error: str | None = None  # traceback summary when outcome is ERROR
     video_path: str | None = None
     keyframes: tuple[str, ...] = ()
+    details: Mapping[str, Any] = field(default_factory=dict)  # backend-specific trace, JSON-able
 
     def to_dict(self) -> dict[str, Any]:
         return to_dict(self)
@@ -227,6 +283,7 @@ class RolloutResult:
                 "metrics": dict(d.get("metrics", {})),
                 "events": tuple(Event.from_dict(e) for e in d.get("events", ())),
                 "keyframes": tuple(d.get("keyframes", ())),
+                "details": dict(d.get("details", {})),
             }
         )
 
@@ -238,11 +295,13 @@ class Failure:
     mode: str  # open string; see FailureMode for the recommended vocabulary
     root_cause: str  # one causal sentence tied to the code
     confidence: float
-    source: str = "rules"  # "model" or "rules"
+    source: str = "rules"  # one of FAILURE_SOURCES
     target: BlameTarget = BlameTarget.PROGRAM
 
     def __post_init__(self) -> None:
         _check_unit("confidence", self.confidence)
+        if self.source not in FAILURE_SOURCES:
+            raise ValueError(f"source must be one of {FAILURE_SOURCES}, got {self.source!r}")
 
     def to_dict(self) -> dict[str, Any]:
         return to_dict(self)
@@ -270,6 +329,8 @@ class Constraint:
     code_sketch: str | None = None  # a hint, never a full patch
     evidence: tuple[str, ...] = ()  # attack ids, replayable
     skill: SkillRef | None = None  # the blamed skill when target is SKILL
+    check_code: str | None = None  # runnable precondition (a Python expression or function body)
+    phase: str | None = None  # the policy stage it applies to; None means the whole program
 
     def __post_init__(self) -> None:
         if (self.target is BlameTarget.SKILL) != (self.skill is not None):
@@ -324,7 +385,8 @@ class AttackReport:
 class Feedback:
     """What the orchestrator forwards to System 1 after a failure on an acceptance case.
 
-    Held-out cases never produce Feedback; that split is enforced by the orchestrator.
+    Held-out cases never produce Feedback. The orchestrator enforces the split; as a second line
+    of defence, a Feedback built from a held-out `test_case` raises.
     """
 
     policy_id: str
@@ -333,6 +395,12 @@ class Feedback:
     failure: Failure
     case: Perturbation
     rollout: RolloutResult
+    details: Mapping[str, Any] = field(default_factory=dict)
+    test_case: CaseSpec | None = None  # the suite case the failure came from, when known
+
+    def __post_init__(self) -> None:
+        if self.test_case is not None and self.test_case.held_out:
+            raise ValueError(f"held-out case {self.test_case.case_id} cannot produce Feedback")
 
     def to_dict(self) -> dict[str, Any]:
         return to_dict(self)
@@ -346,10 +414,12 @@ class Feedback:
             failure=Failure.from_dict(d["failure"]),
             case=Perturbation.from_dict(d["case"]),
             rollout=RolloutResult.from_dict(d["rollout"]),
+            details=dict(d.get("details", {})),
+            test_case=CaseSpec.from_dict(d["test_case"]) if d.get("test_case") else None,
         )
 
     @classmethod
-    def from_report(cls, report: AttackReport) -> Feedback:
+    def from_report(cls, report: AttackReport, test_case: CaseSpec | None = None) -> Feedback:
         if report.failure is None or report.constraint is None:
             raise ValueError(f"attack {report.attack_id} has no failure to feed back")
         return cls(
@@ -359,4 +429,5 @@ class Feedback:
             failure=report.failure,
             case=report.perturbation,
             rollout=report.result,
+            test_case=test_case,
         )
