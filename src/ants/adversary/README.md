@@ -2,7 +2,7 @@
 
 System 2 takes a robot program written by System 1 and tries to make it fail in simulation. It explains each failure and hands it back as a constraint System 1 can follow. It only reports. It never edits code, never accepts or rejects rewrites, and never decides to escalate.
 
-> Status: the full System 2 cycle runs offline. Implemented and tested: model layer, perturbation space wired to the ASPIRE launcher, selector and test planner, rule diagnoser, failure history, sandboxed runner, a mock world that runs System 1's v0 policy (`examples/bowl_on_plate/policy.py`) unchanged, and the `Adversary` entry point. With `model="muse-spark"`, four Muse Spark agents propose each attack from the program's code, Muse Spark diagnoses each failure and writes a plain-language explanation, all with rule fallbacks; tested against a fake API, not yet run live. Next: the cap_harness backend. Mock-world numbers are test fixtures, not results; nothing is measured on the simulator yet. Full-system context: [`docs/architecture.md`](../../../docs/architecture.md). Hard rules, layout and build order are in [`docs/adversary/spec.md`](../../../docs/adversary/spec.md).
+> Status: the full System 2 cycle runs offline. Implemented and tested: model layer, perturbation space wired to the ASPIRE launcher, selector and test planner, rule diagnoser, failure history, sandboxed runner, a mock world that runs System 1's v0 policy (`examples/bowl_on_plate/policy.py`) unchanged, and the `Adversary` entry point. With `model="muse-spark"`, four Muse Spark agents propose each attack from the program's code, Muse Spark diagnoses each failure and writes a plain-language explanation, all with rule fallbacks; tested against a fake API, not yet run live. The cap_harness backend (`rollout/aspire_backend.py`) runs each attack in ASPIRE on LIBERO-Pro through System 1's launcher; it is tested against a fake harness that writes ASPIRE's run-directory format, **not yet run on the GPU**. Mock-world numbers are test fixtures, not results; nothing is measured on the simulator yet. Full-system context: [`docs/architecture.md`](../../../docs/architecture.md). Hard rules, layout and build order are in [`docs/adversary/spec.md`](../../../docs/adversary/spec.md).
 
 ## One adversarial cycle
 
@@ -76,12 +76,19 @@ Where the program meets the perturbed world. Two layers:
 
 - **Backend (ASPIRE `cap_harness` on LIBERO-Pro, or the mock world)** builds one episode. It resets the scene with the seed and applies the perturbation: moves the bowl, scales friction, spawns distractors, shifts the camera, dims the lights. It then hands over a robot object with the shared ASPIRE-style primitives (`localize_object`, `generate_grasps`, `select_grasp`, `move_to_pose`, `close_gripper`, `open_gripper`, `phase`). Each primitive logs events as it runs (`grasp_slip`, `collision`, `object_dropped`) and records the last step that completed.
 - **Runner** executes System 1's code against that robot with only a whitelist of basic builtins, `import math`, and the robot's functions in scope.
-  - **Not a security boundary.** The whitelist guards against mistakes in generated code, not against hostile code. On the real simulator the program runs inside ASPIRE `cap_harness` in a separate process (System 1's `tools/aspire_launch.py` and rollout: "it runs in ASPIRE's sandbox"), which is the isolation we rely on.
+  - **Not a security boundary.** The whitelist guards against mistakes in generated code, not against hostile code. On the real simulator the program runs in ASPIRE's own process, so a crash or hang there cannot take the System 2 loop down. ASPIRE's program sandbox (AST validator, `import math` only, restricted builtins) is also an in-process `exec` and is not a security boundary either (System 1's ASPIRE deep read, `docs/synthesizer/research/aspire-deep-read.md`).
   - A crash in the generated code is an **error**, not a failure, so broken code never inflates the failure statistics.
   - **Two limits, two meanings:**
     - *Line budget* (`line_budget`, deterministic): the program executed too many lines, i.e. it looped or kept retrying. This is a **failure** (reason `timeout`): the robot did not finish the task, it reproduces on every OS and seed, and it can become a constraint ("bound the retries").
     - *Wall clock* (`rollout_timeout_s`, safety net, checked between policy lines, so a slow primitive trips it once it returns): elapsed time depends on the machine and its load (for example GPU contention), not only on the program. It is an **error** (reason `wall_clock_timeout`), so it never becomes a constraint and never counts against a category. A primitive that never returns is stopped by the cap_harness subprocess timeout.
   - Everything is packed into a rollout result: outcome, metrics (for example distance to target), event log, last phase, and video plus keyframes when recording.
+
+- **cap_harness backend** (`rollout/aspire_backend.py`, `backend="cap_harness"`) runs the whole program in ASPIRE instead of in our runner, because the simulator lives in its own Linux venv:
+  - nominal cases call `cap-harness run`; perturbed cases go through System 1's `tools/aspire_launch.py`, which applies the perturbation host-side, so the program never sees it;
+  - always `--init-mode seeded`; the attack seed maps onto ASPIRE's dev seeds 51–65 (the acceptance set), so an acceptance backend can never run a held-out seed (1–50). Held-out evaluation builds its own backend with `split=held_out`;
+  - outcome: `task_success` is a success, `program_ok` false is an error, anything else a failure; no run directory, a harness crash or the wall clock is an error;
+  - every primitive call becomes an event with tool and status, so the rule diagnoser and the studio work unchanged; the run directory, video, keyframes, final gripper pose, stdout tail, seed, split and scene are kept with the result.
+  - Run it: `uv run python -m ants.studio.run --attacks 6 --backend cap_harness --aspire ../ASPIRE` on the machine with ASPIRE and its services (SAM 3, PyRoki) running.
 
 ### 6. Success branch
 
@@ -123,7 +130,7 @@ status = adv.status(policy)  # stop rule: .robust when every category is below �
 | Setting | Default | Meaning |
 |---|---|---|
 | `model` | `"mock"` | `"muse-spark"`, `"provider:model"` (OpenAI-compatible) or `"mock"` |
-| `backend` | `"mock"` | `"libero"` or `"mock"` |
+| `backend` | `"mock"` | `"cap_harness"` (ASPIRE on LIBERO-Pro) or `"mock"` |
 | `categories` | pose, physics, clutter, camera | selector arms (also: lighting, occlusion, actuation) |
 | `rho` | 0.8 | severity bound ρ |
 | `eta` | 0.2 | uniform exploration rate η (`1.0` = uniform baseline) |

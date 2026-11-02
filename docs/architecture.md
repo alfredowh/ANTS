@@ -207,7 +207,7 @@ uniform, cost per cycle).
 | Piece | State |
 |---|---|
 | contracts | PR #3 with cap_harness signatures (#4) merged in; System 1 follow-up PRs agreed |
-| adversary | `feature/system2`: full cycle offline (`Adversary.attack/replay/discovered_failures/status`) on System 1's launcher mapping, planner interface and rule diagnoser, with history, sandboxed runner and a mock world that runs the PR #5 v0 policy; cap_harness backend and model proposer/diagnoser next |
+| adversary | `feature/system2`: full cycle offline (`Adversary.attack/replay/discovered_failures/status`) on System 1's launcher mapping, planner interface and rule diagnoser, with history, sandboxed runner, a mock world that runs the PR #5 v0 policy, Muse Spark proposer/diagnoser/explainer, and a cap_harness backend (subprocess, seeded acceptance seeds 51–65) tested against a fake harness; first GPU run next |
 | synthesizer | branch `synthesizer`: Muse client with cache and token budget, prompt builder, develop-and-repair loop, DemoSpec converters, demo vs no-demo experiment with logged runs |
 | orchestrator | System 1's experiment loop and gate on `synthesizer`; the shared gate moves to `orchestrator/gate.py` |
 | evalkit, observability | System 1: run logging, report viewer with a System 2 tab, on `synthesizer` |

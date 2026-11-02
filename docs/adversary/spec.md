@@ -129,7 +129,7 @@ adversary/
 │   ├── backend.py           SimBackend, Episode protocols
 │   ├── runner.py            sandboxed execution, timeout, evidence packaging
 │   ├── mock_backend.py      toy world, one failure mechanism per category
-│   └── aspire_backend.py    cap_harness runner, from System 1's rollout.py (needs CaseSpec, EpisodeTrace)
+│   └── aspire_backend.py    cap_harness program backend (subprocess), from System 1's rollout.py
 ├── diagnoser/
 │   ├── rules.py             RULES, signature, classify, diagnose (from System 1's v0)
 │   └── model.py             model diagnoser with the rules as fallback
@@ -179,6 +179,15 @@ Build in this order. Each step must pass its tests before the next one starts.
 ## What still has to be built, and how
 
 ### ASPIRE backend (`rollout/aspire_backend.py`)
+
+**Built (2026-11-02), not yet run on the GPU.** A `ProgramBackend`: it writes the program to a
+file and runs `cap-harness run` (nominal) or System 1's `tools/aspire_launch.py` (perturbed) as a
+subprocess with the wall-clock timeout, then reads `outcome.json`, `source/program-result.json`,
+`episode/steps.jsonl` and `media/` into a `RolloutResult`. Seeds: `--init-mode seeded`, attack
+seeds mapped onto ASPIRE dev 51–65 (acceptance); a held-out backend uses 1–50. The appliers below
+live in System 1's launcher today (pose, physics, size, actuation, camera, lighting); clutter and
+occlusion are not built. The list below is the original plan, kept for the remaining pieces.
+
 - Run on ASPIRE `cap_harness` (LIBERO-Pro); its seed split maps onto our acceptance and held-out sets.
 - Load the LIBERO scene matching the recorded demo (Franka Panda, bowl and plate, OSC_POSE controller).
 - Use one applier per category, run after `reset(seed)`, then step a few no-ops to settle physics:

@@ -1,8 +1,11 @@
 """Backend interface: build one perturbed episode and hand the policy its API.
 
 Policies are flat cap_harness scripts (decision D5): the backend's API functions are put in the
-script's scope as globals. Backends: the offline mock world here, and the cap_harness runner once
-System 1's contracts (`CaseSpec`, `EpisodeTrace`) land.
+script's scope as globals. Two shapes:
+
+- `Backend` (the offline mock world): hands over an in-process episode; our runner execs the script.
+- `ProgramBackend` (ASPIRE cap_harness): runs the whole program in its own process and returns the
+  `RolloutResult`, because the simulator and its primitives live in another venv.
 """
 
 from __future__ import annotations
@@ -10,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Protocol
 
-from ants.contracts import Event, Perturbation
+from ants.contracts import Event, Perturbation, RolloutResult
 
 
 class Episode(Protocol):
@@ -32,4 +35,14 @@ class Backend(Protocol):
 
     def episode(self, perturbation: Perturbation | None, seed: int) -> Episode:
         """A fresh episode reset with `seed`, with `perturbation` applied (None = nominal)."""
+        ...
+
+
+class ProgramBackend(Protocol):
+    name: str
+
+    def run_program(
+        self, program: str, perturbation: Perturbation | None, seed: int, timeout_s: float | None
+    ) -> RolloutResult:
+        """Run `program` once in a fresh episode reset with `seed`, `perturbation` applied."""
         ...

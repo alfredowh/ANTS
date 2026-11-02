@@ -2,10 +2,13 @@
 
     uv run python -m ants.studio.run --attacks 20                     # rules, mock world, free
     uv run python -m ants.studio.run --attacks 10 --model muse-spark  # Muse Spark, costs tokens
+    uv run python -m ants.studio.run --attacks 6 --backend cap_harness --aspire ../ASPIRE  # LIBERO
 
 Writes `<out>/run.json`, `<out>/policy.py`, `<out>/attacks.jsonl` (one line per attack: the report,
 why it was chosen, the diagnosis source and a plain-language explanation) and `<out>/studio.html`.
-The mock world is a test fixture: its numbers are not robot results.
+The mock world is a test fixture: its numbers are not robot results. With `--backend cap_harness`
+every rollout runs in ASPIRE (Linux, GPU, ~40 s each) and its run directory is kept under
+`<out>/aspire/`.
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ from pathlib import Path
 
 from ants.adversary import Adversary, AdversaryConfig
 from ants.adversary.perturbations import Bounds
+from ants.adversary.rollout import AspireConfig
 from ants.contracts import Policy
 from ants.studio.build import build
 
@@ -34,6 +38,8 @@ def run(
     eta: float = 0.2,
     severity_bound: float = 0.6,
     token_budget: int | None = None,
+    backend: str = "mock",
+    aspire_root: Path | None = None,
 ) -> Path:
     out.mkdir(parents=True, exist_ok=True)
     for stale in ("history.jsonl", "attacks.jsonl"):
@@ -47,6 +53,12 @@ def run(
         eta=eta,
         bounds=Bounds(default=severity_bound),
         history_path=out / "history.jsonl",
+        backend=backend,
+        aspire=AspireConfig(
+            **({"root": aspire_root} if aspire_root else {}), output_root=out / "aspire"
+        )
+        if backend == "cap_harness"
+        else None,
     )
     adv = Adversary.from_config(cfg)
     if token_budget is not None and adv.model is not None and hasattr(adv.model, "token_budget"):
@@ -110,6 +122,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", default="mock", help='"mock" (rules only) or "muse-spark"')
     ap.add_argument("--policy", type=Path, default=DEFAULT_POLICY)
     ap.add_argument("--out", type=Path, default=None)
+    ap.add_argument("--backend", default="mock", choices=["mock", "cap_harness"])
+    ap.add_argument("--aspire", type=Path, default=None, help="ASPIRE checkout (cap_harness)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--eta", type=float, default=0.2, help="1.0 = uniform baseline")
     ap.add_argument("--severity-bound", type=float, default=0.6)
@@ -124,6 +138,7 @@ def main(argv: list[str] | None = None) -> int:
     page = run(
         out, args.attacks, args.model, args.policy, seed=args.seed, eta=args.eta,
         severity_bound=args.severity_bound, token_budget=args.token_budget,
+        backend=args.backend, aspire_root=args.aspire,
     )  # fmt: skip
     print(f"\nstudio: {page.resolve()}")
     return 0

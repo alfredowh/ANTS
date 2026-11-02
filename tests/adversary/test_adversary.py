@@ -86,8 +86,9 @@ def test_stop_modes():
 def test_config_and_backend_validation():
     with pytest.raises(ValueError):
         AdversaryConfig(stop_mode="never")
-    with pytest.raises(NotImplementedError):
-        Adversary.from_config(AdversaryConfig(backend="cap_harness"))
+    assert Adversary.from_config(AdversaryConfig(backend="cap_harness")).backend.name == (
+        "cap_harness"
+    )
     with pytest.raises(ValueError):
         Adversary.from_config(AdversaryConfig(backend="gazebo"))
 

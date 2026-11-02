@@ -25,7 +25,7 @@ from collections.abc import Mapping
 from contextlib import redirect_stdout
 from typing import Any
 
-from ants.adversary.rollout.backend import Backend
+from ants.adversary.rollout.backend import Backend, ProgramBackend
 from ants.contracts import Event, Outcome, Perturbation, RolloutResult
 
 _SAFE_BUILTINS = (
@@ -128,6 +128,20 @@ def run_policy(
     )
 
 
+def execute(
+    program: str,
+    backend: Backend | ProgramBackend,
+    perturbation: Perturbation | None,
+    seed: int,
+    line_budget: int = DEFAULT_LINE_BUDGET,
+    timeout_s: float | None = DEFAULT_TIMEOUT_S,
+) -> RolloutResult:
+    """One rollout on either backend shape: program backends run the program themselves."""
+    if hasattr(backend, "run_program"):
+        return backend.run_program(program, perturbation, seed, timeout_s)
+    return run_policy(program, backend, perturbation, seed, line_budget, timeout_s)
+
+
 def to_feedback(result: RolloutResult, stdout_tail: str = "") -> dict[str, Any]:
     """The compact feedback dict the rule diagnoser reads (same shape as the cap_harness one)."""
     terminated = [e for e in result.events if e.kind == "terminated"]
@@ -147,6 +161,8 @@ def to_feedback(result: RolloutResult, stdout_tail: str = "") -> dict[str, Any]:
     }
     if result.error:
         fb["error"] = result.error
+    for key, value in (result.details.get("feedback") or {}).items():  # cap_harness evidence
+        fb.setdefault(key, value)
     if stdout_tail:
         fb["stdout_tail"] = stdout_tail[-1500:]
     return fb

@@ -30,7 +30,14 @@ from ants.adversary.models import ReasoningModel, get_model
 from ants.adversary.perturbations import DEFAULT_SPACE
 from ants.adversary.planner import TestPlanner
 from ants.adversary.planner.proposer import Proposer
-from ants.adversary.rollout import Backend, MockBackend, run_policy, to_feedback
+from ants.adversary.rollout import (
+    AspireBackend,
+    Backend,
+    MockBackend,
+    ProgramBackend,
+    execute,
+    to_feedback,
+)
 from ants.contracts import AttackReport, Outcome, Perturbation, Policy, RolloutResult, to_dict
 
 
@@ -50,7 +57,7 @@ class Adversary:
     def __init__(
         self,
         config: AdversaryConfig,
-        backend: Backend,
+        backend: Backend | ProgramBackend,
         history: FailureHistory | None = None,
         model: ReasoningModel | None = None,
     ) -> None:
@@ -75,9 +82,7 @@ class Adversary:
         if config.backend == "mock":
             return cls(config, MockBackend(), model=model)
         if config.backend == "cap_harness":
-            raise NotImplementedError(
-                "the cap_harness backend waits on CaseSpec and EpisodeTrace in contracts"
-            )
+            return cls(config, AspireBackend(config.aspire), model=model)
         raise ValueError(f"unknown backend {config.backend!r}")
 
     def _sync_planner(self, policy: Policy) -> None:
@@ -129,7 +134,7 @@ class Adversary:
             }
         chosen = self.planner.last_selection
         notes["selection"] = {"explored": bool(chosen and chosen.explored)}
-        result = run_policy(
+        result = execute(
             policy.code,
             self.backend,
             perturbation,
@@ -193,7 +198,7 @@ class Adversary:
         """Run fixed cases (None = nominal scene). Not recorded: replays are the gate's and the
         evaluation's business, and must not move the selector's beliefs."""
         return [
-            run_policy(
+            execute(
                 policy.code,
                 self.backend,
                 p,

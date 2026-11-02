@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ants.adversary.perturbations import CATEGORIES, Bounds
+from ants.adversary.rollout.aspire_backend import AspireConfig
 from ants.adversary.rollout.runner import DEFAULT_LINE_BUDGET, DEFAULT_TIMEOUT_S
 
 
@@ -14,7 +15,7 @@ class AdversaryConfig:
     model: str = "mock"  # "muse-spark" enables the model proposer, diagnoser and explainer
     n_agents: int = 4  # parallel proposer agents (PARALLEL effort)
     confidence_floor: float = 0.5  # below it the rule diagnosis is used
-    backend: str = "mock"  # "mock" now; "cap_harness" once System 1's contracts land
+    backend: str = "mock"  # "mock" (offline fixture) or "cap_harness" (ASPIRE on LIBERO-Pro)
     categories: tuple[str, ...] = CATEGORIES
     eta: float = 0.2  # uniform share of picks; 1.0 is the uniform baseline
     bounds: Bounds = field(default_factory=Bounds)  # per-category severity limit (rho caps on top)
@@ -27,6 +28,9 @@ class AdversaryConfig:
     line_budget: int = DEFAULT_LINE_BUDGET  # deterministic loop guard: hitting it is a FAILURE
     rollout_timeout_s: float = DEFAULT_TIMEOUT_S  # wall-clock safety net: hitting it is an ERROR
     history_path: Path | None = None
+    aspire: AspireConfig | None = (
+        None  # cap_harness only; defaults to $ANTS_ASPIRE_ROOT or ../ASPIRE
+    )
 
     def __post_init__(self) -> None:
         if self.stop_mode not in ("min_tests", "posterior"):
