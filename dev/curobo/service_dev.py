@@ -42,7 +42,7 @@ def _spheres() -> list[list[float]]:
 def _apply(planner, request) -> None:
     global _attached
     spheres = _spheres()
-    manager = planner.attachment_manager
+    manager = planner.trajopt_solver.core.attachment_manager  # the planner's own property is broken
     if spheres:
         buf = manager.kinematics_params.link_spheres
         tensor = torch.tensor(spheres, device=buf.device, dtype=buf.dtype)
