@@ -43,7 +43,14 @@ used by mistake).
 harness default) and builds the planning cloud without robot pixels. mode "curobo-sam3": the robot
 mask comes from SAM 3 prompts "robot arm" and "robot gripper" (no simulator state). Mode
 "curobo-sim": the mask comes from MuJoCo's segmentation render (privileged, a digital twin).
-`exclude_radius_m` drops cloud points within r of the manipulated object. The cuRobo service
+`exclude_radius_m` drops cloud points within r of the manipulated object. `cloud_dir` saves every
+planning cloud (debugging). `attach` {"file", "profile", "sphere_r", "query", "body", "body_main"}:
+while the gripper is closed on the bowl, its points are removed from the planning cloud and spheres
+that cover a bowl of the KNOWN outer-radius profile (`profile`: [[height, radius], ...]) are written
+to `file`, in the hand frame, for the dev cuRobo service (`service_dev.py`, ANTS_ATTACH_FILE) to
+attach to the hand. The bowl's points come from the SAM 3 text `query` (curobo-sam3) or from the
+simulator's segmentation of `body` (curobo-sim); the axis comes from a fit to the visible rim
+(curobo-sam3) or from the simulator box of `body_main` (curobo-sim). The cuRobo service
 (`dev/curobo/service_dev.py`, carve margin ANTS_CARVE_MARGIN_M) must be running.
 
 "bodies" in physics match by substring of the MuJoCo body name. "scale" rebuilds the scene
@@ -116,6 +123,56 @@ def circle_overlap_fraction(c1, r1: float, c2, r2: float) -> float:
         - 0.5 * np.sqrt((-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2))
     )  # fmt: skip
     return float(area / (np.pi * r1 * r1))
+
+
+def body_aabb(env, body_id: int) -> tuple[np.ndarray, np.ndarray]:
+    """World axis-aligned box (lo, hi) of a body's collision geoms."""
+    model, data = env.sim.model._model, env.sim.data._data
+    lo, hi = np.full(3, np.inf), np.full(3, -np.inf)
+    for g in range(model.ngeom):
+        solid = model.geom_contype[g] + model.geom_conaffinity[g] > 0
+        if model.geom_bodyid[g] != body_id or not solid:
+            continue
+        rot = data.geom_xmat[g].reshape(3, 3)
+        centre = data.geom_xpos[g] + rot @ model.geom_aabb[g][:3]
+        half = np.abs(rot) @ model.geom_aabb[g][3:]
+        lo, hi = np.minimum(lo, centre - half), np.maximum(hi, centre + half)
+    return lo, hi
+
+
+def bowl_spheres(profile, centre_xy, z_bottom: float, sphere_r: float) -> np.ndarray:
+    """Spheres (x, y, z) covering a round bowl of known outer radius profile, upright.
+
+    `profile` is [(height above the bottom, outer radius), ...]. Each ring of spheres sits one
+    sphere radius inside the wall, spaced about 1.7 sphere radii apart; one sphere closes the base.
+    """
+    out = [[centre_xy[0], centre_xy[1], z_bottom + sphere_r]]
+    for h, radius in profile:
+        ring = max(radius - sphere_r, 0.0)
+        n = 1 if ring < 1e-6 else max(3, int(np.ceil(2 * np.pi * ring / (1.7 * sphere_r))))
+        for k in range(n):
+            a = 2 * np.pi * k / n
+            out.append([
+                centre_xy[0] + ring * np.cos(a),
+                centre_xy[1] + ring * np.sin(a),
+                z_bottom + max(h, sphere_r),
+            ])  # fmt: skip
+    return np.asarray(out)
+
+
+def fit_axis(points: np.ndarray, radius: float) -> np.ndarray:
+    """Centre (x, y) of a round bowl of known rim radius from the visible rim points."""
+    rim = points[points[:, 2] > points[:, 2].max() - 0.02][:, :2]
+    centre = rim.mean(axis=0) if len(rim) else points[:, :2].mean(axis=0)
+    for _ in range(30):  # Gauss-Newton on sum (|p - c| - radius)^2
+        d = rim - centre
+        dist = np.linalg.norm(d, axis=1)
+        if len(rim) < 8 or dist.min() < 1e-6:
+            break
+        jac = -d / dist[:, None]
+        step = np.linalg.lstsq(jac, -(dist - radius), rcond=None)[0]
+        centre = centre + 0.7 * step
+    return centre
 
 
 def footprint(env, body_id: int) -> tuple[np.ndarray, float]:
@@ -198,7 +255,7 @@ def install_curobo_planning(cfg: dict) -> None:
 
     renderers: dict = {}
 
-    def sim_pixels(camera_name, depth) -> np.ndarray:
+    def sim_pixels(camera_name, depth, prefix: str | None = None) -> np.ndarray:
         model, data = LIVE["env"].sim.model._model, LIVE["env"].sim.data._data
         h, w = depth.shape
         if (h, w) not in renderers:
@@ -219,10 +276,12 @@ def install_curobo_planning(cfg: dict) -> None:
             mujoco.mj_id2name(model, mujoco.mjtObj.mjOBJ_BODY, int(b)) or ""
             for b in model.geom_bodyid
         ]
-        robot = np.array([n.startswith(("robot0", "gripper0", "mount0")) for n in names])
+        robot = np.array(
+            [n.startswith(prefix) if prefix else n.startswith(("robot0", "gripper0", "mount0")) for n in names]
+        )
         is_geom = seg[..., 1] == int(mujoco.mjtObj.mjOBJ_GEOM)
         mask = is_geom & robot[np.clip(seg[..., 0], 0, len(robot) - 1)]
-        return binary_dilation(mask, iterations=2)
+        return binary_dilation(mask, iterations=2 if not prefix else 0)
 
     def masked(self, mask, *, camera_name, target_frame, observation):
         if isinstance(mask, np.ndarray) and mask.dtype == bool and "env" in LIVE:
@@ -236,6 +295,98 @@ def install_curobo_planning(cfg: dict) -> None:
         )
 
     CapApi._project_mask = masked
+    if cfg.get("cloud_dir"):  # debugging: keep every planning cloud cuRobo is given
+        cloud_dir, counter, scene_of = Path(cfg["cloud_dir"]), iter(range(10_000)), CapApi._planning_scene
+        cloud_dir.mkdir(parents=True, exist_ok=True)
+
+        def dump(self, *a, **kw):
+            scene = scene_of(self, *a, **kw)
+            np.save(cloud_dir / f"cloud_{next(counter):03d}.npy", scene.point_cloud.points)
+            return scene
+
+        CapApi._planning_scene = dump
+    attach = cfg.get("attach")
+    if attach:
+        from cap_harness.contracts import PlanningScene, PointCloud
+
+        held_state: dict = {}
+        scene_of = CapApi._planning_scene
+        out_path = Path(attach["file"])
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
+        def write(spheres: list) -> None:
+            out_path.write_text(json.dumps({"spheres": spheres}), encoding="utf-8")
+            with out_path.with_suffix(".log").open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps({"n_spheres": len(spheres)}) + "\n")
+
+        def bowl_points(api, observation, frame: str) -> np.ndarray:
+            """Base-frame points of the bowl: SAM 3 mask (curobo-sam3) or simulator render."""
+            clouds = []
+            for camera in observation.cameras:
+                depth = observation.cameras[camera].depth_m
+                if mode == "curobo-sam3":
+                    result = api._segment_text(camera, attach["query"], observation)
+                    masks = [np.asarray(m.mask, dtype=bool) for m in result.segmentations] if result.ok else []
+                else:
+                    masks = [sim_pixels(camera, depth, attach["body"])]
+                for mask in masks:
+                    if mask.any():
+                        pts = original(api, mask, camera_name=camera, target_frame=frame, observation=observation).points
+                        if len(pts):
+                            clouds.append(pts)
+            return np.concatenate(clouds) if clouds else np.zeros((0, 3))
+
+        def with_attach(self, *a, **kw):
+            scene = scene_of(self, *a, **kw)
+            try:
+                observation = self.get_observation()
+                state = observation.robot_state
+                frame = state.base_frame
+                ee = state.end_effector_poses["primary"]
+                t = np.asarray(ee.position, dtype=float)
+                w, x, y, z = (float(v) for v in ee.quaternion_wxyz)
+                rot = np.array([
+                    [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+                    [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+                    [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+                ])  # fmt: skip
+                closed = float(state.gripper_positions["primary"]) < 0.5
+                bowl = bowl_points(self, observation, frame) if closed else np.zeros((0, 3))
+                near = len(bowl) >= 30 and np.linalg.norm(bowl.mean(axis=0) - t) < attach.get("hold_dist_m", 0.16)
+                if not (closed and near):
+                    if held_state.pop("local", None) is not None:
+                        write([])
+                        print("[ants-attach] released", file=sys.stderr)
+                    return scene
+                profile = [tuple(r) for r in attach["profile"]]
+                if "local" not in held_state:
+                    if mode == "curobo-sam3":
+                        centre = fit_axis(bowl, max(r for _, r in profile))
+                        z_bottom = float(bowl[:, 2].max()) - max(h for h, _ in profile)
+                    else:
+                        env = LIVE["env"]
+                        lo, hi = body_aabb(env, env.sim.model.body_name2id(attach["body_main"]))
+                        centre, z_bottom = (lo[:2] + hi[:2]) / 2, float(lo[2])
+                    world = bowl_spheres(profile, centre, z_bottom, attach["sphere_r"])
+                    held_state["local"] = (world - t) @ rot  # hand frame
+                    print(f"[ants-attach] attached {len(world)} spheres, axis {np.round(centre, 3).tolist()}, bottom z {z_bottom:.3f}", file=sys.stderr)
+                local = held_state["local"]
+                write([[*map(float, p), attach["sphere_r"]] for p in local])
+                from scipy.spatial import cKDTree
+
+                near_bowl = cKDTree(bowl).query(scene.point_cloud.points)[0] < attach.get("remove_m", 0.02)
+                kept = scene.point_cloud.points[~near_bowl]
+                scene = PlanningScene(
+                    point_cloud=PointCloud(points=kept, frame=scene.point_cloud.frame),
+                    voxel_size_m=scene.voxel_size_m,
+                    timestamp_s=scene.timestamp_s,
+                )
+            except Exception as err:  # never break planning because the attach failed
+                print(f"[ants-attach] failed: {type(err).__name__}: {err}", file=sys.stderr)
+            return scene
+
+        CapApi._planning_scene = with_attach
+        write([])
     radius = cfg.get("exclude_radius_m")
     if radius:
 

@@ -165,7 +165,7 @@ uv run python -m ants.evalkit.report data/runs --open
 **dev/curobo: why does the planner go through the rack?** (done (dev notes))
 
 ```bash
-cd ../ASPIRE && ANTS_CARVE_MARGIN_M=0.02 .venv-curobo/bin/python ../ANTS/dev/curobo/service_dev.py \
+cd ../ASPIRE && ANTS_CARVE_MARGIN_M=0.0 ANTS_ATTACH_FILE=$PWD/../ANTS/data/runs/curobo/attach.json .venv-curobo/bin/python ../ANTS/dev/curobo/service_dev.py \
     --port 8118
 ```
 
@@ -220,6 +220,19 @@ uv run python -m ants.orchestrator.exp_curobo \
 ```bash
 uv run python -m ants.evalkit.report data/runs/exp04_scene \
     --open
+```
+
+**Exp 09 to 11: exp06 to 08 again, with the held bowl attached to the hand** (code ready, not run)
+
+```bash
+cd ../ASPIRE && ANTS_CARVE_MARGIN_M=0.0 ANTS_ATTACH_FILE=$PWD/../ANTS/data/runs/curobo/attach.json .venv-curobo/bin/python ../ANTS/dev/curobo/service_dev.py \
+    --port 8118
+```
+
+```bash
+uv run python -m ants.orchestrator.exp_curobo \
+    --exp exp06,exp08,exp07 \
+    --token-budget 250000
 ```
 
 <!-- runbook:end -->

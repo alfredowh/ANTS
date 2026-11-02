@@ -33,6 +33,26 @@ EXAMPLE_TASK = "pick up the alphabet soup and place it in the basket"
 REAL_SIZE = {"akita_black_bowl_1_main": 1.227, "plate_1_main": 1.855}
 
 
+ATTACH_FILE = Path("data/runs/curobo/attach.json")  # read by the dev cuRobo service
+ATTACH_RINGS = (0, 1, 3, 5)  # which rings of the bowl's radius profile get spheres
+
+
+def known_bowl_attach(scene_dump: Path, file: Path, sphere_r: float = 0.015) -> dict:
+    """Planner `attach` spec: the bowl's KNOWN outer-radius profile, from the settled scene dump."""
+    from ants.adversary.collision_world import load_world, radial_profile
+
+    world = load_world(json.loads(scene_dump.read_text(encoding="utf-8")))
+    _, rings = radial_profile(world.get("bowl"))
+    return {
+        "file": str(file.resolve()),
+        "profile": [list(rings[i]) for i in ATTACH_RINGS if i < len(rings)],
+        "sphere_r": sphere_r,
+        "query": "bowl",
+        "body": "akita_black_bowl",
+        "body_main": "akita_black_bowl_1_main",
+    }
+
+
 def run_sample(
     arm: str,
     sample: int,
@@ -91,6 +111,10 @@ def run_sample(
         contacts = out / f"debug_attempt{attempt}" / "contacts.jsonl"
         if args.contacts:
             harness.scene = {**(harness.scene or {}), "contacts": {"path": str(contacts)}}
+        if args.save_clouds and (harness.scene or {}).get("planner"):
+            cloud_dir = str(out / f"debug_attempt{attempt}" / "clouds")
+            planner = {**harness.scene["planner"], "cloud_dir": cloud_dir}
+            harness.scene = {**harness.scene, "planner": planner}
         trace = harness.run(
             debug_case, program, out / f"debug_attempt{attempt}", f"{arm}-s{sample}-a{attempt}"
         )
@@ -246,6 +270,15 @@ def main(argv: list[str] | None = None) -> int:
         "masked by the simulator (digital twin)",
     )  # fmt: skip
     p.add_argument(
+        "--attach-known", action="store_true",
+        help="while the bowl is held, attach spheres of the bowl's KNOWN size to the hand "
+        "(needs the dev cuRobo service with ANTS_ATTACH_FILE=data/runs/curobo/attach.json)",
+    )  # fmt: skip
+    p.add_argument(
+        "--save-clouds", action="store_true",
+        help="keep every planning cloud per attempt (for dev/curobo/make_viewer.py)",
+    )  # fmt: skip
+    p.add_argument(
         "--ontop-area", type=float, default=None,
         help="'bowl on plate' passes when this share of the bowl footprint lies inside the plate",
     )  # fmt: skip
@@ -285,6 +318,11 @@ def main(argv: list[str] | None = None) -> int:
     extra: dict = {}
     if args.planner != "default":
         extra["planner"] = {"mode": args.planner, "exclude_radius_m": 0.12}
+    if args.attach_known:
+        if "planner" not in extra:
+            raise SystemExit("--attach-known needs --planner curobo-sam3 or curobo-sim")
+        dump = Path("data/scenes/L1/contacts_scene.json")
+        extra["planner"]["attach"] = known_bowl_attach(dump, ATTACH_FILE)
     if args.ontop_area is not None:
         extra["ontop"] = {"rule": "area", "min_fraction": args.ontop_area}
     if args.evidence != "none":

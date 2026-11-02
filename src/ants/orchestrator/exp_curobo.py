@@ -1,4 +1,4 @@
-"""Experiments 06 to 08: cuRobo planning on perception, without and with scene understanding.
+"""Experiments 06 to 08 and 09 to 11: cuRobo planning on perception, without and with scene text.
 
 All three plan with cuRobo on the public depth cloud (robot masked by SAM 3 in 06 and 07, by the
 simulator in 08), debug in the scaled scene (seed 51) at temperature 0.2 with the WHY repair and
@@ -9,6 +9,10 @@ Arms: clip 233859, clip 233832 (their demonstration summary) and no demonstratio
     exp07  S4 scene text built from perception (exp05) in the first prompt and every repair, repairs
            add the E3 evidence (contact log + scene + stall readings)
     exp08  as exp07, with the S4 text from the simulator (digital twin) and the simulator robot mask
+
+    exp09  as exp06, and the held bowl is attached to the hand (spheres of the bowl's KNOWN size)
+    exp10  as exp07 (perceived S4 + E3), with the same attached bowl, known size
+    exp11  as exp08 (simulator S4 + E3, simulator masks), with the same attached bowl, known size
 
     uv run python -m ants.orchestrator.exp_curobo --exp exp06 [--token-budget 250000]
 
@@ -41,6 +45,23 @@ EXPERIMENTS = {
         "scene": "data/runs/exp05_perceived_scene/s4_oracle.txt",
         "evidence": "e3",
     },
+    "exp09": {"planner": "curobo-sam3", "scene": None, "evidence": "none", "attach": True},
+    "exp10": {
+        "planner": "curobo-sam3",
+        "scene": "data/runs/exp05_perceived_scene/s4_perceived.txt",
+        "evidence": "e3",
+        "attach": True,
+    },
+    "exp11": {
+        "planner": "curobo-sim",
+        "scene": "data/runs/exp05_perceived_scene/s4_oracle.txt",
+        "evidence": "e3",
+        "attach": True,
+    },
+}
+DOCS = {
+    "attach": "docs/synthesizer/experiment-09-11-curobo-attach.md",
+    "plain": "docs/synthesizer/experiment-06-08-curobo.md",
 }
 
 
@@ -53,16 +74,18 @@ def argv_for(exp: str, arm: str, token_budget: int, root: Path) -> list[str]:
         "--debug-scene", "scaled", "--scenes", "scaled", "--eval-seeds", "",
         "--planner", cfg["planner"], "--ontop-area", "0.5", "--contacts",
         "--evidence", cfg["evidence"], "--token-budget", str(token_budget),
-        "--doc", "docs/synthesizer/experiment-06-08-curobo.md",
+        "--doc", DOCS["attach" if cfg.get("attach") else "plain"],
     ]  # fmt: skip
     if cfg["scene"]:
         argv += ["--scene-text-file", cfg["scene"]]
+    if cfg.get("attach"):
+        argv += ["--attach-known", "--save-clouds"]
     return argv
 
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
-    p.add_argument("--exp", required=True, help="comma list of exp06, exp07, exp08")
+    p.add_argument("--exp", required=True, help="comma list of exp06 to exp11")
     p.add_argument("--arms", default=",".join(ARMS))
     p.add_argument("--token-budget", type=int, default=250_000, help="per run, NEW tokens")
     p.add_argument("--root", type=Path, default=Path("data/runs/curobo"))

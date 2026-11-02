@@ -818,6 +818,43 @@
         "data/runs/curobo/"
       ],
       "result": "9 runs: solved 1 of 3 (06), 2 of 3 (07), 2 of 3 (08); no blocking contact in any rollout. See the doc."
+    },
+    {
+      "id": "exp09",
+      "title": "Exp 09 to 11: exp06 to 08 again, with the held bowl attached to the hand",
+      "status": "code ready, not run",
+      "kind": "experiment",
+      "question": "Do the cuRobo refusals disappear when the held bowl is an attached object of the known size instead of an obstacle in the cloud, and does that change the solved count?",
+      "doc": "docs/synthesizer/experiment-09-11-curobo-attach.md",
+      "run_dir": "data/runs/curobo/<exp>/<arm>",
+      "modules": [
+        "orch_exp",
+        "generator",
+        "llm",
+        "muse",
+        "rollout",
+        "launcher",
+        "aspire",
+        "services",
+        "evalkit",
+        "curobo_dev"
+      ],
+      "commands": [
+        "curobo.service",
+        "curobo.exp",
+        "curobo.viewer",
+        "report.run"
+      ],
+      "inputs": [
+        "data/demospecs/hurobo_233859.json",
+        "data/demospecs/hurobo_233832.json",
+        "data/runs/exp05_perceived_scene/s4_perceived.txt",
+        "data/scenes/L1/contacts_scene.json"
+      ],
+      "outputs": [
+        "data/runs/curobo/exp09|exp10|exp11/"
+      ],
+      "result": "Not run yet."
     }
   ],
   "commands": [
@@ -2341,11 +2378,11 @@
     },
     {
       "id": "curobo.service",
-      "title": "cuRobo service with a tunable carve margin",
+      "title": "cuRobo service (dev): carve margin and attached held object",
       "group": "dev-curobo",
       "runner": "curobo",
       "where": "cd ../ASPIRE",
-      "env": "ANTS_CARVE_MARGIN_M=0.02",
+      "env": "ANTS_CARVE_MARGIN_M=0.0 ANTS_ATTACH_FILE=$PWD/../ANTS/data/runs/curobo/attach.json",
       "base": "../ANTS/dev/curobo/service_dev.py",
       "args": [
         {
@@ -2356,7 +2393,7 @@
           "desc": "Service port (stock cuRobo port)."
         }
       ],
-      "description": "Stock service deletes every scene point within 5 cm of the robot spheres, so an obstacle next to the gripper is invisible. ANTS_CARVE_MARGIN_M replaces that (default here 0.02). Stop the supervised cuRobo first.",
+      "description": "Stock service deletes every scene point within 5 cm of the robot spheres, so an obstacle next to the gripper is invisible. ANTS_CARVE_MARGIN_M replaces that (default here 0.02). Stop the supervised cuRobo first. Since 2026-11-02 it also uses dev/curobo/franka_attach.yml (64 sphere slots on the attached_object link) and reads the spheres to attach from $ANTS_ATTACH_FILE before every plan (written by tools/aspire_launch.py, planner.attach). Exp06 to 08 ran with ANTS_CARVE_MARGIN_M=0.0, which the service turns into max(voxel 0.01 m, 0.0) = 1 cm, not the 2 cm the doc first stated.",
       "examples": [
         {
           "title": "Stock margin for comparison",
@@ -2882,9 +2919,12 @@
             "exp06",
             "exp07",
             "exp08",
-            "exp06,exp08,exp07"
+            "exp09",
+            "exp10",
+            "exp11",
+            "exp09,exp10,exp11"
           ],
-          "desc": "exp06: no scene text, WHY only. exp07: S4 from perception + E3 evidence. exp08: S4 from the simulator + E3, simulator robot mask."
+          "desc": "exp06: no scene text, WHY only. exp07: S4 from perception + E3 evidence. exp08: S4 from the simulator + E3, simulator robot mask. exp09 to exp11 repeat exp06 to 08 with the held bowl attached to the hand (known bowl size) and save the planning clouds."
         },
         {
           "flag": "--token-budget",
@@ -2916,6 +2956,10 @@
         {
           "title": "Show the commands only",
           "cmd": "uv run python -m ants.orchestrator.exp_curobo --exp exp07 --print"
+        },
+        {
+          "title": "Exp 09 to 11, attach the held bowl",
+          "cmd": "uv run python -m ants.orchestrator.exp_curobo --exp exp09,exp10,exp11 --token-budget 250000"
         }
       ],
       "modules": [
@@ -2938,7 +2982,51 @@
       ],
       "cost": "up to 250k tokens per run, 9 runs",
       "minutes": 600,
-      "doc": "docs/synthesizer/experiment-06-08-curobo.md"
+      "doc": "docs/synthesizer/experiment-09-11-curobo-attach.md"
+    },
+    {
+      "id": "curobo.viewer",
+      "title": "Build the cuRobo plan viewer for one run attempt",
+      "group": "dev-curobo",
+      "runner": "shell",
+      "where": "cd to the ANTS repo root",
+      "base": "PYTHONPATH=src ../ASPIRE/.venv-libero/bin/python dev/curobo/make_viewer.py",
+      "args": [
+        {
+          "flag": "data/runs/curobo/exp09/clip_233859",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "desc": "Run folder (needs --save-clouds, on by default in exp09 to exp11). Passed as the first argument."
+        },
+        {
+          "flag": "--attempt",
+          "value": "4",
+          "kind": "value",
+          "on": false,
+          "desc": "Attempt to replay; default the last."
+        }
+      ],
+      "description": "Replays every cuRobo plan call of one attempt (cloud, robot spheres, straight vs planned path, before/after attaching the bowl by my own collision check) and writes <run>/plan_viewer/index.html and plans2d.html. View it in the run viewer's Doc tab: uv run python -m ants.evalkit.report data/runs/curobo --serve --open",
+      "examples": [
+        {
+          "title": "All three arms of exp09, last attempt",
+          "cmd": "for a in clip_233859 clip_233832 nodemo; do PYTHONPATH=src ../ASPIRE/.venv-libero/bin/python dev/curobo/make_viewer.py data/runs/curobo/exp09/$a; done"
+        }
+      ],
+      "modules": [
+        "curobo_dev",
+        "evalkit"
+      ],
+      "in": [
+        "data/runs/curobo/<exp>/<arm>/*/sample0/debug_attempt*/clouds"
+      ],
+      "out": [
+        "data/runs/curobo/<exp>/<arm>/plan_viewer/"
+      ],
+      "cost": "free",
+      "minutes": 2,
+      "doc": "dev/curobo/make_viewer.py"
     }
   ]
 }
