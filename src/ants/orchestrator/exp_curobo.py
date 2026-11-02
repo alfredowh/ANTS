@@ -23,6 +23,7 @@ Finished runs are kept; repeat the command to resume. A crashed run is retried t
 from __future__ import annotations
 
 import argparse
+import json
 import traceback
 from pathlib import Path
 
@@ -83,27 +84,57 @@ def argv_for(exp: str, arm: str, token_budget: int, root: Path) -> list[str]:
     return argv
 
 
+def ledger_tokens(path: Path = Path("data/llm_ledger.jsonl")) -> int:
+    """New (uncached) tokens logged so far, from the model ledger."""
+    total = 0
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if not row.get("from_cache"):
+            total += int(row.get("prompt_tokens") or 0) + int(row.get("completion_tokens") or 0)
+    return total
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     p.add_argument("--exp", required=True, help="comma list of exp06 to exp11")
     p.add_argument("--arms", default=",".join(ARMS))
     p.add_argument("--token-budget", type=int, default=250_000, help="per run, NEW tokens")
+    p.add_argument(
+        "--total-token-budget", type=int, default=None,
+        help="stop starting new runs once this many NEW tokens were spent in this command",
+    )  # fmt: skip
+    p.add_argument(
+        "--arm-major", action="store_true",
+        help="loop arms outside, experiments inside, so a stop leaves comparable arms",
+    )  # fmt: skip
     p.add_argument("--root", type=Path, default=Path("data/runs/curobo"))
     p.add_argument("--print", action="store_true", help="print the commands and stop")
     args = p.parse_args(argv)
-    for exp in args.exp.split(","):
-        for arm in args.arms.split(","):
-            cmd = argv_for(exp, arm, args.token_budget, args.root)
-            if args.print:
-                print("uv run python -m ants.orchestrator.demo_vs_nodemo", *cmd)
-                continue
-            for attempt in range(3):
-                try:
-                    demo_vs_nodemo.main(cmd)
-                    break
-                except Exception:
-                    print(f"[{exp} {arm}] crashed (try {attempt + 1}/3):", flush=True)
-                    traceback.print_exc()
+    exps, arms = args.exp.split(","), args.arms.split(",")
+    pairs = [(e, a) for a in arms for e in exps]
+    if not args.arm_major:
+        pairs = [(e, a) for e in exps for a in arms]
+    start = 0 if args.print else ledger_tokens()
+    for exp, arm in pairs:
+        if args.total_token_budget and not args.print:
+            spent = ledger_tokens() - start
+            if spent >= args.total_token_budget:
+                print(f"token budget used up ({spent} >= {args.total_token_budget}); stopping")
+                break
+        cmd = argv_for(exp, arm, args.token_budget, args.root)
+        if args.print:
+            print("uv run python -m ants.orchestrator.demo_vs_nodemo", *cmd)
+            continue
+        for attempt in range(3):
+            try:
+                demo_vs_nodemo.main(cmd)
+                break
+            except Exception:
+                print(f"[{exp} {arm}] crashed (try {attempt + 1}/3):", flush=True)
+                traceback.print_exc()
     return 0
 
 

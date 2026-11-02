@@ -2941,6 +2941,18 @@
           "desc": "Subset of arms."
         },
         {
+          "flag": "--total-token-budget",
+          "kind": "value",
+          "on": false,
+          "desc": "Stop starting new runs once this many NEW tokens were spent in this command (counted from data/llm_ledger.jsonl). Default: no total cap."
+        },
+        {
+          "flag": "--arm-major",
+          "kind": "switch",
+          "on": false,
+          "desc": "Loop arms outside and experiments inside, so a stop leaves comparable arms."
+        },
+        {
           "flag": "--print",
           "kind": "switch",
           "on": false,
