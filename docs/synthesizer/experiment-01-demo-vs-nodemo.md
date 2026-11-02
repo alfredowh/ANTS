@@ -13,7 +13,7 @@ Run 2026-10-31. Run directory: `data/runs/demo_vs_nodemo_01/` (git-ignored; prog
   - release at 0.67 plate radii, with an uncertain height
   - all relative to object size (`tools/hurobo_demospec.py`, `src/ants/synthesizer/generator.py`).
 - **Per arm and sample:** write a program, run it on debug seed 51, repair up to 2 times from text feedback (`src/ants/adversary/rollout.py::feedback`), then evaluate the final program unchanged on seeds 51–55. Samples at temperature 0.2 and 0.7.
-- **Command:** `uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/demo_vs_nodemo_01`
+- **Command:** `uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/demo_vs_nodemo_01`
 
 ## Result
 

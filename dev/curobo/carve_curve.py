@@ -2,7 +2,7 @@
 
 Same replay as carve_check.py, but sweeps the margin (the stock service uses 5 cm) and prints JSON.
 
-    ../ASPIRE/.venv-curobo/bin/python dev/curobo/carve_curve.py \
+    ASPIRE/.venv-curobo/bin/python dev/curobo/carve_curve.py \
         CLOUD.npy TRACE_CALLS_DIR CALL_ID X Y Z
 """
 

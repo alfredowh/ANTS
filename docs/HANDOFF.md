@@ -5,7 +5,7 @@ Give this file to a new session as context. It is the single place that says whe
 ## 1. One-paragraph state
 
 - **What ANTS is.** One video demonstration → a frozen code model (Meta Muse) writes a robot program → an adversary perturbs the scene → failures become constraints → a gate accepts only rewrites that never regress. The claim was narrowed against RAPID, ASPIRE and CaP-X: the novelty is the loop (adversary-chosen tests, never-regress gate, targeted-demo escalation), not demo-to-program.
-- **What runs.** The execution layer is NVIDIA ASPIRE's `cap-harness`, installed at `../ASPIRE` and working on the RTX A5500 laptop.
+- **What runs.** The execution layer is NVIDIA ASPIRE's `cap-harness`, installed at `ASPIRE` and working on the RTX A5500 laptop.
 - **First result.** On LIBERO "put the bowl on the plate", Muse **with** a demonstration from a real hurobo phone clip wrote a program that solved 5/5 acceptance seeds (1 of 2 samples). **Without** the demo it solved 0/10 (0 of 2 samples). That program also survived three hand-picked perturbations.
 - **Not built yet.** System 2 (adversary planner, diagnoser, constraint loop, regression gate, escalation) and memory.
 
@@ -13,7 +13,7 @@ Give this file to a new session as context. It is the single place that says whe
 
 | Topic | Decision |
 |---|---|
-| Harness | ASPIRE `cap-harness` at `../ASPIRE`, driven by ANTS's own client via subprocess. ASPIRE's Claude-Code agent layer is not used |
+| Harness | ASPIRE `cap-harness` at `ASPIRE`, driven by ANTS's own client via subprocess. ASPIRE's Claude-Code agent layer is not used |
 | Policy format | A program over primitives, written once per cycle (no model in the control loop). Per-step agent only as a later comparison arm |
 | No-demo baseline | System 1 minus the DemoSpec. CaP-Agent0-lite (1 sample, ≤2 turns, text feedback) later if budget remains; full CaP-X later |
 | Generator | Muse via the Meta API (`muse-wonder-1.0`), **$15 cap**. Other models via OpenRouter, **$5 cap**. No reference model yet |
@@ -43,7 +43,7 @@ Give this file to a new session as context. It is the single place that says whe
 | LIBERO human demos → DemoSpec (run with ASPIRE's Python) | `tools/libero_demospec.py` |
 | Perturbation launcher (no ASPIRE edits) | `tools/aspire_launch.py` |
 | Local data (git-ignored) | `data/`: `hurobo_e1/` extractions, `demospecs/`, `libero_demos/book_under_shelf_demo.hdf5` (596 MB, 50 demos), `runs/`, `llm_cache/`, `llm_ledger.jsonl`, `viz/` |
-| ASPIRE local changes | `../ASPIRE/configs/profiles/a5500.json` and an `sm_86` entry in `configs/dependency-lock.json` |
+| ASPIRE local changes | `ASPIRE/configs/profiles/a5500.json` and an `sm_86` entry in `configs/dependency-lock.json` |
 
 ## 4. How to run what exists
 
@@ -51,17 +51,17 @@ Every command, flag and example is in the run book: `uv run python -m ants.evalk
 
 ```bash
 # ASPIRE services (SAM 3 + PyRoki, ~4.5 GB GPU). The experiments need them.
-cd ../ASPIRE && CUDA_VISIBLE_DEVICES=0 TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 \
+cd ASPIRE && CUDA_VISIBLE_DEVICES=0 TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 \
   scripts/supervise_services.sh --profile a5500 --providers sam3,pyroki
 
 # Experiment 01 again (cached calls cost nothing; new ones count against --token-budget)
-cd ANTS && uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE \
+cd ANTS && uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE \
   --demospec data/demospecs/hurobo_233832.json --out data/runs/<name>
 
 # One program under a perturbation
-cd ../ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl \
+cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl \
   PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 \
-  .venv-libero/bin/python ../ANTS/tools/aspire_launch.py <perturbation.json> -- run \
+  .venv-libero/bin/python ../tools/aspire_launch.py <perturbation.json> -- run \
   --benchmark libero-pro --suite libero_goal_swap --task-id 8 --seed 51 --init-mode seeded \
   --program <program.py> --output-root <dir> --max-steps 2000 --camera-width 800 --camera-height 512
 

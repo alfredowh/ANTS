@@ -24,6 +24,8 @@ packages = ["src/ants"]
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+# hurobo and ASPIRE are git submodules: separate repos with their own configs
+exclude = ["hurobo", "ASPIRE"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

@@ -47,7 +47,7 @@ uv run ruff check . && uv run pytest
 ```
 
 ```bash
-cd ../ASPIRE && CUDA_VISIBLE_DEVICES=0 TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 scripts/supervise_services.sh \
+cd ASPIRE && CUDA_VISIBLE_DEVICES=0 TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 scripts/supervise_services.sh \
     --profile a5500 \
     --providers sam3,pyroki
 ```
@@ -55,17 +55,17 @@ cd ../ASPIRE && CUDA_VISIBLE_DEVICES=0 TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 script
 **Make a DemoSpec from a demonstration** (reference)
 
 ```bash
-cd ../hurobo && .venv/bin/python scripts/02_extract_demos.py data/raw/e1/clips/*.mp4 \
+cd hurobo && .venv/bin/python scripts/02_extract_demos.py data/raw/e1/clips/*.mp4 \
     --setup data/raw/setup_01/measurements.yaml \
     --intrinsics data/camera_intrinsics_s10e.npz \
     --cuts data/raw/e1/cuts.json \
     --marker-size-m 0.0575 \
-    --out ../ANTS/data/hurobo_e1/demos_marker_0.0575
+    --out ../data/hurobo_e1/demos_marker_0.0575
 ```
 
 ```bash
-../hurobo/.venv/bin/python -I tools/hurobo_demospec.py data/hurobo_e1/demos_marker_0.06/20261016_233832.npz \
-    --setup ../hurobo/data/raw/setup_01/measurements.yaml \
+hurobo/.venv/bin/python -I tools/hurobo_demospec.py data/hurobo_e1/demos_marker_0.06/20261016_233832.npz \
+    --setup hurobo/data/raw/setup_01/measurements.yaml \
     --out data/demospecs/hurobo_233832.json
 ```
 
@@ -73,7 +73,7 @@ cd ../hurobo && .venv/bin/python scripts/02_extract_demos.py data/raw/e1/clips/*
 
 ```bash
 uv run python -m ants.orchestrator.demo_vs_nodemo \
-    --aspire ../ASPIRE \
+    --aspire ASPIRE \
     --demospec data/demospecs/hurobo_233832.json \
     --out data/runs/demo_vs_nodemo_01 \
     --temperatures 0.2,0.7 \
@@ -82,20 +82,20 @@ uv run python -m ants.orchestrator.demo_vs_nodemo \
 ```
 
 ```bash
-uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/exp01b \
+uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/exp01b \
     --token-budget 600000
 ```
 
 **Exp 02: debug in the scaled scene** (done)
 
 ```bash
-uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/exp02_scaled --debug-scene scaled --scenes stock,scaled \
+uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/exp02_scaled --debug-scene scaled --scenes stock,scaled \
     --temperatures 0.2,0.7,0.5 \
     --token-budget 600000
 ```
 
 ```bash
-uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/exp02_scaled --debug-scene scaled --scenes stock,scaled \
+uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/exp02_scaled --debug-scene scaled --scenes stock,scaled \
     --temperatures 0.2,0.7,0.5 \
     --token-budget 320000
 ```
@@ -103,7 +103,7 @@ uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE --demospec 
 **Exp 03: explain-then-repair, one run per clip** (done (no write-up))
 
 ```bash
-uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE --arms demo --temperatures 0.2 --explain --debug-scene scaled --scenes stock,scaled --eval-seeds "" \
+uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --arms demo --temperatures 0.2 --explain --debug-scene scaled --scenes stock,scaled --eval-seeds "" \
     --demospec data/demospecs/hurobo_233859.json \
     --out data/runs/exp03_explain/clip_233859 \
     --token-budget 250000
@@ -117,39 +117,39 @@ uv run python -m ants.evalkit.report data/runs/exp04_scene \
 **Exp 04: which scene description helps?** (done (see experiment-04-scene-context.md))
 
 ```bash
-uv run python -m ants.orchestrator.scene_context_exp --aspire ../ASPIRE --prep \
+uv run python -m ants.orchestrator.scene_context_exp --aspire ASPIRE --prep \
     --out data/runs/exp04_scene
 ```
 
 ```bash
-uv run python -m ants.orchestrator.scene_context_exp --aspire ../ASPIRE --dry-run \
+uv run python -m ants.orchestrator.scene_context_exp --aspire ASPIRE --dry-run \
     --out data/runs/exp04_scene
 ```
 
 **Perturbation preview (System 2 hook)** (done)
 
 ```bash
-cd ../ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../ANTS/tools/aspire_launch.py ../ANTS/data/runs/perturb_preview/friction04.json -- run \
+cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/aspire_launch.py ../data/runs/perturb_preview/friction04.json -- run \
     --benchmark libero-pro \
     --suite libero_goal_swap \
     --task-id 8 \
     --seed 51 \
     --init-mode seeded \
     --program PATH/program.py \
-    --output-root ../ANTS/data/runs/perturb_preview/out \
+    --output-root ../data/runs/perturb_preview/out \
     --max-steps 2000 \
     --camera-width 800 \
     --camera-height 512
 ```
 
 ```bash
-cd ../ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../ANTS/tools/aspire_launch.py ../ANTS/data/scaled_test/scale.json -- run \
+cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/aspire_launch.py ../data/scaled_test/scale.json -- run \
     --suite libero_goal_swap \
     --task-id 8 \
     --seed 51 \
     --init-mode seeded \
     --program PATH/program.py \
-    --output-root ../ANTS/data/scaled_test/out
+    --output-root ../data/scaled_test/out
 ```
 
 **System 2 v0: harden with the never-regress gate** (built, no live run)
@@ -165,12 +165,12 @@ uv run python -m ants.evalkit.report data/runs --open
 **dev/curobo: why does the planner go through the rack?** (done (dev notes))
 
 ```bash
-cd ../ASPIRE && ANTS_CARVE_MARGIN_M=0.0 ANTS_ATTACH_FILE=$PWD/../ANTS/data/runs/curobo/attach.json .venv-curobo/bin/python ../ANTS/dev/curobo/service_dev.py \
+cd ASPIRE && ANTS_CARVE_MARGIN_M=0.0 ANTS_ATTACH_FILE=$PWD/../data/runs/curobo/attach.json .venv-curobo/bin/python ../dev/curobo/service_dev.py \
     --port 8118
 ```
 
 ```bash
-cd ../ASPIRE && ANTS_CONTACT_LOG=../ANTS/data/evidence/out.jsonl LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../ANTS/dev/curobo/contact_launch.py scene.json -- run --benchmark libero-pro --suite libero_goal_swap --task-id 8 --seed 51 --init-mode seeded --program ../ANTS/dev/curobo/programs/exp3_a2_orbit.py
+cd ASPIRE && ANTS_CONTACT_LOG=../data/evidence/out.jsonl LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../dev/curobo/contact_launch.py scene.json -- run --benchmark libero-pro --suite libero_goal_swap --task-id 8 --seed 51 --init-mode seeded --program ../dev/curobo/programs/exp3_a2_orbit.py
 ```
 
 **Research radar maintenance** (tooling)
@@ -201,7 +201,7 @@ uv run python .claude/skills/robot-research-radar/scripts/radar.py pending \
 ```bash
 uv run python -m ants.orchestrator.perceived_scene --probe \
     --out data/runs/exp05_perceived_scene \
-    --aspire ../ASPIRE
+    --aspire ASPIRE
 ```
 
 ```bash
@@ -225,7 +225,7 @@ uv run python -m ants.evalkit.report data/runs/exp04_scene \
 **Exp 09 to 11: exp06 to 08 again, with the held bowl attached to the hand** (code ready, not run)
 
 ```bash
-cd ../ASPIRE && ANTS_CARVE_MARGIN_M=0.0 ANTS_ATTACH_FILE=$PWD/../ANTS/data/runs/curobo/attach.json .venv-curobo/bin/python ../ANTS/dev/curobo/service_dev.py \
+cd ASPIRE && ANTS_CARVE_MARGIN_M=0.0 ANTS_ATTACH_FILE=$PWD/../data/runs/curobo/attach.json .venv-curobo/bin/python ../dev/curobo/service_dev.py \
     --port 8118
 ```
 

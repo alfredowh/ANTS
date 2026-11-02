@@ -1,6 +1,6 @@
 """A3: how well does ASPIRE's own perception see the scene? Compare it with the simulator.
 
-    uv run python -m ants.orchestrator.a3_perception --aspire ../ASPIRE --out data/evidence/a3
+    uv run python -m ants.orchestrator.a3_perception --aspire ASPIRE --out data/evidence/a3
 
 Runs `data/scenes/perception_probe.py` once per scene level (SAM 3 text mask, depth point cloud,
 `estimate_geometry`, from the agent-view camera) and compares each object's perceived centre and

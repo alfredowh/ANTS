@@ -3,7 +3,7 @@
 Needs numpy and scipy: run it with ASPIRE's Python from the ANTS root, after a run made with
 `--save-clouds` (exp09 to exp11 do this):
 
-    PYTHONPATH=src ../ASPIRE/.venv-libero/bin/python dev/curobo/make_viewer.py \
+    PYTHONPATH=src ASPIRE/.venv-libero/bin/python dev/curobo/make_viewer.py \
         data/runs/curobo/exp09/clip_233859 [--attempt 4]
 
 Writes `<run>/plan_viewer/index.html` (3D) and `plans2d.html`. The run viewer

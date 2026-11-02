@@ -80,7 +80,7 @@ def argv_for(
     if normalize_sam_model(sam_model) == "sam-3.1" and planner == "curobo-sam3":
         planner = "curobo-sam31"
     argv = [
-        "--aspire", "../ASPIRE", "--demospec", spec, "--out", str(root / exp / arm),
+        "--aspire", "ASPIRE", "--demospec", spec, "--out", str(root / exp / arm),
         "--arms", kind, "--temperatures", "0.2", "--explain", "--repairs", "4",
         "--debug-scene", "scaled", "--scenes", "scaled", "--eval-seeds", "",
         "--planner", planner, "--ontop-area", "0.5", "--contacts",

@@ -1,6 +1,6 @@
 """A0: replay every exp03 program with the simulator contact log, and say what blocked each stall.
 
-    uv run python -m ants.orchestrator.a0_replay --aspire ../ASPIRE --out data/evidence/a0
+    uv run python -m ants.orchestrator.a0_replay --aspire ASPIRE --out data/evidence/a0
 
 Each program runs once in the scaled L1 scene (seed 51) through `tools/aspire_launch.py` with the
 contact log on. The answer key for a stall is the blocking contact (a robot part that pressed on an

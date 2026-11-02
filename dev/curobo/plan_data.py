@@ -2,7 +2,7 @@
 
 Needs numpy and scipy, so run it with ASPIRE's Python from the ANTS root:
 
-    PYTHONPATH=src ../ASPIRE/.venv-libero/bin/python dev/curobo/plan_data.py RUN_DIR CLOUD_DIR OUT.json
+    PYTHONPATH=src ASPIRE/.venv-libero/bin/python dev/curobo/plan_data.py RUN_DIR CLOUD_DIR OUT.json
 
 RUN_DIR is the harness run folder (has trace/ and payloads/), CLOUD_DIR the `cloud_dir` of the
 launcher's `planner` spec (one cloud per plan call, in call order). For every

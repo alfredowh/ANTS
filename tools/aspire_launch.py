@@ -8,7 +8,7 @@ and the program under test cannot see the perturbation (it runs in ASPIRE's sand
 
 Run it with ASPIRE's Python, from the ASPIRE checkout:
 
-    ../ASPIRE/.venv-libero/bin/python <ANTS>/tools/aspire_launch.py perturbation.json -- \
+    ASPIRE/.venv-libero/bin/python <ANTS>/tools/aspire_launch.py perturbation.json -- \
         run --benchmark libero-pro --suite libero_goal_swap --task-id 8 --seed 51 ...
 
 perturbation.json (every key optional):

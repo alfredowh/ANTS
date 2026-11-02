@@ -6,7 +6,7 @@ within 5 cm of the gripper is then deleted from the planning world. This script 
 step offline on a dumped planning cloud and reports what survives near a contact point.
 
 Run with ASPIRE's cuRobo venv (needs the GPU):
-    ../ASPIRE/.venv-curobo/bin/python dev/curobo/carve_check.py \
+    ASPIRE/.venv-curobo/bin/python dev/curobo/carve_check.py \
         CLOUD.npy TRACE_CALLS_DIR CALL_ID X Y Z
 """
 

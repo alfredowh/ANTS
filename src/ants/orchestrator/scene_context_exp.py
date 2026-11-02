@@ -6,9 +6,9 @@ same as S4 with the wine rack's position wrong on purpose). Each is tried in sce
 E: ONE repair of a failed program (exp03, clip 233859, attempt 2) with different evidence in the
 repair message (E0 as in exp03, E1 + contact log, E2 + scene, E3 + stall readings, EP placebo).
 
-    uv run python -m ants.orchestrator.scene_context_exp --aspire ../ASPIRE --out data/runs/exp04_scene --prep
-    uv run python -m ants.orchestrator.scene_context_exp --aspire ../ASPIRE --out data/runs/exp04_scene --dry-run
-    uv run python -m ants.orchestrator.scene_context_exp --aspire ../ASPIRE --out data/runs/exp04_scene
+    uv run python -m ants.orchestrator.scene_context_exp --aspire ASPIRE --out data/runs/exp04_scene --prep
+    uv run python -m ants.orchestrator.scene_context_exp --aspire ASPIRE --out data/runs/exp04_scene --dry-run
+    uv run python -m ants.orchestrator.scene_context_exp --aspire ASPIRE --out data/runs/exp04_scene
 
 The scene given to the model is simulator truth ("oracle"), not a perceived scene. Everything is
 cached and logged; `--token-budget` is a hard cap on NEW tokens. View: `ants.evalkit.report`.

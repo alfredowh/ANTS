@@ -10,7 +10,7 @@ Same task, generator, prompts and demo spec as [experiment 01](experiment-01-dem
 - **Up to 4 repairs** (5 attempts) per sample; temperatures 0.2, 0.7, 0.5.
 - **Seeds:** debug seed 51, evaluation seeds 51-55. These are acceptance seeds used during development, not the held-out set.
 - **Budget:** the first pass hit its 600,000-token budget (627,090 used) and stopped inside nodemo sample 2; the run was resumed with a 320,000-token budget (rerunning the same command with the same `--out` keeps finished samples and redoes the stopped one). Event log: `budget_stop` and the second `run_start` in `events.jsonl`.
-- **Command:** `uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/exp02_scaled --debug-scene scaled --scenes stock,scaled`
+- **Command:** `uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/exp02_scaled --debug-scene scaled --scenes stock,scaled`
 
 ## Result
 

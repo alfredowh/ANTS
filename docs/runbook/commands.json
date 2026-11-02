@@ -12,7 +12,7 @@
     },
     "libero": {
       "label": "ASPIRE LIBERO python",
-      "where": "ASPIRE checkout (cd ../ASPIRE)",
+      "where": "ASPIRE checkout (cd ASPIRE)",
       "prefix": "LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python"
     },
     "curobo": {
@@ -23,7 +23,7 @@
     "hurobo": {
       "label": "hurobo python",
       "where": "ANTS repo root",
-      "prefix": "../hurobo/.venv/bin/python -I"
+      "prefix": "hurobo/.venv/bin/python -I"
     },
     "shell": {
       "label": "shell",
@@ -36,7 +36,7 @@
       "id": "hurobo",
       "name": "hurobo (external)",
       "group": "input",
-      "path": "../hurobo",
+      "path": "hurobo",
       "role": "Phone-video recordings of a human doing the task; extracts hand and object tracks (ArUco/ChArUco).",
       "in": [
         "clips *.mp4",
@@ -251,7 +251,7 @@
       "id": "aspire",
       "name": "ASPIRE cap-harness (external)",
       "group": "external",
-      "path": "../ASPIRE",
+      "path": "ASPIRE",
       "role": "Execution substrate: LIBERO sim, program sandbox, primitives. Own venvs (.venv-libero, .venv-sam3, .venv-pyroki, .venv-curobo).",
       "in": [
         "program.py",
@@ -269,7 +269,7 @@
       "id": "services",
       "name": "perception/planning services",
       "group": "external",
-      "path": "../ASPIRE/scripts/supervise_services.sh",
+      "path": "ASPIRE/scripts/supervise_services.sh",
       "role": "SAM 3 (8114), PyRoki (8116), cuRobo (8118) HTTP services the simulator process calls. Must be up for every experiment.",
       "in": [],
       "out": [
@@ -422,7 +422,7 @@
       ],
       "inputs": [
         "uv",
-        "../ASPIRE with venvs",
+        "ASPIRE with venvs",
         "GPU",
         "META_API_KEY in .env"
       ],
@@ -917,7 +917,7 @@
       "title": "Start SAM 3 + PyRoki (+ cuRobo) services",
       "group": "services",
       "runner": "shell",
-      "where": "cd ../ASPIRE",
+      "where": "cd ASPIRE",
       "base": "CUDA_VISIBLE_DEVICES=0 TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 scripts/supervise_services.sh",
       "args": [
         {
@@ -959,7 +959,7 @@
       "examples": [
         {
           "title": "Background, logging to ANTS/data/services.log",
-          "cmd": "cd ../ASPIRE && CUDA_VISIBLE_DEVICES=0 TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 nohup scripts/supervise_services.sh --profile a5500 --providers sam3,pyroki > ../ANTS/data/services.log 2>&1 &"
+          "cmd": "cd ASPIRE && CUDA_VISIBLE_DEVICES=0 TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 nohup scripts/supervise_services.sh --profile a5500 --providers sam3,pyroki > ../data/services.log 2>&1 &"
         }
       ],
       "modules": [
@@ -981,7 +981,7 @@
       "title": "ASPIRE doctor (install check)",
       "group": "services",
       "runner": "shell",
-      "where": "cd ../ASPIRE",
+      "where": "cd ASPIRE",
       "base": ".venv-libero/bin/python -m cap_harness.cli doctor",
       "args": [
         {
@@ -1052,7 +1052,7 @@
       "title": "hurobo: extract demos from clips",
       "group": "demos",
       "runner": "shell",
-      "where": "cd ../hurobo",
+      "where": "cd hurobo",
       "base": ".venv/bin/python scripts/02_extract_demos.py data/raw/e1/clips/*.mp4",
       "args": [
         {
@@ -1090,7 +1090,7 @@
         },
         {
           "flag": "--out",
-          "value": "../ANTS/data/hurobo_e1/demos_marker_0.0575",
+          "value": "../data/hurobo_e1/demos_marker_0.0575",
           "kind": "value",
           "on": true,
           "desc": "Output folder (never write into hurobo)."
@@ -1144,7 +1144,7 @@
       "args": [
         {
           "flag": "--setup",
-          "value": "../hurobo/data/raw/setup_01/measurements.yaml",
+          "value": "hurobo/data/raw/setup_01/measurements.yaml",
           "kind": "value",
           "on": true,
           "required": true,
@@ -1163,15 +1163,15 @@
       "examples": [
         {
           "title": "Clip 233859",
-          "cmd": "../hurobo/.venv/bin/python -I tools/hurobo_demospec.py data/hurobo_e1/demos_marker_0.06/20261016_233859.npz --setup ../hurobo/data/raw/setup_01/measurements.yaml --out data/demospecs/hurobo_233859.json"
+          "cmd": "hurobo/.venv/bin/python -I tools/hurobo_demospec.py data/hurobo_e1/demos_marker_0.06/20261016_233859.npz --setup hurobo/data/raw/setup_01/measurements.yaml --out data/demospecs/hurobo_233859.json"
         },
         {
           "title": "Clip 234314",
-          "cmd": "../hurobo/.venv/bin/python -I tools/hurobo_demospec.py data/hurobo_e1/demos_marker_0.06/20261016_234314.npz --setup ../hurobo/data/raw/setup_01/measurements.yaml --out data/demospecs/hurobo_234314.json"
+          "cmd": "hurobo/.venv/bin/python -I tools/hurobo_demospec.py data/hurobo_e1/demos_marker_0.06/20261016_234314.npz --setup hurobo/data/raw/setup_01/measurements.yaml --out data/demospecs/hurobo_234314.json"
         },
         {
           "title": "Clip 234603",
-          "cmd": "../hurobo/.venv/bin/python -I tools/hurobo_demospec.py data/hurobo_e1/demos_marker_0.06/20261016_234603.npz --setup ../hurobo/data/raw/setup_01/measurements.yaml --out data/demospecs/hurobo_234603.json"
+          "cmd": "hurobo/.venv/bin/python -I tools/hurobo_demospec.py data/hurobo_e1/demos_marker_0.06/20261016_234603.npz --setup hurobo/data/raw/setup_01/measurements.yaml --out data/demospecs/hurobo_234603.json"
         }
       ],
       "modules": [
@@ -1194,8 +1194,8 @@
       "title": "LIBERO human demos to DemoSpec JSON",
       "group": "demos",
       "runner": "libero",
-      "where": "cd ../ASPIRE",
-      "base": "../ANTS/tools/libero_demospec.py ../ANTS/data/libero_demos/book_under_shelf_demo.hdf5",
+      "where": "cd ASPIRE",
+      "base": "../tools/libero_demospec.py ../data/libero_demos/book_under_shelf_demo.hdf5",
       "args": [
         {
           "flag": "--object",
@@ -1222,7 +1222,7 @@
         },
         {
           "flag": "--out",
-          "value": "../ANTS/data/demospecs/libero_book_under_shelf.json",
+          "value": "../data/demospecs/libero_book_under_shelf.json",
           "kind": "value",
           "on": true,
           "required": true,
@@ -1255,7 +1255,7 @@
       "args": [
         {
           "flag": "--aspire",
-          "value": "../ASPIRE",
+          "value": "ASPIRE",
           "kind": "value",
           "on": true,
           "required": true,
@@ -1420,15 +1420,15 @@
       "examples": [
         {
           "title": "Exact exp01 (n=2 per arm)",
-          "cmd": "uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/demo_vs_nodemo_01 --temperatures 0.2,0.7 --repairs 2 --scenes stock"
+          "cmd": "uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/demo_vs_nodemo_01 --temperatures 0.2,0.7 --repairs 2 --scenes stock"
         },
         {
           "title": "Cheap smoke: one sample, one repair, one eval seed",
-          "cmd": "uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/smoke --arms demo --temperatures 0.2 --repairs 1 --eval-seeds 51 --scenes stock --token-budget 80000"
+          "cmd": "uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/smoke --arms demo --temperatures 0.2 --repairs 1 --eval-seeds 51 --scenes stock --token-budget 80000"
         },
         {
           "title": "Next step from HANDOFF: more samples, 4 repairs, both scenes",
-          "cmd": "uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/exp01c --temperatures 0.2,0.7,0.5,1.0 --repairs 4 --scenes stock,scaled --token-budget 600000"
+          "cmd": "uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/exp01c --temperatures 0.2,0.7,0.5,1.0 --repairs 4 --scenes stock,scaled --token-budget 600000"
         }
       ],
       "modules": [
@@ -1464,7 +1464,7 @@
       "group": "experiments",
       "runner": "ants",
       "paid": true,
-      "base": "-m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/exp01b",
+      "base": "-m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/exp01b",
       "args": [
         {
           "flag": "--token-budget",
@@ -1507,7 +1507,7 @@
       "title": "Re-score finished programs (no model calls)",
       "group": "experiments",
       "runner": "ants",
-      "base": "-m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE --demospec data/demospecs/hurobo_233832.json --eval-only",
+      "base": "-m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --demospec data/demospecs/hurobo_233832.json --eval-only",
       "args": [
         {
           "flag": "--out",
@@ -1557,7 +1557,7 @@
       "group": "experiments",
       "runner": "ants",
       "paid": true,
-      "base": "-m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/exp02_scaled --debug-scene scaled --scenes stock,scaled",
+      "base": "-m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/exp02_scaled --debug-scene scaled --scenes stock,scaled",
       "args": [
         {
           "flag": "--temperatures",
@@ -1609,7 +1609,7 @@
       "group": "experiments",
       "runner": "ants",
       "paid": true,
-      "base": "-m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/exp02_scaled --debug-scene scaled --scenes stock,scaled",
+      "base": "-m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --demospec data/demospecs/hurobo_233832.json --out data/runs/exp02_scaled --debug-scene scaled --scenes stock,scaled",
       "args": [
         {
           "flag": "--temperatures",
@@ -1648,7 +1648,7 @@
       "group": "experiments",
       "runner": "ants",
       "paid": true,
-      "base": "-m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE --arms demo --temperatures 0.2 --explain --debug-scene scaled --scenes stock,scaled --eval-seeds \"\"",
+      "base": "-m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --arms demo --temperatures 0.2 --explain --debug-scene scaled --scenes stock,scaled --eval-seeds \"\"",
       "args": [
         {
           "flag": "--demospec",
@@ -1690,7 +1690,7 @@
       "examples": [
         {
           "title": "All three clips",
-          "cmd": "for c in 233832 233859 234314; do uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE --demospec data/demospecs/hurobo_$c.json --out data/runs/exp03_explain/clip_$c --arms demo --temperatures 0.2 --explain --debug-scene scaled --scenes stock,scaled --eval-seeds \"\" --token-budget 250000; done"
+          "cmd": "for c in 233832 233859 234314; do uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --demospec data/demospecs/hurobo_$c.json --out data/runs/exp03_explain/clip_$c --arms demo --temperatures 0.2 --explain --debug-scene scaled --scenes stock,scaled --eval-seeds \"\" --token-budget 250000; done"
         }
       ],
       "modules": [
@@ -1718,7 +1718,7 @@
       "title": "Exp 04 step 1: settle and dump every scene level",
       "group": "experiments",
       "runner": "ants",
-      "base": "-m ants.orchestrator.scene_context_exp --aspire ../ASPIRE --prep",
+      "base": "-m ants.orchestrator.scene_context_exp --aspire ASPIRE --prep",
       "args": [
         {
           "flag": "--out",
@@ -1767,7 +1767,7 @@
       "title": "Exp 04 step 2: write the prompts only",
       "group": "experiments",
       "runner": "ants",
-      "base": "-m ants.orchestrator.scene_context_exp --aspire ../ASPIRE --dry-run",
+      "base": "-m ants.orchestrator.scene_context_exp --aspire ASPIRE --dry-run",
       "args": [
         {
           "flag": "--out",
@@ -1835,7 +1835,7 @@
       "group": "experiments",
       "runner": "ants",
       "paid": true,
-      "base": "-m ants.orchestrator.scene_context_exp --aspire ../ASPIRE",
+      "base": "-m ants.orchestrator.scene_context_exp --aspire ASPIRE",
       "args": [
         {
           "flag": "--out",
@@ -1936,19 +1936,19 @@
       "examples": [
         {
           "title": "First program, level 1 only",
-          "cmd": "uv run python -m ants.orchestrator.scene_context_exp --aspire ../ASPIRE --out data/runs/exp04_scene --groups G --levels L1"
+          "cmd": "uv run python -m ants.orchestrator.scene_context_exp --aspire ASPIRE --out data/runs/exp04_scene --groups G --levels L1"
         },
         {
           "title": "Repair-evidence group only",
-          "cmd": "uv run python -m ants.orchestrator.scene_context_exp --aspire ../ASPIRE --out data/runs/exp04_scene --groups E"
+          "cmd": "uv run python -m ants.orchestrator.scene_context_exp --aspire ASPIRE --out data/runs/exp04_scene --groups E"
         },
         {
           "title": "Level 2 and 3 first-program variants",
-          "cmd": "uv run python -m ants.orchestrator.scene_context_exp --aspire ../ASPIRE --out data/runs/exp04_scene --groups G --levels L2,L3"
+          "cmd": "uv run python -m ants.orchestrator.scene_context_exp --aspire ASPIRE --out data/runs/exp04_scene --groups G --levels L2,L3"
         },
         {
           "title": "Cheapest useful cell: placebo vs full scene, level 2",
-          "cmd": "uv run python -m ants.orchestrator.scene_context_exp --aspire ../ASPIRE --out data/runs/exp04_scene --groups G --levels L2 --g-variants S0,S4,SP --token-budget 200000"
+          "cmd": "uv run python -m ants.orchestrator.scene_context_exp --aspire ASPIRE --out data/runs/exp04_scene --groups G --levels L2 --g-variants S0,S4,SP --token-budget 200000"
         }
       ],
       "modules": [
@@ -2056,8 +2056,8 @@
       "title": "Run a program under a perturbation",
       "group": "perturbations",
       "runner": "libero",
-      "where": "cd ../ASPIRE",
-      "base": "../ANTS/tools/aspire_launch.py ../ANTS/data/runs/perturb_preview/friction04.json -- run",
+      "where": "cd ASPIRE",
+      "base": "../tools/aspire_launch.py ../data/runs/perturb_preview/friction04.json -- run",
       "args": [
         {
           "flag": "--benchmark",
@@ -2110,7 +2110,7 @@
         },
         {
           "flag": "--output-root",
-          "value": "../ANTS/data/runs/perturb_preview/out",
+          "value": "../data/runs/perturb_preview/out",
           "kind": "value",
           "on": true,
           "desc": "Where the run dir goes."
@@ -2191,8 +2191,8 @@
       "title": "Real-size scene (bowl x1.227, plate x1.855)",
       "group": "perturbations",
       "runner": "libero",
-      "where": "cd ../ASPIRE",
-      "base": "../ANTS/tools/aspire_launch.py ../ANTS/data/scaled_test/scale.json -- run",
+      "where": "cd ASPIRE",
+      "base": "../tools/aspire_launch.py ../data/scaled_test/scale.json -- run",
       "args": [
         {
           "flag": "--suite",
@@ -2232,7 +2232,7 @@
         },
         {
           "flag": "--output-root",
-          "value": "../ANTS/data/scaled_test/out",
+          "value": "../data/scaled_test/out",
           "kind": "value",
           "on": true,
           "desc": "Output."
@@ -2265,8 +2265,8 @@
       "title": "Log every MuJoCo contact of a run",
       "group": "perturbations",
       "runner": "libero",
-      "where": "cd ../ASPIRE",
-      "base": "../ANTS/tools/aspire_launch.py ../ANTS/data/evidence/contacts_spec.json -- run",
+      "where": "cd ASPIRE",
+      "base": "../tools/aspire_launch.py ../data/evidence/contacts_spec.json -- run",
       "args": [
         {
           "flag": "--suite",
@@ -2309,7 +2309,7 @@
       "examples": [
         {
           "title": "Spec",
-          "cmd": "{\"scale\": {\"bodies\": {\"akita_black_bowl_1_main\": 1.227, \"plate_1_main\": 1.855}}, \"contacts\": {\"path\": \"../ANTS/data/evidence/run/contacts.jsonl\"}}"
+          "cmd": "{\"scale\": {\"bodies\": {\"akita_black_bowl_1_main\": 1.227, \"plate_1_main\": 1.855}}, \"contacts\": {\"path\": \"../data/evidence/run/contacts.jsonl\"}}"
         }
       ],
       "modules": [
@@ -2381,9 +2381,9 @@
       "title": "cuRobo service (dev): carve margin and attached held object",
       "group": "dev-curobo",
       "runner": "curobo",
-      "where": "cd ../ASPIRE",
-      "env": "ANTS_CARVE_MARGIN_M=0.0 ANTS_ATTACH_FILE=$PWD/../ANTS/data/runs/curobo/attach.json",
-      "base": "../ANTS/dev/curobo/service_dev.py",
+      "where": "cd ASPIRE",
+      "env": "ANTS_CARVE_MARGIN_M=0.0 ANTS_ATTACH_FILE=$PWD/../data/runs/curobo/attach.json",
+      "base": "../dev/curobo/service_dev.py",
       "args": [
         {
           "flag": "--port",
@@ -2397,7 +2397,7 @@
       "examples": [
         {
           "title": "Stock margin for comparison",
-          "cmd": "ANTS_CARVE_MARGIN_M=0.05 ../ASPIRE/.venv-curobo/bin/python dev/curobo/service_dev.py --port 8118"
+          "cmd": "ANTS_CARVE_MARGIN_M=0.05 ASPIRE/.venv-curobo/bin/python dev/curobo/service_dev.py --port 8118"
         }
       ],
       "modules": [
@@ -2417,9 +2417,9 @@
       "title": "Run with per-step contact log + robot mask",
       "group": "dev-curobo",
       "runner": "libero",
-      "where": "cd ../ASPIRE",
-      "env": "ANTS_CONTACT_LOG=../ANTS/data/evidence/out.jsonl",
-      "base": "../ANTS/dev/curobo/contact_launch.py scene.json -- run --benchmark libero-pro --suite libero_goal_swap --task-id 8 --seed 51 --init-mode seeded --program ../ANTS/dev/curobo/programs/exp3_a2_orbit.py",
+      "where": "cd ASPIRE",
+      "env": "ANTS_CONTACT_LOG=../data/evidence/out.jsonl",
+      "base": "../dev/curobo/contact_launch.py scene.json -- run --benchmark libero-pro --suite libero_goal_swap --task-id 8 --seed 51 --init-mode seeded --program ../dev/curobo/programs/exp3_a2_orbit.py",
       "args": [
         {
           "flag": "ANTS_ROBOT_MASK=",
@@ -2441,7 +2441,7 @@
         },
         {
           "flag": "ANTS_CLOUD_DIR=",
-          "value": "../ANTS/data/evidence/clouds",
+          "value": "../data/evidence/clouds",
           "kind": "env",
           "on": false,
           "desc": "Env: dump every planning cloud (input to carve_check, carve_curve, probe_goal)."
@@ -2455,7 +2455,7 @@
         },
         {
           "flag": "ANTS_ONTOP_TEST=",
-          "value": "../ANTS/data/evidence/ontop.json",
+          "value": "../data/evidence/ontop.json",
           "kind": "env",
           "on": false,
           "desc": "Env: drop the bowl on the plate and record what the on-top check sees."
@@ -2513,8 +2513,8 @@
       "title": "Does the carve erase the obstacle?",
       "group": "dev-curobo",
       "runner": "curobo",
-      "where": "cd ../ASPIRE",
-      "base": "../ANTS/dev/curobo/carve_check.py CLOUD.npy TRACE_CALLS_DIR CALL_ID 0.477 -0.175 0.237",
+      "where": "cd ASPIRE",
+      "base": "../dev/curobo/carve_check.py CLOUD.npy TRACE_CALLS_DIR CALL_ID 0.477 -0.175 0.237",
       "args": [],
       "description": "Replays the robot carve on a dumped planning cloud (needs the GPU) and reports what survives near a contact point X Y Z (robot base frame).",
       "examples": [],
@@ -2539,8 +2539,8 @@
       "title": "Sweep the carve margin",
       "group": "dev-curobo",
       "runner": "curobo",
-      "where": "cd ../ASPIRE",
-      "base": "../ANTS/dev/curobo/carve_curve.py CLOUD.npy TRACE_CALLS_DIR CALL_ID 0.477 -0.175 0.237",
+      "where": "cd ASPIRE",
+      "base": "../dev/curobo/carve_curve.py CLOUD.npy TRACE_CALLS_DIR CALL_ID 0.477 -0.175 0.237",
       "args": [],
       "description": "Same replay as carve_check, over a range of margins (stock is 5 cm); prints JSON.",
       "examples": [],
@@ -2806,7 +2806,7 @@
         },
         {
           "flag": "--aspire",
-          "value": "../ASPIRE",
+          "value": "ASPIRE",
           "kind": "value",
           "on": true,
           "desc": "ASPIRE checkout (services sam3 and pyroki must run)."
@@ -2816,7 +2816,7 @@
       "examples": [
         {
           "title": "Run it",
-          "cmd": "uv run python -m ants.orchestrator.perceived_scene --aspire ../ASPIRE --out data/runs/exp05_perceived_scene --probe"
+          "cmd": "uv run python -m ants.orchestrator.perceived_scene --aspire ASPIRE --out data/runs/exp05_perceived_scene --probe"
         }
       ],
       "modules": [
@@ -3002,7 +3002,7 @@
       "group": "dev-curobo",
       "runner": "shell",
       "where": "cd to the ANTS repo root",
-      "base": "PYTHONPATH=src ../ASPIRE/.venv-libero/bin/python dev/curobo/make_viewer.py",
+      "base": "PYTHONPATH=src ASPIRE/.venv-libero/bin/python dev/curobo/make_viewer.py",
       "args": [
         {
           "flag": "data/runs/curobo/exp09/clip_233859",
@@ -3023,7 +3023,7 @@
       "examples": [
         {
           "title": "All three arms of exp09, last attempt",
-          "cmd": "for a in clip_233859 clip_233832 nodemo; do PYTHONPATH=src ../ASPIRE/.venv-libero/bin/python dev/curobo/make_viewer.py data/runs/curobo/exp09/$a; done"
+          "cmd": "for a in clip_233859 clip_233832 nodemo; do PYTHONPATH=src ASPIRE/.venv-libero/bin/python dev/curobo/make_viewer.py data/runs/curobo/exp09/$a; done"
         }
       ],
       "modules": [

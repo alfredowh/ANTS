@@ -4,7 +4,7 @@ Records, for every simulator step, the pairs of MuJoCo bodies in contact (with p
 depth) and the end-effector height, to $ANTS_CONTACT_LOG (JSONL). Used to find out what blocks
 the arm when a trajectory does not converge.
 
-    ANTS_CONTACT_LOG=out.jsonl ../ASPIRE/.venv-libero/bin/python dev/curobo/contact_launch.py \
+    ANTS_CONTACT_LOG=out.jsonl ASPIRE/.venv-libero/bin/python dev/curobo/contact_launch.py \
         scene.json -- run --benchmark libero-pro ...
 """
 

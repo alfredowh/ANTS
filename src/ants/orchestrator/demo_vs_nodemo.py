@@ -5,7 +5,7 @@ docs/synthesizer/discussion.md). Per arm and sample: write a program, run it on 
 repair it from text feedback up to N times, then evaluate the final program unchanged on the
 acceptance seeds (no model calls at evaluation time).
 
-    uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ../ASPIRE \
+    uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE \
         --demospec data/demospecs/hurobo_233832.json --out data/runs/demo_vs_nodemo_01
 
 All model calls are cached and logged; --token-budget is a hard cap on new tokens per run.

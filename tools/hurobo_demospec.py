@@ -2,9 +2,9 @@
 
 Run it with hurobo's Python, since it needs numpy and ANTS does not depend on it:
 
-    ../hurobo/.venv/bin/python -I tools/hurobo_demospec.py \
+    hurobo/.venv/bin/python -I tools/hurobo_demospec.py \
         data/hurobo_e1/demos_marker_0.06/20261016_233832.npz \
-        --setup ../hurobo/data/raw/setup_01/measurements.yaml \
+        --setup hurobo/data/raw/setup_01/measurements.yaml \
         --out data/demospecs/hurobo_233832.json
 
 Distances are given both in metres and as a fraction of the object's radius, so they carry

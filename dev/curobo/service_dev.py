@@ -12,7 +12,7 @@ the hand frame (metres); an empty list or a missing file detaches. The launcher
 (`tools/aspire_launch.py`, planner.attach) writes the file; nothing else in ASPIRE changes.
 
     ANTS_CARVE_MARGIN_M=0.02 ANTS_ATTACH_FILE=/tmp/attach.json \
-      ../ASPIRE/.venv-curobo/bin/python dev/curobo/service_dev.py --port 8118
+      ASPIRE/.venv-curobo/bin/python dev/curobo/service_dev.py --port 8118
 """
 
 from __future__ import annotations

@@ -4,7 +4,7 @@ Offline study on the L1 start state (libero_goal_swap task 8, seed 51; rack behi
 (Muse) call, no token spend: SAM 3 and depth run inside ASPIRE's services.
 
     # 1. perceive (needs ASPIRE's services; ~3 minutes): writes perception_start.json, perception_arm.json
-    uv run python -m ants.orchestrator.perceived_scene --aspire ../ASPIRE --out data/runs/exp05_perceived_scene --probe
+    uv run python -m ants.orchestrator.perceived_scene --aspire ASPIRE --out data/runs/exp05_perceived_scene --probe
     # 2. analyse offline (pure Python): variants V0..V5, perceived world, S4 text, comparison with the oracle
     uv run python -m ants.orchestrator.perceived_scene --out data/runs/exp05_perceived_scene --analyse
     # 3. the HTML report
@@ -640,7 +640,7 @@ def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    p.add_argument("--aspire", type=Path, default=Path("../ASPIRE"))
+    p.add_argument("--aspire", type=Path, default=Path("ASPIRE"))
     p.add_argument("--out", type=Path, default=Path("data/runs/exp05_perceived_scene"))
     p.add_argument(
         "--probe",

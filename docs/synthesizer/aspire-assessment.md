@@ -263,7 +263,7 @@ The principle is a thin vertical slice first, with contracts that System 2 plugs
 6. **System 2 seam.** An `env_factory` perturbation wrapper (friction, mass, pose, camera, light, actuation), so System 2 only adds a planner, a diagnoser and the gate.
 
 **Decided 2026-10-31 (by the user):**
-- Harness: ASPIRE `cap-harness` approved, checkout at `../ASPIRE`. SAM 3 access available; SAM 3.1 wanted for demo tracking (see §5).
+- Harness: ASPIRE `cap-harness` approved, checkout at `ASPIRE`. SAM 3 access available; SAM 3.1 wanted for demo tracking (see §5).
 - Budget: Muse via the Meta API, $15 total. Other models via OpenRouter, $5 total. No reference model for now.
 - Tasks: T1 (hurobo scaled bowl → plate, real phone clips; hurobo reused read-only) and T2 (LIBERO "book under the shelf") are the main experiments; T0 is the smoke test.
 - T1 demo: process the newer clips in `hurobo/data/raw/e1/clips/`, with a 6.0 cm marker size until it is measured.
