@@ -310,7 +310,7 @@ def install_curobo_planning(cfg: dict) -> None:
         from cap_harness.contracts import PlanningScene, PointCloud
 
         held_state: dict = {}
-        scene_of = CapApi._planning_scene
+        inner_scene = CapApi._planning_scene
         out_path = Path(attach["file"])
         out_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -337,7 +337,7 @@ def install_curobo_planning(cfg: dict) -> None:
             return np.concatenate(clouds) if clouds else np.zeros((0, 3))
 
         def with_attach(self, *a, **kw):
-            scene = scene_of(self, *a, **kw)
+            scene = inner_scene(self, *a, **kw)
             try:
                 observation = self.get_observation()
                 state = observation.robot_state
@@ -352,7 +352,14 @@ def install_curobo_planning(cfg: dict) -> None:
                 ])  # fmt: skip
                 closed = float(state.gripper_positions["primary"]) < 0.5
                 bowl = bowl_points(self, observation, frame) if closed else np.zeros((0, 3))
-                near = len(bowl) >= 30 and np.linalg.norm(bowl.mean(axis=0) - t) < attach.get("hold_dist_m", 0.16)
+                dist = float(np.linalg.norm(bowl.mean(axis=0) - t)) if len(bowl) else -1.0
+                near = len(bowl) >= 30 and dist < attach.get("hold_dist_m", 0.16)
+                print(
+                    f"[ants-attach] gripper {float(state.gripper_positions['primary']):.2f} "
+                    f"bowl points {len(bowl)} distance to hand {dist:.3f} m -> "
+                    f"{'held' if closed and near else 'not held'}",
+                    file=sys.stderr,
+                )
                 if not (closed and near):
                     if held_state.pop("local", None) is not None:
                         write([])
