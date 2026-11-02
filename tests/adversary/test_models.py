@@ -150,3 +150,20 @@ def test_meta_sends_images_as_data_urls(api):
     content = fake.requests[0][1]["messages"][0]["content"]
     assert content[0] == {"type": "text", "text": "look"}
     assert content[1]["image_url"]["url"].startswith("data:image/png;base64,")
+
+
+def test_meta_budget_counts_only_this_runs_new_tokens(api, tmp_path):
+    """Earlier runs in the shared ledger do not use up a new run's budget."""
+    _, model, _ = api
+    model.ledger.write_text(
+        json.dumps({"prompt_tokens": 10**6, "completion_tokens": 0, "from_cache": False}) + "\n",
+        encoding="utf-8",
+    )
+    model._spent = None
+    model.token_budget = 600
+    model.complete([Message("user", "fresh run")])
+    assert model.run_spent == 500 and model.spent() > 10**6
+
+
+def test_meta_default_budget_is_the_run_book_limit():
+    assert meta_module.MetaModel().token_budget == 100_000

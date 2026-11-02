@@ -1,8 +1,10 @@
 """Meta Model API adapter (Muse Spark), OpenAI-compatible chat completions, standard library only.
 
 Same request format, disk cache and token ledger as System 1's client (`synthesizer/llm.py`), and by
-default the same ledger file, so both systems spend from one visible budget. A hard token budget
-is checked before every uncached call.
+default the same ledger file, so both systems spend from one visible budget. A hard budget on the
+NEW (uncached) tokens of this model instance, i.e. of one run, is checked before every uncached
+call. It defaults to 100k, the run-book limit above which a run needs an explicit budget; when it
+is used up, `BudgetExceeded` (a `ModelError`) makes every role fall back to its rules.
 
 Effort levels map to request settings per call:
 - FAST (explainer) and DELIBERATE (diagnoser): one call each.
@@ -33,6 +35,9 @@ from ants.adversary.models.base import Effort, Message, ModelError, ModelRespons
 
 META_BASE_URL = "https://api.meta.ai/v1"
 DEFAULT_MODEL = "muse-spark-1.3"
+
+
+DEFAULT_TOKEN_BUDGET = 100_000
 
 
 class BudgetExceeded(ModelError):
@@ -68,7 +73,7 @@ def load_dotenv(path: Path) -> None:
 class MetaModel:
     cache_dir: Path = Path("data/llm_cache")
     ledger: Path = Path("data/llm_ledger.jsonl")
-    token_budget: int = 2_000_000
+    token_budget: int = DEFAULT_TOKEN_BUDGET  # new tokens per run; pass more explicitly
     efforts: Mapping[Effort, EffortSetting] = field(default_factory=lambda: dict(DEFAULT_EFFORTS))
     base_url: str = META_BASE_URL
     api_key_env: str = "META_API_KEY"
@@ -76,6 +81,7 @@ class MetaModel:
     tag: str = "system2"
     name: str = "muse-spark"
     _spent: int | None = field(default=None, repr=False)
+    run_spent: int = field(default=0, repr=False)  # new tokens spent by this instance
 
     # --- public ------------------------------------------------------------------------------
     def complete(
@@ -101,6 +107,7 @@ class MetaModel:
         return ModelResponse(tuple(r["text"] for r in replies), setting.model, usage)
 
     def spent(self) -> int:
+        """Total new tokens in the shared ledger (both systems, all runs); for reporting only."""
         if self._spent is None:
             self._spent = 0
             if self.ledger.exists():
@@ -135,8 +142,10 @@ class MetaModel:
         if path.exists():
             data, seconds, cached = json.loads(path.read_text(encoding="utf-8")), 0.0, True
         else:
-            if self.spent() >= self.token_budget:
-                raise BudgetExceeded(f"token budget {self.token_budget} used up ({self.spent()})")
+            if self.run_spent >= self.token_budget:
+                raise BudgetExceeded(
+                    f"run token budget {self.token_budget} used up ({self.run_spent} new tokens)"
+                )
             data, seconds = self._post(body)
             cached = False
             self.cache_dir.mkdir(parents=True, exist_ok=True)
@@ -153,6 +162,7 @@ class MetaModel:
         reasoning = int((usage.get("completion_tokens_details") or {}).get("reasoning_tokens", 0))
         if not cached:
             self._spent = self.spent() + prompt + completion
+            self.run_spent += prompt + completion
         self._log(setting.model, key, cached, prompt, completion, reasoning, seconds)
         return {
             "text": text or "",

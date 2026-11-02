@@ -69,6 +69,8 @@ def run(
             "min_tests": cfg.min_tests,
             "tau": cfg.tau,
             "seed": seed,
+            "token_budget": getattr(adv.model, "token_budget", None),
+            "rollout_timeout_s": cfg.rollout_timeout_s,
         },
     }
     nominal = adv.replay(policy, [None], seed=seed)[0]
@@ -97,6 +99,7 @@ def run(
             f"{i + 1:3d}/{attacks} {report.perturbation.category:9s} {outcome:7s} {sig}", flush=True
         )
     meta["finished"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    meta["tokens_spent"] = getattr(adv.model, "run_spent", 0)
     (out / "run.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
     return build(out)
 
@@ -110,7 +113,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--eta", type=float, default=0.2, help="1.0 = uniform baseline")
     ap.add_argument("--severity-bound", type=float, default=0.6)
-    ap.add_argument("--token-budget", type=int, default=None)
+    ap.add_argument(
+        "--token-budget",
+        type=int,
+        default=None,
+        help="new Muse tokens this run may spend (default 100k; pass more explicitly)",
+    )
     args = ap.parse_args(argv)
     out = args.out or Path("data/runs") / f"studio_{time.strftime('%Y%m%d_%H%M%S')}"
     page = run(
