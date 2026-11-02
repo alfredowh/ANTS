@@ -47,6 +47,8 @@ Give this file to a new session as context. It is the single place that says whe
 
 ## 4. How to run what exists
 
+Every command, flag and example is in the run book: `uv run python -m ants.evalkit.runbook list` (also `docs/runbook.html`, `docs/synthesizer/experiment-commands.md`, `docs/runbook/commands-full.md`). The snippets below are the short version.
+
 ```bash
 # ASPIRE services (SAM 3 + PyRoki, ~4.5 GB GPU). The experiments need them.
 cd ../ASPIRE && CUDA_VISIBLE_DEVICES=0 TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 \

@@ -109,10 +109,10 @@ The only thing that leaves System 2 after a cycle. It holds the perturbation, th
 
 ```python
 adv = Adversary.from_config(AdversaryConfig(model="muse-spark", backend="libero"))
-report = adv.attack(policy)                # one cycle -> AttackReport
-results = adv.replay(policy, cases)        # re-run fixed cases: gate, acceptance, held-out
-cases = adv.discovered_failures()          # the gate's growing test set
-status = adv.status(policy)                # stop rule: .robust when every category is below τ
+report = adv.attack(policy)  # one cycle -> AttackReport
+results = adv.replay(policy, cases)  # re-run fixed cases: gate, acceptance, held-out
+cases = adv.discovered_failures()  # the gate's growing test set
+status = adv.status(policy)  # stop rule: .robust when every category is below τ
 ```
 
 ## Defaults
