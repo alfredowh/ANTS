@@ -285,6 +285,29 @@ def is_run(path: Path) -> bool:
     return (path / "config.json").exists() or any(path.glob("*/sample*/record.json"))
 
 
+def find_runs(root: Path, depth: int = 3) -> list[Path]:
+    """`root` itself if it is a run, else every run below it (up to `depth` folders down)."""
+    if is_run(root):
+        return [root]
+    if depth == 0:
+        return []
+    return [r for d in sorted(root.iterdir()) if d.is_dir() for r in find_runs(d, depth - 1)]
+
+
+def _doc(root: Path, config: dict) -> dict | None:
+    """The experiment write-up shown in the Doc tab: `config["doc"]` (repo path) or `<run>/doc.md`."""
+    for cand in (config.get("doc"), "doc.md"):
+        if not cand:
+            continue
+        path = Path(cand) if Path(cand).is_absolute() else (
+            root / cand if (root / cand).exists() else Path(cand)
+        )
+        text = _read(path) if path.exists() else None
+        if text:
+            return {"path": str(cand), "md": text}
+    return None
+
+
 def _system2(root: Path) -> list[dict]:
     """Cycles of the adversary loop, one JSON object per line of `<run>/system2.jsonl`."""
     text = _read(root / "system2.jsonl") or ""
@@ -373,7 +396,8 @@ def collect(root: Path, base: Path | None = None) -> dict:
             }
         )
     return {
-        "name": root.name,
+        "name": str(root.relative_to(base)) if root != base else root.name,
+        "doc": _doc(root, config),
         "date": str(
             config.get("started") or datetime.fromtimestamp(root.stat().st_mtime).isoformat()
         )[:16].replace("T", " "),
@@ -393,15 +417,7 @@ def collect(root: Path, base: Path | None = None) -> dict:
 def build(root: Path) -> Path:
     """Write report.html: for a run directory, that run; for a folder of runs, all of them."""
     root = root.resolve()
-    runs = (
-        [root]
-        if is_run(root)
-        else sorted(
-            (d for d in root.iterdir() if d.is_dir() and is_run(d)),
-            key=lambda d: d.stat().st_mtime,
-            reverse=True,
-        )
-    )
+    runs = sorted(find_runs(root), key=lambda d: d.stat().st_mtime, reverse=True)
     if not runs:
         raise SystemExit(f"no runs found in {root}")
     payload = {"runs": [collect(r, root) for r in runs]}
@@ -805,16 +821,29 @@ function sample(s){const e=s.evaluation;
  ${s.attempts.map(attempt).join("")}<h3>Evaluation of the final program <span class="muted" style="font-weight:400">(click a row to watch)</span></h3>${ev}`}
 
 /* ---------- shell ---------- */
+function md(t){
+ const inl=x=>esc(x).replace(/`([^`]+)`/g,"<code>$1</code>").replace(/\*\*([^*]+)\*\*/g,"<b>$1</b>").replace(/\[([^\]]+)\]\(([^)]+)\)/g,'<a href="$2" target="_blank">$1</a>');
+ const L=t.split("\n"),o=[];let i=0;
+ while(i<L.length){const l=L[i];
+  if(l.startsWith("```")){const c=[];i++;while(i<L.length&&!L[i].startsWith("```"))c.push(L[i++]);i++;o.push("<pre>"+esc(c.join("\n"))+"</pre>");continue}
+  if(l.startsWith("|")){const r=[];while(i<L.length&&L[i].startsWith("|"))r.push(L[i++]);const cells=x=>x.replace(/^\||\|$/g,"").split("|").map(c=>inl(c.trim()));
+   o.push("<table><tr>"+cells(r[0]).map(c=>"<th>"+c+"</th>").join("")+"</tr>"+r.slice(2).map(x=>"<tr>"+cells(x).map(c=>"<td>"+c+"</td>").join("")+"</tr>").join("")+"</table>");continue}
+  const h=/^(#{1,4}) (.*)/.exec(l);if(h){o.push(`<h${h[1].length+1}>${inl(h[2])}</h${h[1].length+1}>`);i++;continue}
+  if(/^[-*] /.test(l)){const r=[];while(i<L.length&&/^[-*] /.test(L[i]))r.push("<li>"+inl(L[i++].slice(2))+"</li>");o.push("<ul>"+r.join("")+"</ul>");continue}
+  if(!l.trim()){i++;continue}
+  const p=[];while(i<L.length&&L[i].trim()&&!/^(#|\||```|[-*] )/.test(L[i]))p.push(L[i++]);o.push("<p>"+inl(p.join(" "))+"</p>")}
+ return o.join("")}
+function docView(){return `<div class="muted" style="margin-bottom:8px">${esc(D.doc.path)}</div><div class="card pad" style="max-width:900px">${md(D.doc.md)}</div>`}
 function pick(i){D=ALL.runs[i];F={arm:"",scene:"",outcome:"",cause:"",q:""};PL={sel:null,ref:"",full:false};C={a:"",b:"",cam:"agentview"};header();show(EXP()?"about":"dash")}
 function header(){const n=D.samples.reduce((a,s)=>a+s.tokens_new,0);
  $("#rn").innerHTML=`<select onchange="pick(this.value)" title="Run">${ALL.runs.map((r,i)=>`<option value="${i}" ${r===D?"selected":""}>${esc(r.name)} · ${esc(r.date)} · ${r.samples.length} samples</option>`).join("")}</select>`;$("#hd").innerHTML=chip(RO().length+" rollouts")+chip(n.toLocaleString()+" new tokens")+chip("≈ "+usd(n),"acc")}
 function nav(c){const by={};D.samples.forEach(s=>(by[s.arm]??=[]).push(s));const sel=c.startsWith("r:")?"rollouts":c;
  const b=(id,t)=>`<button class="${sel===id?"on":""}" onclick="show('${id}')">${t}</button>`;
- let h=(EXP()?b("about","About this run")+b("results","Results")+b("scene","Scene"):"")+b("dash","Dashboard")+b("rollouts","Rollouts ("+RO().length+")")+b("compare","Compare")+b("matched","Matched")+b("policies","Policies")+b("system2","System 2"+((D.system2||[]).length?" ("+D.system2.length+")":""))+b("events","Events ("+D.events.length+")");
+ let h=(EXP()?b("about","About this run")+b("results","Results")+b("scene","Scene"):"")+(D.doc?b("doc","Doc"):"")+b("dash","Dashboard")+b("rollouts","Rollouts ("+RO().length+")")+b("compare","Compare")+b("matched","Matched")+b("policies","Policies")+b("system2","System 2"+((D.system2||[]).length?" ("+D.system2.length+")":""))+b("events","Events ("+D.events.length+")");
  for(const arm in by){h+=`<h4>${esc(arm)} · trace</h4>`+by[arm].map(s=>{const e=evalSum(s);return `<button class="${c===s.id?"on":""}" onclick="show('${s.id}')">${s.exp?s.exp.level+" · "+((D.config.levels||{})[s.exp.level]||{}).title:"sample "+s.sample+" · T "+s.temperature}<div class="sub">${solved(s)?"✓ solved debug":"✗ not solved"} · ${Object.entries(e).map(([k,v])=>k+" "+v.ok+"/"+v.n).join(" · ")||"no eval"}</div></button>`}).join("")}
  $("#nav").innerHTML=h}
 function show(id,keep){const y=window.scrollY;stopPlayer();if(id==="overview")id="dash";cur=id;location.hash=encodeURIComponent(D.name)+"|"+id;nav(id);const m=$("#main");
- if(id==="dash")m.innerHTML=dash();else if(id==="about")m.innerHTML=expAbout();else if(id==="results")m.innerHTML=expResults();else if(id==="scene")m.innerHTML=expScene();else if(id==="rollouts")m.innerHTML=rollouts();else if(id==="events")m.innerHTML=events();else if(id==="system2")m.innerHTML=system2();
+ if(id==="dash")m.innerHTML=dash();else if(id==="about")m.innerHTML=expAbout();else if(id==="doc")m.innerHTML=docView();else if(id==="results")m.innerHTML=expResults();else if(id==="scene")m.innerHTML=expScene();else if(id==="rollouts")m.innerHTML=rollouts();else if(id==="events")m.innerHTML=events();else if(id==="system2")m.innerHTML=system2();
  else if(id==="matched")m.innerHTML=matched();else if(id==="policies")m.innerHTML=policies();else if(id==="compare"){m.innerHTML=compare();mount([byId(C.a),byId(C.b)].filter(Boolean),"cmp")}
  else if(id.startsWith("r:")){const r=byId(id.slice(2));if(!r){m.innerHTML="<p>rollout not found</p>";return}m.innerHTML=explorer(r);mount([r],"single")}
  else{const s=smp(id);m.innerHTML=s?sample(s):"<p>not found</p>"}

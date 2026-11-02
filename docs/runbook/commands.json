@@ -789,7 +789,7 @@
     {
       "id": "exp06",
       "title": "Exp 06 to 08: cuRobo on perception, scene understanding off, perceived, privileged",
-      "status": "running (started 2026-11-02)",
+      "status": "done (see experiment-06-08-curobo.md)",
       "kind": "experiment",
       "question": "With cuRobo planning on the depth cloud (SAM 3 robot mask), does a scene description in the first prompt and contact evidence in repairs help, and how much does perception cost against a digital twin?",
       "doc": "docs/synthesizer/experiment-06-08-curobo.md",
@@ -817,7 +817,7 @@
       "outputs": [
         "data/runs/curobo/"
       ],
-      "result": "Running; results will be filled in from data/runs/curobo only."
+      "result": "9 runs: solved 1 of 3 (06), 2 of 3 (07), 2 of 3 (08); no blocking contact in any rollout. See the doc."
     }
   ],
   "commands": [

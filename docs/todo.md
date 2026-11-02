@@ -209,7 +209,7 @@ uv run python -m ants.orchestrator.perceived_scene --analyse \
     --out data/runs/exp05_perceived_scene
 ```
 
-**Exp 06 to 08: cuRobo on perception, scene understanding off, perceived, privileged** (running (started 2026-11-02))
+**Exp 06 to 08: cuRobo on perception, scene understanding off, perceived, privileged** (done (see experiment-06-08-curobo.md))
 
 ```bash
 uv run python -m ants.orchestrator.exp_curobo \

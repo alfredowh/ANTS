@@ -53,6 +53,7 @@ def argv_for(exp: str, arm: str, token_budget: int, root: Path) -> list[str]:
         "--debug-scene", "scaled", "--scenes", "scaled", "--eval-seeds", "",
         "--planner", cfg["planner"], "--ontop-area", "0.5", "--contacts",
         "--evidence", cfg["evidence"], "--token-budget", str(token_budget),
+        "--doc", "docs/synthesizer/experiment-06-08-curobo.md",
     ]  # fmt: skip
     if cfg["scene"]:
         argv += ["--scene-text-file", cfg["scene"]]

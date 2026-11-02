@@ -249,6 +249,9 @@ def main(argv: list[str] | None = None) -> int:
         "--ontop-area", type=float, default=None,
         help="'bowl on plate' passes when this share of the bowl footprint lies inside the plate",
     )  # fmt: skip
+    p.add_argument(
+        "--doc", default=None, help="write-up (repo path) shown in the run viewer's Doc tab"
+    )
     p.add_argument("--model", default="muse-wonder-1.0")
     p.add_argument(
         "--token-budget", type=int, default=600_000,
