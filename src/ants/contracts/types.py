@@ -129,7 +129,7 @@ class Skill:
 
 @dataclass(frozen=True)
 class Policy:
-    """System 1's output: a program defining `run(robot, params)` plus its demo data."""
+    """System 1's output: a program (see `entry_format`) plus its demo data."""
 
     policy_id: str  # stable across versions of one skill
     version: int
@@ -140,10 +140,21 @@ class Policy:
     constraints: tuple[str, ...] = ()  # constraint ids this version claims to satisfy
     skills_used: tuple[SkillRef, ...] = ()  # library skills inlined in `code` or read as guidance
     demo_id: str | None = None
+    # False = outcomes can vary run to run, so the gate must use several rollouts per case.
+    deterministic: bool = False
+    metadata: Mapping[str, Any] = field(default_factory=dict)  # model, prompt hash, tokens, ...
+    # (min, max) per key of `params` that is worth attacking; System 2 stays inside it.
+    attack_ranges: Mapping[str, tuple[float, float]] = field(default_factory=dict)
+    # Open string. "run_function": `def run(robot, params)`. "script": top-level code that sets
+    # a top-level `result`; the backend wraps it.
+    entry_format: str = "run_function"
 
     def __post_init__(self) -> None:
         if self.version < 0:
             raise ValueError(f"version must be >= 0, got {self.version}")
+        for name, (lo, hi) in self.attack_ranges.items():
+            if lo > hi:
+                raise ValueError(f"attack_ranges[{name!r}] has min {lo} > max {hi}")
 
     def to_dict(self) -> dict[str, Any]:
         return to_dict(self)
@@ -154,6 +165,10 @@ class Policy:
             **{
                 **d,
                 "params": dict(d.get("params", {})),
+                "metadata": dict(d.get("metadata", {})),
+                "attack_ranges": {
+                    k: (float(r[0]), float(r[1])) for k, r in d.get("attack_ranges", {}).items()
+                },
                 "constraints": tuple(d.get("constraints", ())),
                 "skills_used": tuple(SkillRef(**s) for s in d.get("skills_used", ())),
             }
