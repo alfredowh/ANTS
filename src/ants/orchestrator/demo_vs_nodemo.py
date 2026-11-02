@@ -22,6 +22,7 @@ from pathlib import Path
 
 from ants.adversary.rollout import CapHarness, feedback
 from ants.contracts import CaseSpec, to_json
+from ants.evalkit.contacts import analyse, evidence_text
 from ants.evalkit.runlog import RunLog, unified_diff
 from ants.synthesizer.generator import build_messages, extract_code, repair_message
 from ants.synthesizer.llm import BudgetExceeded, ChatClient, load_dotenv
@@ -47,7 +48,12 @@ def run_sample(
     rel = f"{arm}/sample{sample}"
     api_ref = (args.aspire / "docs" / "api-reference.md").read_text(encoding="utf-8")
     example = (args.aspire / EXAMPLE).read_text(encoding="utf-8")
-    messages = build_messages(api_ref, example, EXAMPLE_TASK, args.task, demo_summary)
+    scene_text = None
+    if args.scene_text_file:
+        scene_text = args.scene_text_file.read_text(encoding="utf-8").strip()
+    messages = build_messages(
+        api_ref, example, EXAMPLE_TASK, args.task, demo_summary, scene_context=scene_text
+    )
     record: dict = {"arm": arm, "sample": sample, "temperature": temperature, "attempts": []}
     debug_case = CaseSpec(
         f"debug-{args.debug_seed}", args.suite, args.task_id, args.debug_seed, "acceptance"
@@ -81,12 +87,28 @@ def run_sample(
             from_cache=reply.from_cache, lines=len(text.splitlines()),
             diff_lines=len(diff.splitlines()),
         )  # fmt: skip
-        trace = harnesses[args.debug_scene].run(
+        harness = harnesses[args.debug_scene]
+        contacts = out / f"debug_attempt{attempt}" / "contacts.jsonl"
+        if args.contacts:
+            harness.scene = {**(harness.scene or {}), "contacts": {"path": str(contacts)}}
+        trace = harness.run(
             debug_case, program, out / f"debug_attempt{attempt}", f"{arm}-s{sample}-a{attempt}"
         )
+        analysis = None
+        if args.contacts and trace.run_dir:
+            try:
+                dump = json.loads(contacts.with_name("contacts_scene.json").read_text("utf-8"))
+                analysis = analyse(
+                    contacts, Path(trace.run_dir), dump, tuple(dump["bodies"]["robot0_base"]["pos"])
+                )
+            except Exception as err:  # keep the run going; the evidence is optional
+                log.event("contact_analysis_failed", arm=arm, attempt=attempt, error=str(err)[:200])
         record["attempts"].append(
             {"attempt": attempt, "role": role, "tokens": tokens,
-             "from_cache": reply.from_cache, "trace": json.loads(to_json(trace))}
+             "from_cache": reply.from_cache, "trace": json.loads(to_json(trace)),
+             "blocking": [(e["part"], e["object"], e["n_steps"]) for e in analysis["blocking"]]
+             if analysis else None,
+             "clean_success": bool(trace.task_success and analysis and not analysis["blocking"])}
         )  # fmt: skip
         log.event(
             "rollout", arm=arm, sample=sample, attempt=attempt, seed=args.debug_seed,
@@ -102,7 +124,16 @@ def run_sample(
         fb = feedback(Path(trace.run_dir))
         log.write_json(f"{rel}/feedback_attempt{attempt}.json", fb)
         log.event("feedback", arm=arm, sample=sample, attempt=attempt, keys=sorted(fb))
-        messages = [*messages, {"role": "assistant", "content": reply.text}, repair_message(fb)]
+        repair = repair_message(fb, args.explain)
+        if args.evidence == "e3" and analysis:
+            base_z = dump["bodies"]["robot0_base"]["pos"][2]
+            parts = ["Evidence from the simulator for this failed run:",
+                     evidence_text(analysis, dump, base_z, 3)]  # fmt: skip
+            if scene_text:
+                parts += ["", scene_text]
+            repair = {**repair, "content": repair["content"] + "\n\n" + "\n".join(parts)}
+            log.write(f"{rel}/evidence_attempt{attempt}.txt", "\n".join(parts))
+        messages = [*messages, {"role": "assistant", "content": reply.text}, repair]
     record["evaluation"] = []
     if program is not None:
         for scene, harness in harnesses.items():
@@ -191,8 +222,33 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--task-id", type=int, default=8)
     p.add_argument("--task", default="put the bowl on the plate")
     p.add_argument("--debug-seed", type=int, default=51)
-    p.add_argument("--eval-seeds", default="51,52,53,54,55")
+    p.add_argument("--eval-seeds", default="51,52,53,54,55", help="empty string: no evaluation")
     p.add_argument("--repairs", type=int, default=4)
+    p.add_argument(
+        "--explain", action="store_true",
+        help="repair replies start with a 'WHY:' rationale (the API returns no reasoning text)",
+    )  # fmt: skip
+    p.add_argument(
+        "--scene-text-file", type=Path, default=None,
+        help="scene description (e.g. S4) added to the first prompt and to every repair",
+    )  # fmt: skip
+    p.add_argument(
+        "--evidence", default="none", choices=["none", "e3"],
+        help="e3: repair message adds the contact log, the scene text and the stall readings",
+    )  # fmt: skip
+    p.add_argument(
+        "--contacts", action="store_true",
+        help="log simulator contacts per attempt (evaluation only unless --evidence is set)",
+    )  # fmt: skip
+    p.add_argument(
+        "--planner", default="default", choices=["default", "curobo-sam3", "curobo-sim"],
+        help="curobo-sam3: cuRobo on the depth cloud, robot masked by SAM 3; curobo-sim: robot "
+        "masked by the simulator (digital twin)",
+    )  # fmt: skip
+    p.add_argument(
+        "--ontop-area", type=float, default=None,
+        help="'bowl on plate' passes when this share of the bowl footprint lies inside the plate",
+    )  # fmt: skip
     p.add_argument("--model", default="muse-wonder-1.0")
     p.add_argument(
         "--token-budget", type=int, default=600_000,
@@ -214,7 +270,7 @@ def main(argv: list[str] | None = None) -> int:
         help="no generation: re-score the final programs of an existing --out run in --scenes",
     )  # fmt: skip
     args = p.parse_args(argv)
-    args.eval_seeds = [int(s) for s in args.eval_seeds.split(",")]
+    args.eval_seeds = [int(s) for s in args.eval_seeds.split(",") if s.strip()]
     args.aspire = args.aspire.resolve()
     args.out = args.out.resolve()
     load_dotenv(Path(".env"))
@@ -223,6 +279,13 @@ def main(argv: list[str] | None = None) -> int:
     base_spent = client.spent()
     client.token_budget = base_spent + args.token_budget
     launcher = Path(__file__).resolve().parents[3] / "tools" / "aspire_launch.py"
+    extra: dict = {}
+    if args.planner != "default":
+        extra["planner"] = {"mode": args.planner, "exclude_radius_m": 0.12}
+    if args.ontop_area is not None:
+        extra["ontop"] = {"rule": "area", "min_fraction": args.ontop_area}
+    if args.evidence != "none":
+        args.contacts = True
     harnesses = {}
     for scene in args.scenes.split(","):
         if scene == "stock":
@@ -231,7 +294,7 @@ def main(argv: list[str] | None = None) -> int:
             harnesses[scene] = CapHarness(
                 args.aspire,
                 launcher=launcher,
-                scene={"scale": {"bodies": json.loads(args.scale_json)}},
+                scene={"scale": {"bodies": json.loads(args.scale_json)}, **extra},
             )
         else:
             raise SystemExit(f"unknown scene {scene!r} (stock, scaled)")
