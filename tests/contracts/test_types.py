@@ -108,7 +108,7 @@ def test_success_report_has_no_failure(report):
 
 
 def test_feedback_from_report(report):
-    fb = Feedback.from_report(report)
+    fb = Feedback.from_report(report, _case(Split.ACCEPTANCE))
     assert fb.case == report.perturbation
     assert fb.constraint.target is BlameTarget.PROGRAM
     assert Feedback.from_dict(_json(fb)) == fb
@@ -123,7 +123,7 @@ def test_feedback_requires_failure(report):
         RolloutResult(Outcome.SUCCESS),
     )
     with pytest.raises(ValueError):
-        Feedback.from_report(ok)
+        Feedback.from_report(ok, _case(Split.ACCEPTANCE))
 
 
 def test_perturbation_key_ignores_rationale_and_order():
@@ -240,10 +240,25 @@ def test_held_out_case_cannot_produce_feedback(report):
         Feedback.from_report(report, test_case=_case(Split.HELD_OUT))
 
 
+def test_feedback_cannot_be_built_without_a_case(report):
+    """No path skips the guard: the case is required, typed, and checked on load too."""
+    fb = Feedback.from_report(report, _case(Split.ACCEPTANCE))
+    fields_no_case = {k: v for k, v in fb.__dict__.items() if k != "test_case"}
+    with pytest.raises(TypeError):
+        Feedback(**fields_no_case)
+    with pytest.raises(TypeError):
+        Feedback(**{**fb.__dict__, "test_case": None})
+    with pytest.raises(TypeError):
+        Feedback.from_report(report)
+    held_out = {**_json(fb), "test_case": _case(Split.HELD_OUT).to_dict()}
+    with pytest.raises(ValueError, match="held-out"):
+        Feedback.from_dict(held_out)
+
+
 def test_details_mappings_round_trip(report):
     rollout = RolloutResult(Outcome.FAILURE, details={"calls": [{"name": "move_to_pose"}]})
     assert RolloutResult.from_dict(_json(rollout)) == rollout
-    fb = Feedback.from_report(report)
+    fb = Feedback.from_report(report, _case(Split.ACCEPTANCE))
     fb = Feedback(**{**fb.__dict__, "details": {"trace": "t.jsonl"}})
     assert Feedback.from_dict(_json(fb)).details == {"trace": "t.jsonl"}
 
