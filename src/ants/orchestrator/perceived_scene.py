@@ -36,6 +36,7 @@ from ants.adversary.collision_world import (
     relations,
 )
 from ants.evalkit.panda import flange_position, spheres
+from ants.synthesizer.sam_api import add_sam_model_arg, normalize_sam_model
 
 Pt = tuple[float, float, float]
 LEVEL_DUMP = Path("data/scenes/L1/contacts_scene.json")
@@ -649,8 +650,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--analyse", action="store_true", help="offline analysis of the saved perception"
     )
+    add_sam_model_arg(p)
     args = p.parse_args(argv)
     args.out.mkdir(parents=True, exist_ok=True)
+    (args.out / "sam_model.json").write_text(
+        json.dumps({"sam_model": normalize_sam_model(args.sam_model)}), encoding="utf-8"
+    )
     if args.probe:
         probe(args)
     if args.analyse or not args.probe:

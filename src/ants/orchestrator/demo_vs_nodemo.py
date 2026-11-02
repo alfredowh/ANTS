@@ -26,6 +26,7 @@ from ants.evalkit.contacts import analyse, evidence_text
 from ants.evalkit.runlog import RunLog, unified_diff
 from ants.synthesizer.generator import build_messages, extract_code, repair_message
 from ants.synthesizer.llm import BudgetExceeded, ChatClient, load_dotenv
+from ants.synthesizer.sam_api import add_sam_model_arg, normalize_sam_model
 
 EXAMPLE = "examples/libero/object_swap_seed1.py"
 EXAMPLE_TASK = "pick up the alphabet soup and place it in the basket"
@@ -269,6 +270,7 @@ def main(argv: list[str] | None = None) -> int:
         help="curobo-sam3: cuRobo on the depth cloud, robot masked by SAM 3; curobo-sim: robot "
         "masked by the simulator (digital twin)",
     )  # fmt: skip
+    add_sam_model_arg(p)
     p.add_argument(
         "--attach-known", action="store_true",
         help="while the bowl is held, attach spheres of the bowl's KNOWN size to the hand "
@@ -317,7 +319,14 @@ def main(argv: list[str] | None = None) -> int:
     launcher = Path(__file__).resolve().parents[3] / "tools" / "aspire_launch.py"
     extra: dict = {}
     if args.planner != "default":
-        extra["planner"] = {"mode": args.planner, "exclude_radius_m": 0.12}
+        mode = args.planner
+        if normalize_sam_model(args.sam_model) == "sam-3.1" and mode == "curobo-sam3":
+            mode = "curobo-sam31"  # same cloud, robot/bowl masked via the Meta sam-3.1 API
+        extra["planner"] = {
+            "mode": mode,
+            "exclude_radius_m": 0.12,
+            "sam_model": normalize_sam_model(args.sam_model),
+        }
     if args.attach_known:
         if "planner" not in extra:
             raise SystemExit("--attach-known needs --planner curobo-sam3 or curobo-sim")
@@ -358,6 +367,7 @@ def main(argv: list[str] | None = None) -> int:
     log.event(
         "run_start", token_budget=args.token_budget, usd_per_mtok=args.usd_per_mtok,
         model=args.model, ledger_spent_at_start=base_spent,
+        sam_model=normalize_sam_model(args.sam_model),
     )  # fmt: skip
     records = []
     temps = [float(t) for t in args.temperatures.split(",")]

@@ -28,6 +28,7 @@ import traceback
 from pathlib import Path
 
 from ants.orchestrator import demo_vs_nodemo
+from ants.synthesizer.sam_api import add_sam_model_arg, normalize_sam_model
 
 ARMS = {
     "clip_233859": ("demo", "data/demospecs/hurobo_233859.json"),
@@ -66,16 +67,26 @@ DOCS = {
 }
 
 
-def argv_for(exp: str, arm: str, token_budget: int, root: Path) -> list[str]:
+def argv_for(
+    exp: str,
+    arm: str,
+    token_budget: int,
+    root: Path,
+    sam_model: str = "sam3",
+) -> list[str]:
     cfg = EXPERIMENTS[exp]
     kind, spec = ARMS[arm]
+    planner = cfg["planner"]
+    if normalize_sam_model(sam_model) == "sam-3.1" and planner == "curobo-sam3":
+        planner = "curobo-sam31"
     argv = [
         "--aspire", "../ASPIRE", "--demospec", spec, "--out", str(root / exp / arm),
         "--arms", kind, "--temperatures", "0.2", "--explain", "--repairs", "4",
         "--debug-scene", "scaled", "--scenes", "scaled", "--eval-seeds", "",
-        "--planner", cfg["planner"], "--ontop-area", "0.5", "--contacts",
+        "--planner", planner, "--ontop-area", "0.5", "--contacts",
         "--evidence", cfg["evidence"], "--token-budget", str(token_budget),
         "--doc", DOCS["attach" if cfg.get("attach") else "plain"],
+        "--sam-model", sam_model,
     ]  # fmt: skip
     if cfg["scene"]:
         argv += ["--scene-text-file", cfg["scene"]]
@@ -112,6 +123,7 @@ def main(argv: list[str] | None = None) -> int:
     )  # fmt: skip
     p.add_argument("--root", type=Path, default=Path("data/runs/curobo"))
     p.add_argument("--print", action="store_true", help="print the commands and stop")
+    add_sam_model_arg(p)
     args = p.parse_args(argv)
     exps, arms = args.exp.split(","), args.arms.split(",")
     pairs = [(e, a) for a in arms for e in exps]
@@ -124,7 +136,7 @@ def main(argv: list[str] | None = None) -> int:
             if spent >= args.total_token_budget:
                 print(f"token budget used up ({spent} >= {args.total_token_budget}); stopping")
                 break
-        cmd = argv_for(exp, arm, args.token_budget, args.root)
+        cmd = argv_for(exp, arm, args.token_budget, args.root, args.sam_model)
         if args.print:
             print("uv run python -m ants.orchestrator.demo_vs_nodemo", *cmd)
             continue

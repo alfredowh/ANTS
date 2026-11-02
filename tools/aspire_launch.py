@@ -22,7 +22,9 @@ perturbation.json (every key optional):
      "contacts":  {"path": "run/contacts.jsonl"},
      "ablate":    {"bodies": ["wine_rack"]},
      "ontop":     {"rule": "area", "min_fraction": 0.5},
-     "planner":   {"mode": "curobo-sam3", "exclude_radius_m": 0.12}}
+     "planner":   {"mode": "curobo-sam3", "exclude_radius_m": 0.12}
+               {"mode": "curobo-sam31", ...} routes robot/bowl masks through the
+               Meta Model API sam-3.1 (needs META_API_KEY; box approximation)}
 
 "ablate" switches off all collisions of every geom whose body name contains one of the strings
 (counterfactual: would the run still stall without that object?). Diagnosis only.
@@ -42,15 +44,18 @@ used by mistake).
 "planner" makes every motion plan use cuRobo (`MotionStrategy(trajectory_planner="curobo")` as the
 harness default) and builds the planning cloud without robot pixels. mode "curobo-sam3": the robot
 mask comes from SAM 3 prompts "robot arm" and "robot gripper" (no simulator state). Mode
+"curobo-sam31": the same prompts go to the Meta Model API model sam-3.1 (needs META_API_KEY;
+box approximation of the pixel masks until the pixel decoder lands). Mode
 "curobo-sim": the mask comes from MuJoCo's segmentation render (privileged, a digital twin).
 `exclude_radius_m` drops cloud points within r of the manipulated object. `cloud_dir` saves every
 planning cloud (debugging). `attach` {"file", "profile", "sphere_r", "query", "body", "body_main"}:
 while the gripper is closed on the bowl, its points are removed from the planning cloud and spheres
 that cover a bowl of the KNOWN outer-radius profile (`profile`: [[height, radius], ...]) are written
 to `file`, in the hand frame, for the dev cuRobo service (`service_dev.py`, ANTS_ATTACH_FILE) to
-attach to the hand. The bowl's points come from the SAM 3 text `query` (curobo-sam3) or from the
-simulator's segmentation of `body` (curobo-sim); the axis comes from a fit to the visible rim
-(curobo-sam3) or from the simulator box of `body_main` (curobo-sim). The cuRobo service
+attach to the hand. The bowl's points come from the SAM 3 text `query` (curobo-sam3), the sam-3.1
+boxes for `query` (curobo-sam31) or the simulator's segmentation of `body` (curobo-sim); the axis
+comes from a fit to the visible rim (curobo-sam3/31) or from the simulator box of `body_main`
+(curobo-sim). The cuRobo service
 (`dev/curobo/service_dev.py`, carve margin ANTS_CARVE_MARGIN_M) must be running.
 
 "bodies" in physics match by substring of the MuJoCo body name. "scale" rebuilds the scene
@@ -60,10 +65,16 @@ LIBERO's 0.03 m "on top of" centre tolerance by the target's factor (`scale_onto
 
 from __future__ import annotations
 
+import base64
 import collections
 import json
+import os
+import re
+import struct
 import sys
+import urllib.request
 import xml.etree.ElementTree as ET
+import zlib
 from pathlib import Path
 
 import numpy as np
@@ -265,6 +276,87 @@ def scale_ontop_tolerance(factors: dict[str, float], area_fraction: float | None
 
 LIVE: dict = {}
 ROBOT_PROMPTS = ("robot arm", "robot gripper")
+SAM31_MODEL = "sam-3.1"
+SAM31_API = "https://api.meta.ai/v1/responses"
+SAM31_TIMEOUT_S = 60.0
+
+
+def _encode_rgb_png(image: np.ndarray) -> bytes:
+    """Minimal RGB PNG encoder (stdlib only): the launcher cannot assume Pillow."""
+    if np.issubdtype(image.dtype, np.floating):
+        rgb = np.rint(image * 255.0).astype(np.uint8)
+    else:
+        rgb = image.astype(np.uint8, copy=False)
+    height, width, _ = rgb.shape
+    raw = b"".join(b"\x00" + row.tobytes() for row in rgb)
+
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        checksum = zlib.crc32(kind)
+        checksum = zlib.crc32(payload, checksum) & 0xFFFFFFFF
+        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", checksum)
+
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+    return (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", ihdr)
+        + chunk(b"IDAT", zlib.compress(raw))
+        + chunk(b"IEND", b"")
+    )
+
+
+def _sam31_boxes(png: bytes, prompt: str) -> list[tuple[int, int, int, int]]:
+    """Pixel boxes from the Meta Model API model sam-3.1 for one image and prompt.
+
+    Box edges are inclusive (x2 == right - 1). Raises RuntimeError without
+    META_API_KEY or on a non-completed response.
+    """
+    key = os.environ.get("META_API_KEY", "")
+    if not key:
+        raise RuntimeError("curobo-sam31 needs META_API_KEY in the environment (ANTS/.env)")
+    body = json.dumps(
+        {
+            "model": SAM31_MODEL,
+            "input": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "input_text", "text": prompt},
+                        {
+                            "type": "input_image",
+                            "image_url": "data:image/png;base64,"
+                            + base64.b64encode(png).decode("ascii"),
+                        },
+                    ],
+                }
+            ],
+        }
+    ).encode("utf-8")
+    req = urllib.request.Request(
+        SAM31_API,
+        data=body,
+        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+    )
+    with urllib.request.urlopen(req, timeout=SAM31_TIMEOUT_S) as resp:
+        data = json.loads(resp.read().decode("utf-8"))
+    if data.get("status") not in (None, "completed"):
+        raise RuntimeError(f"sam-3.1 response not completed: {data.get('status')!r}")
+    boxes = []
+    for item in data.get("output") or []:
+        for part in item.get("content") or []:
+            if part.get("type") == "output_text" and part.get("text"):
+                for m in re.finditer(r"<\|box;x1=(\d+);y1=(\d+);x2=(\d+);y2=(\d+);", part["text"]):
+                    boxes.append(tuple(int(v) for v in m.groups()))  # type: ignore[misc]
+    return boxes
+
+
+def _sam31_union(shape: tuple[int, int], png: bytes, prompts) -> np.ndarray:
+    """Union of sam-3.1 box records as a bool mask (box approximation of pixel masks)."""
+    height, width = shape
+    union = np.zeros((height, width), dtype=bool)
+    for prompt in prompts:
+        for x1, y1, x2, y2 in _sam31_boxes(png, prompt):
+            union[max(0, y1) : min(height, y2 + 1), max(0, x1) : min(width, x2 + 1)] = True
+    return union
 
 
 def install_curobo_planning(cfg: dict) -> None:
@@ -276,7 +368,7 @@ def install_curobo_planning(cfg: dict) -> None:
     from scipy.spatial import cKDTree
 
     mode = cfg.get("mode", "curobo-sam3")
-    if mode not in ("curobo-sam3", "curobo-sim"):
+    if mode not in ("curobo-sam3", "curobo-sam31", "curobo-sim"):
         raise SystemExit(f"unknown planner mode {mode!r}")
     default = MotionStrategy(trajectory_planner="curobo")
     init = CapApi.__init__
@@ -297,6 +389,25 @@ def install_curobo_planning(cfg: dict) -> None:
                 for seg in result.segmentations:
                     union |= np.asarray(seg.mask, dtype=bool)
         print(f"[ants-robot-mask] sam3 {camera_name}: {int(union.sum())} px", file=sys.stderr)
+        return binary_dilation(union, iterations=3)
+
+    def sam31_pixels(api, camera_name, observation) -> np.ndarray:
+        cam = observation.cameras[camera_name]
+        shape = cam.depth_m.shape
+        try:
+            png = _encode_rgb_png(np.asarray(cam.rgb))
+            union = _sam31_union(shape, png, ROBOT_PROMPTS)
+        except Exception as err:  # fail open: keep robot points rather than clear the cloud
+            print(
+                f"[ants-robot-mask] sam31 {camera_name} failed "
+                f"({type(err).__name__}: {err}); keeping robot pixels",
+                file=sys.stderr,
+            )
+            return np.zeros(shape, dtype=bool)
+        print(
+            f"[ants-robot-mask] sam31 {camera_name}: {int(union.sum())} px (box approx)",
+            file=sys.stderr,
+        )
         return binary_dilation(union, iterations=3)
 
     renderers: dict = {}
@@ -336,6 +447,8 @@ def install_curobo_planning(cfg: dict) -> None:
         if isinstance(mask, np.ndarray) and mask.dtype == bool and "env" in LIVE:
             if mode == "curobo-sam3":
                 robot = sam3_pixels(self, camera_name, observation)
+            elif mode == "curobo-sam31":
+                robot = sam31_pixels(self, camera_name, observation)
             else:
                 robot = sim_pixels(camera_name, observation.cameras[camera_name].depth_m)
             mask = mask & ~robot
@@ -374,7 +487,7 @@ def install_curobo_planning(cfg: dict) -> None:
                 fh.write(json.dumps({"n_spheres": len(spheres)}) + "\n")
 
         def bowl_points(api, observation, frame: str) -> np.ndarray:
-            """Base-frame points of the bowl: SAM 3 mask (curobo-sam3) or simulator render."""
+            """Base-frame points of the bowl: SAM mask (curobo-sam3/31) or simulator render."""
             clouds = []
             for camera in observation.cameras:
                 depth = observation.cameras[camera].depth_m
@@ -385,6 +498,16 @@ def install_curobo_planning(cfg: dict) -> None:
                         if result.ok
                         else []
                     )
+                elif mode == "curobo-sam31":
+                    try:
+                        png = _encode_rgb_png(np.asarray(observation.cameras[camera].rgb))
+                        masks = [_sam31_union(depth.shape, png, (attach["query"],))]
+                    except Exception as err:
+                        print(
+                            f"[ants-attach] sam31 {camera} failed ({type(err).__name__}: {err})",
+                            file=sys.stderr,
+                        )
+                        masks = []
                 else:
                     masks = [sim_pixels(camera, depth, attach["body"])]
                 for mask in masks:
@@ -449,7 +572,7 @@ def install_curobo_planning(cfg: dict) -> None:
                         print("[ants-attach] released", file=sys.stderr)
                     return scene
                 if "local" not in held_state:
-                    if mode == "curobo-sam3":
+                    if mode in ("curobo-sam3", "curobo-sam31"):
                         centre = fit_axis(bowl, max(r for _, r in profile))
                         z_bottom = float(bowl[:, 2].max()) - max(h for h, _ in profile)
                     else:

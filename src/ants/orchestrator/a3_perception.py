@@ -18,6 +18,8 @@ from ants.adversary.collision_world import load_world
 from ants.adversary.rollout import CapHarness
 from ants.contracts import CaseSpec
 from ants.orchestrator.scene_context_exp import load_levels, scene_for, scene_spec
+from ants.synthesizer.llm import load_dotenv
+from ants.synthesizer.sam_api import add_sam_model_arg, normalize_sam_model
 
 KEYS = {
     "bowl": "bowl", "plate": "plate", "wine_rack": "wine rack", "wine_bottle": "wine bottle",
@@ -87,7 +89,9 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--aspire", type=Path, required=True)
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--levels-file", type=Path, default=Path("data/scenes/levels.json"))
+    add_sam_model_arg(p)
     args = p.parse_args(argv)
+    load_dotenv(Path(".env"))
     levels = load_levels(args.levels_file)
     result = {}
     for name, level in levels.items():
@@ -103,6 +107,13 @@ def main(argv: list[str] | None = None) -> int:
             result[name] = {"error": str(err)[:300]}
             print(name, "failed:", err, flush=True)
     args.out.mkdir(parents=True, exist_ok=True)
+    result["_sam_model"] = normalize_sam_model(args.sam_model)
+    if result["_sam_model"] == "sam-3.1":
+        result["_sam31_status"] = (
+            "deferred: probe programs run inside ASPIRE's sandbox (no network), "
+            "so in-sandbox segment_text stays on SAM 3 until ASPIRE gains a 3.1 "
+            "provider; use --sam-model sam3.1 with the cuRobo planner for live 3.1 masks"
+        )
     (args.out / "summary.json").write_text(json.dumps(result), encoding="utf-8")
     return 0
 
