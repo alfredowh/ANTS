@@ -29,7 +29,6 @@ import math
 import random
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from types import SimpleNamespace
 
 from ants.contracts import (
     Event,
@@ -37,7 +36,10 @@ from ants.contracts import (
     LocalizationResult,
     ObjectGeometry,
     Perturbation,
+    PointCloud,
     Pose,
+    RobotState,
+    TaskContext,
 )
 
 BOWL_RADIUS = 0.069  # nominal diameter 0.138 m, as the demo's object constants assume
@@ -48,6 +50,9 @@ BOWL_XY = (0.55, -0.12)
 PLATE_XY = (0.50, 0.16)
 START_EE = (0.40, 0.0, 0.30)
 DOWN_WXYZ = (0.0, 1.0, 0.0, 0.0)  # gripper pointing down
+TASK = TaskContext(
+    "libero_goal_swap", 8, "bowl_on_plate", "put the bowl on the plate", "pick_place"
+)
 GRASP_WINDOW = 0.02  # the wall must lie this close to the finger centre line (open width 8 cm)
 ONTOP_TOLERANCE = 0.03  # LIBERO's on-top centre tolerance, scaled with the plate
 SLIP_RATIO = 3.0  # mass_scale / friction_scale above which a high grasp slips
@@ -65,13 +70,6 @@ def _params(p: Perturbation | None, category: str) -> Mapping[str, float]:
 def _wall_radius(radius: float, height: float, z_rel: float) -> float:
     """The bowl flares from 55% of the rim radius at the base to 100% at the rim."""
     return radius * (0.55 + 0.45 * min(max(z_rel / height, 0.0), 1.0))
-
-
-@dataclass(frozen=True)
-class MockLocalization(LocalizationResult):
-    """cap_harness localization results also carry the segmented point cloud."""
-
-    point_cloud: SimpleNamespace | None = None
 
 
 @dataclass
@@ -126,7 +124,7 @@ class MockEpisode:
     def api(self) -> Mapping[str, object]:
         return {
             "Pose": Pose,
-            "get_task_context": lambda: SimpleNamespace(language="put the bowl on the plate"),
+            "get_task_context": lambda: TASK,
             "get_robot_state": self.get_robot_state,
             "localize_object": self.localize_object,
             "move_to_pose": self.move_to_pose,
@@ -134,9 +132,10 @@ class MockEpisode:
             "open_gripper": self.open_gripper,
         }
 
-    def get_robot_state(self) -> SimpleNamespace:
-        return SimpleNamespace(
-            base_frame="robot_base",
+    def get_robot_state(self) -> RobotState:
+        return RobotState(
+            joint_positions={"primary": ()},  # the toy world has no joints
+            joint_velocities={"primary": ()},
             end_effector_poses={"primary": Pose(tuple(self.ee), self.ee_q)},
             gripper_positions={"primary": 0.04 if self.gripper_open else 0.0},
         )
@@ -160,9 +159,7 @@ class MockEpisode:
             return LocalizationResult(ok=False)
         shifted = [self._as_measured(pt) for pt in points]
         geometry = ObjectGeometry(Pose(self._as_measured(centre)), extents, len(shifted))
-        return MockLocalization(
-            ok=True, geometry=geometry, point_cloud=SimpleNamespace(points=shifted)
-        )
+        return LocalizationResult(ok=True, geometry=geometry, point_cloud=PointCloud(shifted))
 
     def _as_measured(self, point: tuple[float, float, float]) -> tuple[float, float, float]:
         x, y, z = point
