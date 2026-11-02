@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ants.adversary.perturbations import CATEGORIES, Bounds
-from ants.adversary.rollout.runner import DEFAULT_LINE_BUDGET
+from ants.adversary.rollout.runner import DEFAULT_LINE_BUDGET, DEFAULT_TIMEOUT_S
 
 
 @dataclass
@@ -24,7 +24,8 @@ class AdversaryConfig:
     tau: float = 0.1
     stop_quantile: float = 0.95
     seed: int = 0
-    line_budget: int = DEFAULT_LINE_BUDGET
+    line_budget: int = DEFAULT_LINE_BUDGET  # deterministic loop guard: hitting it is a FAILURE
+    rollout_timeout_s: float = DEFAULT_TIMEOUT_S  # wall-clock safety net: hitting it is an ERROR
     history_path: Path | None = None
 
     def __post_init__(self) -> None:

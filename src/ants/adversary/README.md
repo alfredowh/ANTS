@@ -75,9 +75,12 @@ Every proposal passes through here: unknown settings are dropped, missing ones a
 Where the program meets the perturbed world. Two layers:
 
 - **Backend (ASPIRE `cap_harness` on LIBERO-Pro, or the mock world)** builds one episode. It resets the scene with the seed and applies the perturbation: moves the bowl, scales friction, spawns distractors, shifts the camera, dims the lights. It then hands over a robot object with the shared ASPIRE-style primitives (`localize_object`, `generate_grasps`, `select_grasp`, `move_to_pose`, `close_gripper`, `open_gripper`, `phase`). Each primitive logs events as it runs (`grasp_slip`, `collision`, `object_dropped`) and records the last step that completed.
-- **Runner** executes System 1's code against that robot in a sandbox: only a whitelist of basic builtins, the robot as the only thing in scope, and a wall-clock timeout.
+- **Runner** executes System 1's code against that robot with only a whitelist of basic builtins, `import math`, and the robot's functions in scope.
+  - **Not a security boundary.** The whitelist guards against mistakes in generated code, not against hostile code. On the real simulator the program runs inside ASPIRE `cap_harness` in a separate process (System 1's `tools/aspire_launch.py` and rollout: "it runs in ASPIRE's sandbox"), which is the isolation we rely on.
   - A crash in the generated code is an **error**, not a failure, so broken code never inflates the failure statistics.
-  - A timeout is a **failure**.
+  - **Two limits, two meanings:**
+    - *Line budget* (`line_budget`, deterministic): the program executed too many lines, i.e. it looped or kept retrying. This is a **failure** (reason `timeout`): the robot did not finish the task, it reproduces on every OS and seed, and it can become a constraint ("bound the retries").
+    - *Wall clock* (`rollout_timeout_s`, safety net, checked between policy lines, so a slow primitive trips it once it returns): elapsed time depends on the machine and its load (for example GPU contention), not only on the program. It is an **error** (reason `wall_clock_timeout`), so it never becomes a constraint and never counts against a category. A primitive that never returns is stopped by the cap_harness subprocess timeout.
   - Everything is packed into a rollout result: outcome, metrics (for example distance to target), event log, last phase, and video plus keyframes when recording.
 
 ### 6. Success branch
@@ -127,7 +130,9 @@ status = adv.status(policy)  # stop rule: .robust when every category is below Ï
 | `n_agents` | 4 | parallel proposer agents |
 | `tau` | 0.1 | target maximum failure rate per category Ï„ |
 | `stop_quantile` | 0.95 | posterior quantile used by the stop rule |
-| `rollout_timeout_s` | 30 | per-rollout wall clock |
+| `line_budget` | 500,000 | executed policy lines per rollout; exceeding it is a task failure |
+| `rollout_timeout_s` | 900 | per-rollout wall clock, as in System 1's cap_harness rollout (one LIBERO run is ~40 s); exceeding it is an error |
+| `token_budget` (Muse) | 100,000 | new tokens one run may spend, the run-book limit; raise it explicitly with `--token-budget`. When used up, every model role falls back to its rules |
 | `record_failures` | true | video and keyframes for multimodal diagnosis |
 
 ## What System 2 deliberately doesn't do

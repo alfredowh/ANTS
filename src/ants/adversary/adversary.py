@@ -129,7 +129,14 @@ class Adversary:
             }
         chosen = self.planner.last_selection
         notes["selection"] = {"explored": bool(chosen and chosen.explored)}
-        result = run_policy(policy.code, self.backend, perturbation, seed, self.config.line_budget)
+        result = run_policy(
+            policy.code,
+            self.backend,
+            perturbation,
+            seed,
+            self.config.line_budget,
+            self.config.rollout_timeout_s,
+        )
 
         failure = constraint = None
         if result.outcome is Outcome.FAILURE:
@@ -192,6 +199,7 @@ class Adversary:
                 p,
                 p.seed if p is not None and p.seed is not None else seed,
                 self.config.line_budget,
+                self.config.rollout_timeout_s,
             )
             for p in cases
         ]

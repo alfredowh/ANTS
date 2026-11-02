@@ -27,7 +27,10 @@ Owner: Daniel. System 1 (`synthesizer/`) is owned by Alfredo. Only `contracts/` 
 3. **Contracts only across boundaries.** `adversary/` imports from `contracts/` and nothing else in the
    repo. Never import from `synthesizer/`, `orchestrator/` or `evalkit/`.
 4. **Generated code is untrusted.** Policies run sandboxed (restricted builtins, only `RobotAPI` in
-   scope, wall-clock timeout). A crash is `Outcome.ERROR`, never counted as a task failure.
+   scope, wall-clock timeout). A crash is `Outcome.ERROR`, never counted as a task failure. A
+   deterministic line budget catches loops (`FAILURE`, reason `timeout`); the wall clock is a
+   machine-dependent safety net (`ERROR`, reason `wall_clock_timeout`). The whitelist is not a
+   security boundary; on the real simulator ASPIRE's process isolation is.
 5. **Severity is enforced in code, not in prompts.** Every perturbation passes through
    `PerturbationSpace.validate()` (clamp to bounds, severity ≤ ρ) whatever the model returned.
 6. **The loop never crashes on the model.** Model errors, timeouts or invalid JSON fall back to
@@ -79,10 +82,10 @@ FailureHistory ──counts per category──▶ CategorySelector ──categor
 
 ```python
 adv = Adversary.from_config(AdversaryConfig(model="muse-spark", backend="libero"))
-report: AttackReport = adv.attack(policy)              # one cycle
+report: AttackReport = adv.attack(policy)  # one cycle
 results: list[RolloutResult] = adv.replay(policy, ps)  # fixed cases: gate, acceptance, held-out
 cases: list[Perturbation] = adv.discovered_failures()  # F_n
-status: RobustnessStatus = adv.status(policy)          # .robust when max_c Q_0.95(θ_c) < τ
+status: RobustnessStatus = adv.status(policy)  # .robust when max_c Q_0.95(θ_c) < τ
 ```
 
 ### Config (defaults)
@@ -97,7 +100,7 @@ status: RobustnessStatus = adv.status(policy)          # .robust when max_c Q_0.
 | `n_agents` | 4 | M parallel proposers |
 | `tau` | 0.1 | target maximum failure rate per category |
 | `stop_quantile` | 0.95 | stop when every category's upper posterior quantile is below τ |
-| `rollout_timeout_s` | 30 | per-rollout wall clock |
+| `rollout_timeout_s` | 900 | per-rollout wall clock (System 1's cap_harness rollout uses 900; one LIBERO run is ~40 s) |
 | `record_failures` | true | video and keyframes for multimodal diagnosis |
 
 ## Layout to create

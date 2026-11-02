@@ -1,10 +1,17 @@
 """Run one policy script in one episode, and turn the outcome into evidence for the diagnoser.
 
 The policy runs with a whitelist of builtins, `import math` only, and the episode's API as its
-only globals. Instead of a wall clock, a budget of executed lines stops runaway programs: it is
-deterministic, so the same seed gives the same outcome on every OS. A crash is `Outcome.ERROR`,
-never a task failure. This is a guard against mistakes in generated code, not a security
-boundary; on the real simulator, ASPIRE's own sandbox runs the program.
+only globals. This is a guard against mistakes in generated code, NOT a security boundary.
+
+Two limits stop a runaway program, and they mean different things:
+- Line budget (deterministic): too many executed policy lines. The program looped, so this is a
+  task failure, `Outcome.FAILURE` with reason `timeout`, the same on every OS and seed.
+- Wall clock (`timeout_s`, a safety net): checked between policy lines, so it also catches a
+  slow primitive once it returns. Elapsed time depends on the machine and its load (GPU
+  contention), not only on the program, so it is `Outcome.ERROR` with reason
+  `wall_clock_timeout`: it never becomes a constraint and never counts as a task failure.
+A single primitive that never returns cannot be interrupted in-process; the cap_harness backend
+runs each episode in a subprocess with its own timeout for that.
 """
 
 from __future__ import annotations
@@ -27,10 +34,15 @@ _SAFE_BUILTINS = (
 ).split()
 _ALLOWED_IMPORTS = {"math": math}
 DEFAULT_LINE_BUDGET = 500_000
+DEFAULT_TIMEOUT_S = 900.0  # System 1's cap_harness rollout uses the same; one LIBERO run is ~40 s
 _FILENAME = "<policy>"
 
 
 class LineBudgetExceeded(Exception):
+    pass
+
+
+class WallClockExceeded(Exception):
     pass
 
 
@@ -52,10 +64,13 @@ def run_policy(
     perturbation: Perturbation | None,
     seed: int,
     line_budget: int = DEFAULT_LINE_BUDGET,
+    timeout_s: float | None = DEFAULT_TIMEOUT_S,
 ) -> RolloutResult:
     episode = backend.episode(perturbation, seed)
     scope = _scope(episode.api())
     lines = 0
+    t0 = time.perf_counter()
+    deadline = None if timeout_s is None else t0 + timeout_s
 
     def tracer(frame, event, arg):  # noqa: ARG001
         nonlocal lines
@@ -65,9 +80,10 @@ def run_policy(
             lines += 1
             if lines > line_budget:
                 raise LineBudgetExceeded
+            if deadline is not None and time.perf_counter() > deadline:
+                raise WallClockExceeded
         return tracer
 
-    t0 = time.perf_counter()
     stdout = io.StringIO()
     error = None
     timed_out = False
@@ -82,6 +98,8 @@ def run_policy(
             sys.settrace(previous)
     except LineBudgetExceeded:
         timed_out = True
+    except WallClockExceeded:
+        error = f"WallClockExceeded: policy ran longer than {timeout_s} s"
     except Exception as exc:  # generated code may raise anything
         error = f"{type(exc).__name__}: {exc}"
 
@@ -90,7 +108,8 @@ def run_policy(
         events.append(Event(float(len(events)), "terminated", detail={"reason": "timeout"}))
         outcome = Outcome.FAILURE
     elif error is not None:
-        events.append(Event(float(len(events)), "terminated", detail={"reason": "program_error"}))
+        reason = "wall_clock_timeout" if error.startswith("WallClock") else "program_error"
+        events.append(Event(float(len(events)), "terminated", detail={"reason": reason}))
         outcome = Outcome.ERROR
     else:
         ok = episode.success()

@@ -72,3 +72,35 @@ def test_runaway_program_is_a_timeout_failure():
     r = run_policy("while True:\n    pass\n", BACKEND, None, 0, line_budget=1000)
     assert r.outcome is Outcome.FAILURE
     assert to_feedback(r)["termination_reason"] == "timeout"
+
+
+def test_wall_clock_timeout_is_an_error_not_a_failure():
+    """Elapsed time depends on the machine, so it must never feed a constraint to System 1."""
+    r = run_policy("while True:\n    pass\n", BACKEND, None, 0, line_budget=10**12, timeout_s=0.05)
+    assert r.outcome is Outcome.ERROR
+    assert "WallClockExceeded" in r.error
+    assert to_feedback(r)["termination_reason"] == "wall_clock_timeout"
+
+
+def test_slow_primitive_trips_the_wall_clock_once_it_returns():
+    class SlowEpisode:
+        events: list = []
+
+        def api(self):
+            import time
+
+            return {"slow_call": lambda: time.sleep(0.1)}
+
+        def success(self):
+            return True
+
+        def metrics(self):
+            return {}
+
+    class SlowBackend:
+        def episode(self, perturbation, seed):
+            return SlowEpisode()
+
+    r = run_policy("slow_call()\nx = 1\n", SlowBackend(), None, 0, timeout_s=0.05)
+    assert r.outcome is Outcome.ERROR
+    assert to_feedback(r)["termination_reason"] == "wall_clock_timeout"
