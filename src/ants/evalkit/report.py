@@ -294,7 +294,7 @@ def find_runs(root: Path, depth: int = 3) -> list[Path]:
     return [r for d in sorted(root.iterdir()) if d.is_dir() for r in find_runs(d, depth - 1)]
 
 
-def _doc(root: Path, config: dict) -> dict | None:
+def _doc(root: Path, config: dict, base: Path) -> dict | None:
     """The experiment write-up shown in the Doc tab: `config["doc"]` (repo path) or `<run>/doc.md`."""
     for cand in (config.get("doc"), "doc.md"):
         if not cand:
@@ -304,7 +304,9 @@ def _doc(root: Path, config: dict) -> dict | None:
         )
         text = _read(path) if path.exists() else None
         if text:
-            return {"path": str(cand), "md": text}
+            viewer = root / "plan_viewer" / "index.html"
+            rel = os.path.relpath(viewer, base).replace(os.sep, "/") if viewer.exists() else None
+            return {"path": str(cand), "md": text, "viewer": rel}
     return None
 
 
@@ -397,7 +399,7 @@ def collect(root: Path, base: Path | None = None) -> dict:
         )
     return {
         "name": str(root.relative_to(base)) if root != base else root.name,
-        "doc": _doc(root, config),
+        "doc": _doc(root, config, base),
         "date": str(
             config.get("started") or datetime.fromtimestamp(root.stat().st_mtime).isoformat()
         )[:16].replace("T", " "),
@@ -833,7 +835,7 @@ function md(t){
   if(!l.trim()){i++;continue}
   const p=[];while(i<L.length&&L[i].trim()&&!/^(#|\||```|[-*] )/.test(L[i]))p.push(L[i++]);o.push("<p>"+inl(p.join(" "))+"</p>")}
  return o.join("")}
-function docView(){return `<div class="muted" style="margin-bottom:8px">${esc(D.doc.path)}</div><div class="card pad" style="max-width:900px">${md(D.doc.md)}</div>`}
+function docView(){const v=D.doc.viewer?`<div class="card pad" style="max-width:900px;margin-bottom:10px"><b>cuRobo plan viewer</b> <a href="${esc(D.doc.viewer)}" target="_blank">open in a new tab</a> <span class="muted">(needs <code>report --serve</code>)</span><iframe src="${esc(D.doc.viewer)}" style="width:100%;height:780px;border:1px solid var(--line);border-radius:8px;margin-top:8px"></iframe></div>`:"";return v+`<div class="muted" style="margin-bottom:8px">${esc(D.doc.path)}</div><div class="card pad" style="max-width:900px">${md(D.doc.md)}</div>`}
 function pick(i){D=ALL.runs[i];F={arm:"",scene:"",outcome:"",cause:"",q:""};PL={sel:null,ref:"",full:false};C={a:"",b:"",cam:"agentview"};header();show(EXP()?"about":"dash")}
 function header(){const n=D.samples.reduce((a,s)=>a+s.tokens_new,0);
  $("#rn").innerHTML=`<select onchange="pick(this.value)" title="Run">${ALL.runs.map((r,i)=>`<option value="${i}" ${r===D?"selected":""}>${esc(r.name)} · ${esc(r.date)} · ${r.samples.length} samples</option>`).join("")}</select>`;$("#hd").innerHTML=chip(RO().length+" rollouts")+chip(n.toLocaleString()+" new tokens")+chip("≈ "+usd(n),"acc")}
