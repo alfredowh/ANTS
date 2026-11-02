@@ -14,6 +14,7 @@ RULES = """You write robot programs for a Franka Panda arm in the LIBERO simulat
 The program is plain Python executed in a sandbox. Rules:
 - The API functions and constructors below are already in scope. Do not import anything (only `math` is allowed).
 - No classes, `with`, `global`, `del`, or names starting with `_`.
+- Builtins are restricted: no `getattr`, `setattr`, `hasattr`, `isinstance`, `eval`, `open` or `__import__`. Probe an object's fields with direct attribute access inside `try/except AttributeError` and fall back to the next field name.
 - Positions are metres in the `robot_base` frame. Do not hard-code absolute object positions: localize objects at run time.
 - Check the `.ok` of every result and stop safely when something fails.
 - Use `print(...)` to log the numbers you rely on (object positions, sizes, target poses) so a failure can be diagnosed.

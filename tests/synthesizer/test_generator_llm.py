@@ -23,6 +23,16 @@ def test_extract_code_takes_first_fenced_block():
     assert extract_code("result = 2") == "result = 2\n"
 
 
+def test_rules_forbid_sandbox_blocked_builtins():
+    # exp11/nodemo attempt 3 died with `NameError: name 'getattr' is not defined`;
+    # attempt 4 without getattr/isinstance probing succeeded, so the rule is prompt-level.
+    from ants.synthesizer.generator import RULES
+
+    for name in ("getattr", "isinstance", "hasattr", "eval"):
+        assert f"`{name}`" in RULES
+    assert "try/except AttributeError" in RULES
+
+
 def test_arms_differ_only_in_demo_section():
     no_demo = build_messages("API", "EX", "other task", "put the bowl on the plate")
     demo = build_messages("API", "EX", "other task", "put the bowl on the plate", SUMMARY)

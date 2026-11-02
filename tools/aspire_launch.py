@@ -175,6 +175,52 @@ def fit_axis(points: np.ndarray, radius: float) -> np.ndarray:
     return centre
 
 
+def spheres_to_local(world: np.ndarray, t: np.ndarray, rot: np.ndarray) -> np.ndarray:
+    """Hand-frame spheres from world spheres at the hand pose (`t` position, `rot` rotation)."""
+    return (world - t) @ rot
+
+
+def spheres_to_world(local: np.ndarray, t: np.ndarray, rot: np.ndarray) -> np.ndarray:
+    """World spheres from hand-frame spheres at the hand pose (`t` position, `rot` rotation)."""
+    return local @ rot.T + t
+
+
+def latch_action(latched: bool, closed: bool, near: bool) -> str:
+    """Sticky held-bowl latch for one planning scene: "keep", "release" or "wait".
+
+    Once the bowl is attached ("latched"), it stays attached while the gripper is
+    closed, even if this frame's mask misses the bowl ("near" false): a flickering
+    mask must not drop the held object back into the planning cloud as an obstacle
+    (exp11/nodemo attempt 2: the descent goal then sits inside the bowl's points and
+    cuRobo refuses it). The latch clears when the gripper opens.
+    """
+    if not closed:
+        return "release"
+    if latched or near:
+        return "keep"
+    return "wait"
+
+
+def removal_mask(
+    points: np.ndarray,
+    bowl: np.ndarray,
+    remove_m: float,
+    pred_world: np.ndarray,
+    pred_m: float,
+) -> np.ndarray:
+    """True for cloud points to drop: near this frame's observed bowl points, or near
+    the predicted world position of the attached spheres (covers a flickering mask)."""
+    cut = np.zeros(len(points), dtype=bool)
+    if len(bowl):
+        from scipy.spatial import cKDTree
+
+        cut |= cKDTree(bowl).query(points)[0] < remove_m
+    if len(pred_world) and len(points):
+        nearest2 = ((points[:, None, :] - pred_world[None, :, :]) ** 2).sum(-1).min(1)
+        cut |= nearest2 < pred_m**2
+    return cut
+
+
 def footprint(env, body_id: int) -> tuple[np.ndarray, float]:
     """Centre (x, y) and radius of a body's collision footprint: its geoms' world boxes, unioned."""
     model, data = env.sim.model._model, env.sim.data._data
@@ -277,7 +323,10 @@ def install_curobo_planning(cfg: dict) -> None:
             for b in model.geom_bodyid
         ]
         robot = np.array(
-            [n.startswith(prefix) if prefix else n.startswith(("robot0", "gripper0", "mount0")) for n in names]
+            [
+                n.startswith(prefix) if prefix else n.startswith(("robot0", "gripper0", "mount0"))
+                for n in names
+            ]
         )
         is_geom = seg[..., 1] == int(mujoco.mjtObj.mjOBJ_GEOM)
         mask = is_geom & robot[np.clip(seg[..., 0], 0, len(robot) - 1)]
@@ -296,7 +345,11 @@ def install_curobo_planning(cfg: dict) -> None:
 
     CapApi._project_mask = masked
     if cfg.get("cloud_dir"):  # debugging: keep every planning cloud cuRobo is given
-        cloud_dir, counter, scene_of = Path(cfg["cloud_dir"]), iter(range(10_000)), CapApi._planning_scene
+        cloud_dir, counter, scene_of = (
+            Path(cfg["cloud_dir"]),
+            iter(range(10_000)),
+            CapApi._planning_scene,
+        )
         cloud_dir.mkdir(parents=True, exist_ok=True)
 
         def dump(self, *a, **kw):
@@ -313,6 +366,7 @@ def install_curobo_planning(cfg: dict) -> None:
         inner_scene = CapApi._planning_scene
         out_path = Path(attach["file"])
         out_path.parent.mkdir(parents=True, exist_ok=True)
+        frames_path = out_path.with_name(out_path.stem + ".frames.jsonl")
 
         def write(spheres: list) -> None:
             out_path.write_text(json.dumps({"spheres": spheres}), encoding="utf-8")
@@ -326,18 +380,36 @@ def install_curobo_planning(cfg: dict) -> None:
                 depth = observation.cameras[camera].depth_m
                 if mode == "curobo-sam3":
                     result = api._segment_text(camera, attach["query"], observation)
-                    masks = [np.asarray(m.mask, dtype=bool) for m in result.segmentations] if result.ok else []
+                    masks = (
+                        [np.asarray(m.mask, dtype=bool) for m in result.segmentations]
+                        if result.ok
+                        else []
+                    )
                 else:
                     masks = [sim_pixels(camera, depth, attach["body"])]
                 for mask in masks:
                     if mask.any():
-                        pts = original(api, mask, camera_name=camera, target_frame=frame, observation=observation).points
+                        pts = original(
+                            api,
+                            mask,
+                            camera_name=camera,
+                            target_frame=frame,
+                            observation=observation,
+                        ).points
                         if len(pts):
                             clouds.append(pts)
             return np.concatenate(clouds) if clouds else np.zeros((0, 3))
 
+        def log_frame(info: dict) -> None:
+            try:
+                with frames_path.open("a", encoding="utf-8") as fh:
+                    fh.write(json.dumps(info) + "\n")
+            except OSError:
+                pass
+
         def with_attach(self, *a, **kw):
             scene = inner_scene(self, *a, **kw)
+            info: dict = {"held": False}
             try:
                 observation = self.get_observation()
                 state = observation.robot_state
@@ -350,22 +422,32 @@ def install_curobo_planning(cfg: dict) -> None:
                     [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
                     [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
                 ])  # fmt: skip
-                closed = float(state.gripper_positions["primary"]) < 0.5
+                gripper = float(state.gripper_positions["primary"])
+                closed = gripper < 0.5
                 bowl = bowl_points(self, observation, frame) if closed else np.zeros((0, 3))
                 dist = float(np.linalg.norm(bowl.mean(axis=0) - t)) if len(bowl) else -1.0
                 near = len(bowl) >= 30 and dist < attach.get("hold_dist_m", 0.16)
+                profile = [tuple(r) for r in attach["profile"]]
+                sphere_r = attach["sphere_r"]
+                action = latch_action("local" in held_state, closed, near)
+                info.update(
+                    gripper=round(gripper, 3),
+                    n_bowl=int(len(bowl)),
+                    dist=round(dist, 3),
+                    action=action,
+                )
                 print(
-                    f"[ants-attach] gripper {float(state.gripper_positions['primary']):.2f} "
-                    f"bowl points {len(bowl)} distance to hand {dist:.3f} m -> "
-                    f"{'held' if closed and near else 'not held'}",
+                    f"[ants-attach] gripper {gripper:.2f} bowl points {len(bowl)} "
+                    f"distance to hand {dist:.3f} m -> {action}",
                     file=sys.stderr,
                 )
-                if not (closed and near):
+                if action == "wait":
+                    return scene
+                if action == "release":
                     if held_state.pop("local", None) is not None:
                         write([])
                         print("[ants-attach] released", file=sys.stderr)
                     return scene
-                profile = [tuple(r) for r in attach["profile"]]
                 if "local" not in held_state:
                     if mode == "curobo-sam3":
                         centre = fit_axis(bowl, max(r for _, r in profile))
@@ -374,22 +456,32 @@ def install_curobo_planning(cfg: dict) -> None:
                         env = LIVE["env"]
                         lo, hi = body_aabb(env, env.sim.model.body_name2id(attach["body_main"]))
                         centre, z_bottom = (lo[:2] + hi[:2]) / 2, float(lo[2])
-                    world = bowl_spheres(profile, centre, z_bottom, attach["sphere_r"])
-                    held_state["local"] = (world - t) @ rot  # hand frame
-                    print(f"[ants-attach] attached {len(world)} spheres, axis {np.round(centre, 3).tolist()}, bottom z {z_bottom:.3f}", file=sys.stderr)
+                    world = bowl_spheres(profile, centre, z_bottom, sphere_r)
+                    held_state["local"] = spheres_to_local(world, t, rot)
+                    info.update(centre=np.round(centre, 4).tolist(), z_bottom=round(z_bottom, 4))
+                    print(
+                        f"[ants-attach] attached {len(world)} spheres, axis {np.round(centre, 3).tolist()}, bottom z {z_bottom:.3f}",
+                        file=sys.stderr,
+                    )
                 local = held_state["local"]
-                write([[*map(float, p), attach["sphere_r"]] for p in local])
-                from scipy.spatial import cKDTree
-
-                near_bowl = cKDTree(bowl).query(scene.point_cloud.points)[0] < attach.get("remove_m", 0.02)
-                kept = scene.point_cloud.points[~near_bowl]
+                write([[*map(float, p), sphere_r] for p in local])
+                pred = spheres_to_world(local, t, rot)
+                remove_m = attach.get("remove_m", 0.02)
+                cut = removal_mask(
+                    scene.point_cloud.points, bowl, remove_m, pred, sphere_r + remove_m
+                )
+                kept = scene.point_cloud.points[~cut]
                 scene = PlanningScene(
                     point_cloud=PointCloud(points=kept, frame=scene.point_cloud.frame),
                     voxel_size_m=scene.voxel_size_m,
                     timestamp_s=scene.timestamp_s,
                 )
+                info.update(held=True, n_spheres=len(local), n_removed=int(cut.sum()))
             except Exception as err:  # never break planning because the attach failed
+                info.update(failed=f"{type(err).__name__}: {err}")
                 print(f"[ants-attach] failed: {type(err).__name__}: {err}", file=sys.stderr)
+            finally:
+                log_frame(info)
             return scene
 
         CapApi._planning_scene = with_attach
