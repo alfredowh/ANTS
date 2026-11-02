@@ -29,6 +29,7 @@ from pathlib import Path
 from ants.adversary.rollout import feedback
 from ants.evalkit.phases import STAGES, targets_from_run, task_phases
 from ants.evalkit.runlog import unified_diff
+from ants.evalkit.scene_view import JS as SCENE_JS
 from ants.evalkit.system2_view import JS as SYSTEM2_JS
 
 
@@ -213,6 +214,24 @@ def _keyframes(run_dir: str | None, root: Path, limit: int = 14) -> list[dict]:
     return frames
 
 
+def _reasoning_tokens(sample_dir: Path, k: int) -> dict | None:
+    """Completion and reasoning token counts of one reply, from the logged API response."""
+    raw = _read(sample_dir / f"api_response_attempt{k}.json")
+    if raw is not None:
+        usage = json.loads(raw).get("usage") or {}
+        detail = usage.get("completion_tokens_details") or {}
+        return {"reasoning": detail.get("reasoning_tokens", 0),
+                "completion": usage.get("completion_tokens", 0)}  # fmt: skip
+    return None
+
+
+def _why(reply: str | None) -> str | None:
+    """The 'WHY:' rationale a repair reply may carry before its code block."""
+    if not reply or "WHY:" not in reply:
+        return None
+    return reply.split("```", 1)[0].strip() or None
+
+
 def _attempt(sample_dir: Path, root: Path, a: dict, prev_text: str | None) -> dict:
     k = a["attempt"]
     program = _read(sample_dir / f"program_attempt{k}.py") or ""
@@ -232,15 +251,21 @@ def _attempt(sample_dir: Path, root: Path, a: dict, prev_text: str | None) -> di
     prompt = None
     if messages:
         msgs = json.loads(messages)
-        prompt = msgs[-1]["content"] if k else "\n\n".join(m["content"] for m in msgs[1:])
+        prompt = (
+            msgs[-1]["content"]
+            if k or len(msgs) > 2
+            else "\n\n".join(m["content"] for m in msgs[1:])
+        )
     return {
         "attempt": k,
         "role": a.get("role", "initial" if k == 0 else "repair"),
         "tokens": a["tokens"],
+        "reasoning_tokens": _reasoning_tokens(sample_dir, k),
         "from_cache": a["from_cache"],
         "program": program,
         "diff": diff or "",
         "reply": _read(sample_dir / f"reply_attempt{k}.md"),
+        "why": _why(_read(sample_dir / f"reply_attempt{k}.md")),
         "prompt": prompt,
         "feedback": fb_obj,
         "success": trace["task_success"],
@@ -330,6 +355,9 @@ def collect(root: Path, base: Path | None = None) -> dict:
                 }
             )
         new_tokens = sum(a["tokens"] for a in rec["attempts"] if not a["from_cache"])
+        exp = rec.get("exp")
+        if exp:
+            exp = {**exp, "overlay": _json(sample_dir / "overlay.json")}
         samples.append(
             {
                 "id": sid,
@@ -339,6 +367,7 @@ def collect(root: Path, base: Path | None = None) -> dict:
                 "attempts": attempts,
                 "evaluation": evals,
                 "stopped": rec.get("stopped"),
+                "exp": exp,
                 "tokens_all": sum(a["tokens"] for a in rec["attempts"]),
                 "tokens_new": new_tokens,
             }
@@ -353,6 +382,9 @@ def collect(root: Path, base: Path | None = None) -> dict:
         "samples": samples,
         "rollouts": rollouts,
         "system2": _system2(root),
+        "a0": _json(root / "a0.json"),
+        "a3": _json(root / "a3.json"),
+        "scenes": {p.stem: _json(p) for p in sorted((root / "scenes").glob("*.json"))},
         "stages": STAGES,
         "usd_per_mtok": float(config.get("usd_per_mtok", 13.5)),
     }
@@ -376,7 +408,10 @@ def build(root: Path) -> Path:
     data = json.dumps(payload).replace("</", "<\\/")
     out = root / "report.html"
     out.write_text(
-        TEMPLATE.replace("__SYSTEM2_JS__", SYSTEM2_JS).replace("__DATA__", data), encoding="utf-8"
+        TEMPLATE.replace("__SYSTEM2_JS__", SYSTEM2_JS)
+        .replace("__SCENE_JS__", SCENE_JS)
+        .replace("__DATA__", data),
+        encoding="utf-8",
     )
     return out
 
@@ -455,6 +490,7 @@ h3.t{margin:0 0 6px;font-size:13px;color:var(--mute);font-weight:600}
 <div id="lb" onclick="this.style.display='none'"><img id="lbi"></div>
 <script>
 __SYSTEM2_JS__
+__SCENE_JS__
 const ALL=__DATA__;let D=ALL.runs[0],cur="dash";
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -754,30 +790,31 @@ function events(){return `<h3>Events</h3><div class="card"><table><tr><th>Time</
 function attempt(a){const rail=okc(a.success);
  const calls=a.calls.map(c=>`<span class="${c.ok?"":"f"}" title="${esc(c.code||"")}">${esc(c.name)}</span>`).join("");
  const fb=a.feedback?det("Feedback sent to the model for the next attempt",`<pre>${esc(JSON.stringify(a.feedback,null,1))}</pre>`):"";
- return `<div class="rail ${rail}"><details class="card" open><summary>Attempt ${a.attempt} · ${a.role==="initial"?"initial policy":"repair"} ${chip(a.success?"success":"failed",okc(a.success))}${chip(a.tokens.toLocaleString()+" tokens"+(a.from_cache?" (cached)":""))}<button class="chip acc" onclick="event.preventDefault();show('r:${a.rid}')">watch rollout ▸</button></summary><div class="bd">
+ return `<div class="rail ${rail}"><details class="card" open><summary>Attempt ${a.attempt} · ${a.role==="initial"?"initial policy":"repair"} ${chip(a.success?"success":"failed",okc(a.success))}${chip(a.tokens.toLocaleString()+" tokens"+(a.from_cache?" (cached)":""))}${a.reasoning_tokens?chip(a.reasoning_tokens.reasoning.toLocaleString()+" of "+a.reasoning_tokens.completion.toLocaleString()+" output tokens were reasoning","acc"):""}<button class="chip acc" onclick="event.preventDefault();show('r:${a.rid}')">watch rollout ▸</button></summary><div class="bd">
  ${a.prompt?det(a.attempt?"Message sent to the model":"Prompt (task + demonstration)",`<pre>${esc(a.prompt)}</pre>`):""}
  ${a.reply?det("Model reply",`<pre>${esc(a.reply)}</pre>`):""}
- ${a.attempt?det("Program changes vs attempt "+(a.attempt-1),diff(a.diff),true):""}
+ ${a.why?det("Why the model changed the code (its own explanation)",`<pre>${esc(a.why)}</pre>`,true):""}
+ ${a.attempt||a.diff?det(a.attempt?"Program changes vs attempt "+(a.attempt-1):"Program changes vs the failed program being repaired",diff(a.diff),true):""}
  ${det("Program ("+a.program.split("\n").length+" lines)",code(a.program),a.attempt===0)}
  ${det("Rollout on the debug seed "+chip(a.reason,okc(a.success))+chip((a.wall_s??"?")+" s"),`<div class="calls">${calls||"<span class=muted>no tool calls</span>"}</div>${a.error?`<pre>${esc(a.error)}</pre>`:""}${frames(a.frames)}`,true)}
  ${fb}</div></details></div>`}
 function sample(s){const e=s.evaluation;
  const ev=e.length?`<div class="card"><table><tr><th>Scene</th><th>Seed</th><th>Result</th><th>Reason</th><th>Time</th></tr>${e.map(x=>`<tr class="row" onclick="show('r:${x.rid}')"><td>${esc(x.scene)}</td><td>${x.seed}</td><td>${chip(x.success?"success":"failed",okc(x.success))}</td><td>${esc(x.reason)}</td><td>${x.wall_s??""} s</td></tr>`).join("")}</table></div>`:`<p class="muted">no evaluation</p>`;
  const sm=Object.entries(evalSum(s)).map(([k,v])=>chip(k+" "+v.ok+"/"+v.n,v.ok===v.n?"ok":v.ok?"acc":"bad")).join("");
- return `<h2 style="margin:0 0 6px">${esc(s.id)} <span class="muted" style="font-weight:400">T ${s.temperature}</span></h2><div style="margin-bottom:12px">${chip(s.attempts.length+" attempts")}${chip(s.tokens_new.toLocaleString()+" new tokens · ≈ "+usd(s.tokens_new),"acc")}${sm}${s.stopped?chip("stopped: "+s.stopped,"bad"):""}</div>
+ return `<h2 style="margin:0 0 6px">${esc(s.id)} <span class="muted" style="font-weight:400">T ${s.temperature}</span></h2><div style="margin-bottom:12px">${s.exp?expChips(s):""}${chip(s.attempts.length+" attempts")}${chip(s.tokens_new.toLocaleString()+" new tokens · ≈ "+usd(s.tokens_new),"acc")}${sm}${s.stopped?chip("stopped: "+s.stopped,"bad"):""}</div>
  ${s.attempts.map(attempt).join("")}<h3>Evaluation of the final program <span class="muted" style="font-weight:400">(click a row to watch)</span></h3>${ev}`}
 
 /* ---------- shell ---------- */
-function pick(i){D=ALL.runs[i];F={arm:"",scene:"",outcome:"",cause:"",q:""};PL={sel:null,ref:"",full:false};C={a:"",b:"",cam:"agentview"};header();show("dash")}
+function pick(i){D=ALL.runs[i];F={arm:"",scene:"",outcome:"",cause:"",q:""};PL={sel:null,ref:"",full:false};C={a:"",b:"",cam:"agentview"};header();show(EXP()?"about":"dash")}
 function header(){const n=D.samples.reduce((a,s)=>a+s.tokens_new,0);
  $("#rn").innerHTML=`<select onchange="pick(this.value)" title="Run">${ALL.runs.map((r,i)=>`<option value="${i}" ${r===D?"selected":""}>${esc(r.name)} · ${esc(r.date)} · ${r.samples.length} samples</option>`).join("")}</select>`;$("#hd").innerHTML=chip(RO().length+" rollouts")+chip(n.toLocaleString()+" new tokens")+chip("≈ "+usd(n),"acc")}
 function nav(c){const by={};D.samples.forEach(s=>(by[s.arm]??=[]).push(s));const sel=c.startsWith("r:")?"rollouts":c;
  const b=(id,t)=>`<button class="${sel===id?"on":""}" onclick="show('${id}')">${t}</button>`;
- let h=b("dash","Dashboard")+b("rollouts","Rollouts ("+RO().length+")")+b("compare","Compare")+b("matched","Matched")+b("policies","Policies")+b("system2","System 2"+((D.system2||[]).length?" ("+D.system2.length+")":""))+b("events","Events ("+D.events.length+")");
- for(const arm in by){h+=`<h4>${esc(arm)} · trace</h4>`+by[arm].map(s=>{const e=evalSum(s);return `<button class="${c===s.id?"on":""}" onclick="show('${s.id}')">sample ${s.sample} · T ${s.temperature}<div class="sub">${solved(s)?"✓ solved debug":"✗ not solved"} · ${Object.entries(e).map(([k,v])=>k+" "+v.ok+"/"+v.n).join(" · ")||"no eval"}</div></button>`}).join("")}
+ let h=(EXP()?b("about","About this run")+b("results","Results")+b("scene","Scene"):"")+b("dash","Dashboard")+b("rollouts","Rollouts ("+RO().length+")")+b("compare","Compare")+b("matched","Matched")+b("policies","Policies")+b("system2","System 2"+((D.system2||[]).length?" ("+D.system2.length+")":""))+b("events","Events ("+D.events.length+")");
+ for(const arm in by){h+=`<h4>${esc(arm)} · trace</h4>`+by[arm].map(s=>{const e=evalSum(s);return `<button class="${c===s.id?"on":""}" onclick="show('${s.id}')">${s.exp?s.exp.level+" · "+((D.config.levels||{})[s.exp.level]||{}).title:"sample "+s.sample+" · T "+s.temperature}<div class="sub">${solved(s)?"✓ solved debug":"✗ not solved"} · ${Object.entries(e).map(([k,v])=>k+" "+v.ok+"/"+v.n).join(" · ")||"no eval"}</div></button>`}).join("")}
  $("#nav").innerHTML=h}
 function show(id,keep){const y=window.scrollY;stopPlayer();if(id==="overview")id="dash";cur=id;location.hash=encodeURIComponent(D.name)+"|"+id;nav(id);const m=$("#main");
- if(id==="dash")m.innerHTML=dash();else if(id==="rollouts")m.innerHTML=rollouts();else if(id==="events")m.innerHTML=events();else if(id==="system2")m.innerHTML=system2();
+ if(id==="dash")m.innerHTML=dash();else if(id==="about")m.innerHTML=expAbout();else if(id==="results")m.innerHTML=expResults();else if(id==="scene")m.innerHTML=expScene();else if(id==="rollouts")m.innerHTML=rollouts();else if(id==="events")m.innerHTML=events();else if(id==="system2")m.innerHTML=system2();
  else if(id==="matched")m.innerHTML=matched();else if(id==="policies")m.innerHTML=policies();else if(id==="compare"){m.innerHTML=compare();mount([byId(C.a),byId(C.b)].filter(Boolean),"cmp")}
  else if(id.startsWith("r:")){const r=byId(id.slice(2));if(!r){m.innerHTML="<p>rollout not found</p>";return}m.innerHTML=explorer(r);mount([r],"single")}
  else{const s=smp(id);m.innerHTML=s?sample(s):"<p>not found</p>"}
@@ -785,7 +822,7 @@ function show(id,keep){const y=window.scrollY;stopPlayer();if(id==="overview")id
  window.scrollTo(0,keep?y:0)}
 document.addEventListener("keydown",e=>{if(!P.master||/INPUT|SELECT|TEXTAREA/.test(e.target.tagName))return;if(e.code==="Space"){e.preventDefault();toggle()}else if(e.code==="ArrowRight"){e.preventDefault();stepF(1)}else if(e.code==="ArrowLeft"){e.preventDefault();stepF(-1)}});
 {const [rn,...v]=decodeURIComponent(location.hash.slice(1)).split("|");const i=ALL.runs.findIndex(r=>r.name===rn);if(i>=0)D=ALL.runs[i];
-header();show(v.join("|")||"dash")}
+header();show(v.join("|")||(EXP()?"about":"dash"))}
 </script></body></html>
 """
 

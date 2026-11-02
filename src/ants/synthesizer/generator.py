@@ -17,6 +17,7 @@ The program is plain Python executed in a sandbox. Rules:
 - Positions are metres in the `robot_base` frame. Do not hard-code absolute object positions: localize objects at run time.
 - Check the `.ok` of every result and stop safely when something fails.
 - Use `print(...)` to log the numbers you rely on (object positions, sizes, target poses) so a failure can be diagnosed.
+- Start the program with two dict literals. `params` holds every number you take from the demonstration (grasp height, approach offsets, carry and release heights), each as a fraction of a measured object size, never absolute metres. `attack_ranges` maps each `params` key to a `[min, max]` list of values you consider still safe. Read these values from `params` below; do not repeat them as literals.
 - Set a top-level variable `result` to a small dict reporting what happened (which steps succeeded, key numbers).
 Reply with ONLY the program inside one ```python fenced block."""
 
@@ -40,6 +41,8 @@ def build_messages(
     task: str,
     demo_summary: dict | None = None,
     constraints: list[str] | None = None,
+    scene_context: str | None = None,
+    images: list[tuple[str, str]] | None = None,
 ) -> list[dict]:
     system = (
         f"{RULES}\n\nAPI reference:\n{api_reference}\n\n"
@@ -48,20 +51,45 @@ def build_messages(
     user = f"Task: {task}"
     if demo_summary is not None:
         user += "\n\nDemonstration:\n" + demo_section(demo_summary)
+    if scene_context:
+        user += "\n\n" + scene_context
     if constraints:
         user += "\n\nRules learned from earlier failures:\n" + "\n".join(
             f"- {c}" for c in constraints
         )
-    return [{"role": "system", "content": system}, {"role": "user", "content": user}]
+    return [{"role": "system", "content": system}, image_message(user, images)]
 
 
-def repair_message(feedback: dict) -> dict:
-    return {
-        "role": "user",
-        "content": "The program did not complete the task. What happened:\n"
+def image_message(text: str, images: list[tuple[str, str]] | None = None) -> dict:
+    """User message; `images` are (caption, data URL) pairs shown to the VLM after the text.
+
+    Examples: the initial scene, a generated goal scene (`image_gen.ImageGenerator`).
+    """
+    if not images:
+        return {"role": "user", "content": text}
+    parts: list[dict] = [{"type": "text", "text": text}]
+    for caption, url in images:
+        parts.append({"type": "text", "text": caption})
+        parts.append({"type": "image_url", "image_url": {"url": url}})
+    return {"role": "user", "content": parts}
+
+
+def repair_message(
+    feedback: dict, explain: bool = False, images: list[tuple[str, str]] | None = None
+) -> dict:
+    """Feedback for the next attempt; `explain` asks for a short rationale before the program."""
+    ask = (
+        "Reply with only the full corrected program."
+        if not explain
+        else "Reply with 3-6 lines starting with 'WHY:' (what went wrong, what you change and why), "
+        "then the full corrected program in one ```python block."
+    )
+    return image_message(
+        "The program did not complete the task. What happened:\n"
         + json.dumps(feedback, indent=1)
-        + "\nFind the cause and fix the program. Reply with only the full corrected program.",
-    }
+        + f"\nFind the cause and fix the program. {ask}",
+        images,
+    )
 
 
 def extract_code(text: str) -> str:
