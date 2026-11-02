@@ -6,6 +6,7 @@ import pytest
 from ants.contracts import (
     AttackReport,
     BlameTarget,
+    CaseSpec,
     Constraint,
     Event,
     Failure,
@@ -18,6 +19,7 @@ from ants.contracts import (
     Skill,
     SkillKind,
     SkillRef,
+    Split,
     failure_signature,
 )
 
@@ -214,3 +216,52 @@ def test_perturbation_seed_is_optional_and_part_of_the_key():
     p = Perturbation("size", {"bowl_scale": 1.1}, 0.4)
     assert p.seed is None and Perturbation.from_dict(_json(p)) == p
     assert p.key != Perturbation("size", {"bowl_scale": 1.1}, 0.4, seed=3).key
+
+
+def _case(split: Split) -> CaseSpec:
+    pert = Perturbation("pose", {"dx": 0.05}, 0.3)
+    return CaseSpec("c-51", "libero_goal_swap", 8, 51, split, perturbations=(pert,))
+
+
+@pytest.mark.parametrize("split", list(Split))
+def test_case_spec_round_trip(split):
+    case = _case(split)
+    assert CaseSpec.from_dict(_json(case)) == case
+    assert case.to_dict()["split"] == split.value
+
+
+def test_feedback_from_acceptance_case(report):
+    fb = Feedback.from_report(report, test_case=_case(Split.ACCEPTANCE))
+    assert Feedback.from_dict(_json(fb)) == fb
+
+
+def test_held_out_case_cannot_produce_feedback(report):
+    with pytest.raises(ValueError, match="held-out"):
+        Feedback.from_report(report, test_case=_case(Split.HELD_OUT))
+
+
+def test_details_mappings_round_trip(report):
+    rollout = RolloutResult(Outcome.FAILURE, details={"calls": [{"name": "move_to_pose"}]})
+    assert RolloutResult.from_dict(_json(rollout)) == rollout
+    fb = Feedback.from_report(report)
+    fb = Feedback(**{**fb.__dict__, "details": {"trace": "t.jsonl"}})
+    assert Feedback.from_dict(_json(fb)).details == {"trace": "t.jsonl"}
+
+
+def test_constraint_check_code_and_phase_round_trip():
+    c = Constraint(
+        "c4",
+        "pose:localize_object:failed",
+        "the bowl may have moved",
+        "Re-localise the bowl before the grasp.",
+        check_code="bowl.ok",
+        phase="grasp",
+    )
+    assert Constraint.from_dict(_json(c)) == c
+    assert Constraint("c5", "a:b:c", "w", "r").phase is None
+
+
+def test_failure_source_is_validated():
+    assert Failure("timeout", "x", 0.5, "human").source == "human"
+    with pytest.raises(ValueError, match="source"):
+        Failure("timeout", "x", 0.5, "oracle")

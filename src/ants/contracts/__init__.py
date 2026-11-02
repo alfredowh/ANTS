@@ -15,8 +15,10 @@ from ants.contracts.primitives import (
 )
 from ants.contracts.types import (
     CONTRACTS_VERSION,
+    FAILURE_SOURCES,
     AttackReport,
     BlameTarget,
+    CaseSpec,
     Constraint,
     Event,
     Failure,
@@ -29,15 +31,18 @@ from ants.contracts.types import (
     Skill,
     SkillKind,
     SkillRef,
+    Split,
     failure_signature,
     to_dict,
 )
 
 __all__ = [
     "CONTRACTS_VERSION",
+    "FAILURE_SOURCES",
     "ApiError",
     "AttackReport",
     "BlameTarget",
+    "CaseSpec",
     "Constraint",
     "Event",
     "ExecutionResult",
@@ -59,6 +64,7 @@ __all__ = [
     "Skill",
     "SkillKind",
     "SkillRef",
+    "Split",
     "TaskContext",
     "failure_signature",
     "to_dict",
