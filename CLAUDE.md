@@ -11,3 +11,5 @@
 # Module context
 
 @docs/adversary/spec.md
+
+@docs/orchestrator/spec.md

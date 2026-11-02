@@ -1,0 +1,59 @@
+# Orchestrator: agent spec
+
+## What this package is
+
+The closed loop of ANTS: System 2 attacks the incumbent policy, each failure becomes feedback for
+System 1, System 1 writes a candidate, and the regression gate keeps it only if nothing got worse.
+It is the only package that knows both systems. Owner: Daniel (D3). The loop, gate and human gate
+are ported from System 1's `harden()`, `regression_gate` and `human_gate` (branch `synthesizer`),
+moved onto the `Adversary` facade and the shared contracts.
+
+## Hard rules
+
+1. **Contracts and public APIs only.** Import `ants.contracts`, `ants.adversary` (the `Adversary`
+   facade and its config) and System 1 only through `Synthesizer`. Never import a system's internals.
+2. **The gate is one pure function** (`gate.py`). Strict rule: no worse on every case seen so far and
+   better on at least one; outcomes, not booleans (a candidate crash where the incumbent passed is a
+   regression; an incumbent crash is not a pass; a missing result never passes). The mode
+   (`strict` or `off`) is in every decision.
+3. **Only acceptance cases reach System 1.** Every case the loop builds is `Split.ACCEPTANCE`, and
+   `Feedback` refuses a held-out case. Held-out evaluation lives in `evalkit/`.
+4. **Everything is logged.** One JSONL line per cycle with every input of every decision (attack,
+   signature, constraint, diff, gate outcomes per case, stalls), each accepted version on disk.
+5. **No result from fixtures.** `PatchSynthesizer` and the mock world prove the loop logic; numbers
+   in any write-up come from the real synthesizer on the cap_harness backend.
+
+## Layout
+
+```
+orchestrator/
+├── gate.py         gate(), GateDecision, GATE_MODES
+├── synthesis.py    Synthesizer protocol; PatchSynthesizer test fixture, MOCK_WORLD_PATCHES
+├── loop.py         Loop, LoopConfig, LoopResult: one attack per cycle, gate, stall, escalation
+├── human_gate.py   a person's text answer to an escalation becomes a constraint (System 1's)
+└── run.py          CLI: uv run python -m ants.orchestrator.run --cycles 30
+tests/orchestrator/ test_gate.py, test_loop.py
+```
+
+## One cycle
+
+1. `Adversary.attack(incumbent)`; a success only updates System 2's beliefs (stop if robust).
+2. A task failure becomes an acceptance `CaseSpec` (in F_n) and a `Feedback`; its constraint joins
+   the context once per failure signature.
+3. `Synthesizer.rewrite(incumbent, feedback, constraints)`; None means the budget is spent.
+4. The candidate replays every case (nominal acceptance cases + F_n); the incumbent's stored
+   outcomes are reused (exact for deterministic backends).
+5. Accepted: new incumbent, stalls reset; System 2's per-version history restarts its beliefs.
+   Rejected: the signature's stall count grows; at W = 3, escalate (ask a person once if
+   `ask_human` is given, else stop).
+
+Policy stages: draft → attackable (passes its nominal cases) → incumbent (accepted by the gate) →
+certified (System 2's stop rule met). A draft that fails its nominal cases is never attacked
+(`no_working_policy`, escalation).
+
+## Next
+
+- Plug in System 1's Muse `synthesize()` behind `Synthesizer` once `synthesizer` merges.
+- Several rollouts per case for `Policy.deterministic=False`.
+- Show `loop.jsonl` in the studio: version history, diffs, gate verdicts.
+- Skill admission after a gate pass (cut for the hackathon).
