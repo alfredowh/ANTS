@@ -385,8 +385,9 @@ class AttackReport:
 class Feedback:
     """What the orchestrator forwards to System 1 after a failure on an acceptance case.
 
-    Held-out cases never produce Feedback. The orchestrator enforces the split; as a second line
-    of defence, a Feedback built from a held-out `test_case` raises.
+    Held-out cases never produce Feedback. `test_case` is required, so every Feedback names the
+    suite case it came from, and building one from a held-out case raises. The orchestrator also
+    filters by split before it gets here.
     """
 
     policy_id: str
@@ -395,11 +396,13 @@ class Feedback:
     failure: Failure
     case: Perturbation
     rollout: RolloutResult
+    test_case: CaseSpec  # the suite case the failure came from; must be an acceptance case
     details: Mapping[str, Any] = field(default_factory=dict)
-    test_case: CaseSpec | None = None  # the suite case the failure came from, when known
 
     def __post_init__(self) -> None:
-        if self.test_case is not None and self.test_case.held_out:
+        if not isinstance(self.test_case, CaseSpec):
+            raise TypeError(f"test_case must be a CaseSpec, got {type(self.test_case).__name__}")
+        if self.test_case.held_out:
             raise ValueError(f"held-out case {self.test_case.case_id} cannot produce Feedback")
 
     def to_dict(self) -> dict[str, Any]:
@@ -414,12 +417,12 @@ class Feedback:
             failure=Failure.from_dict(d["failure"]),
             case=Perturbation.from_dict(d["case"]),
             rollout=RolloutResult.from_dict(d["rollout"]),
+            test_case=CaseSpec.from_dict(d["test_case"]),
             details=dict(d.get("details", {})),
-            test_case=CaseSpec.from_dict(d["test_case"]) if d.get("test_case") else None,
         )
 
     @classmethod
-    def from_report(cls, report: AttackReport, test_case: CaseSpec | None = None) -> Feedback:
+    def from_report(cls, report: AttackReport, test_case: CaseSpec) -> Feedback:
         if report.failure is None or report.constraint is None:
             raise ValueError(f"attack {report.attack_id} has no failure to feed back")
         return cls(
