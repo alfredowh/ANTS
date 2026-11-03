@@ -46,3 +46,15 @@ def test_the_run_writes_a_labelled_figure(tmp_path):
     assert "MOCK WORLD, not a result" in svg
     page = (tmp_path / "figure.html").read_text(encoding="utf-8")
     assert "Table view" in page and 'data-theme="dark"' in page
+
+
+def test_cap_harness_rollouts_land_in_the_run_directory(tmp_path, monkeypatch):
+    from ants.adversary.experiments import adaptive_vs_uniform as avu
+
+    seen = {}
+    monkeypatch.setattr(avu, "run", lambda out, policy, attacks, seeds, base: seen.update(
+        out=out, aspire=base.aspire) or [])  # fmt: skip
+    monkeypatch.setattr(avu, "summarize", lambda runs, backend: "")
+    out = tmp_path / "h1a"
+    avu.main(["--backend", "cap_harness", "--aspire", str(tmp_path), "--out", str(out)])
+    assert seen["aspire"].output_root == out / "aspire" and seen["aspire"].root == tmp_path

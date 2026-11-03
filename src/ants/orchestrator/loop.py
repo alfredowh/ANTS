@@ -59,7 +59,7 @@ AskHuman = Callable[[Mapping[str, Any]], "GateAnswer | None"]
 #: called after every attack with the report and the policy it attacked (observability only)
 OnAttack = Callable[[AttackReport, Policy], None]
 
-#: the names `workflow.md` documents for Muse Wonder; a test keeps the two in sync
+#: the names `docs/orchestrator/phases.md` documents for the repair model; a test keeps them in sync
 STOP_REASONS = ("robust", "cycles", "budget", "escalate", "no_working_policy")
 DECISIONS = ("no_failure", "accepted", "rejected", "budget_stop")
 EVENTS = ("start", "cycle", "escalate", "human_answer", "no_working_policy", "end")
@@ -74,6 +74,9 @@ class LoopConfig:
     gate_mode: str = "strict"  # "off" only for the without-gate ablation arm
     stall_window: int = 3  # W: cycles one failure signature may stall before escalation
     max_human_asks: int = 1
+    # Muse price used to turn token counts into $ (observed about $13.5 per million tokens,
+    # see docs/architecture.md, open decision 6). Logged with the run; not a billing record.
+    usd_per_million_tokens: float = 13.5
     out: Path | None = None  # run directory; None logs nothing to disk
 
 
@@ -124,6 +127,22 @@ class Loop:
         (folder / f"v{policy.version}.json").write_text(
             json.dumps(policy.to_dict(), indent=1, default=str), encoding="utf-8"
         )
+
+    # --- cost ----------------------------------------------------------------------------
+    def _usd(self, tokens: int) -> float:
+        return round(tokens * self.cfg.usd_per_million_tokens / 1e6, 4)
+
+    def _cost(self, rows: list[dict[str, Any]]) -> dict[str, Any]:
+        """Rewrite tokens and $ in total and per rewrite (System 1's counts)."""
+        spent = [r["rewrite_tokens"] for r in rows if "rewrite_tokens" in r]
+        total = sum(spent)
+        return {
+            "rewrite_tokens": total,
+            "rewrites": len(spent),
+            "rewrite_cost_usd": self._usd(total),
+            "cost_per_rewrite_usd": self._usd(total / len(spent)) if spent else 0.0,
+            "usd_per_million_tokens": self.cfg.usd_per_million_tokens,
+        }
 
     # --- cases ---------------------------------------------------------------------------
     def _run(self, policy: Policy, case: CaseSpec) -> RolloutResult:
@@ -239,6 +258,7 @@ class Loop:
             row["candidate_version"] = candidate.version
             if "tokens" in candidate.metadata:  # what this rewrite cost (System 1's count)
                 row["rewrite_tokens"] = candidate.metadata["tokens"]
+                row["rewrite_cost_usd"] = self._usd(candidate.metadata["tokens"])
             row["diff"] = "".join(
                 difflib.unified_diff(
                     incumbent.code.splitlines(keepends=True),
@@ -314,7 +334,7 @@ class Loop:
             "constraints": [c.to_dict() for c in self.constraints],
             "escalation": escalation,
             "cases": len(self.cases),
-            "rewrite_tokens": sum(r.get("rewrite_tokens", 0) for r in rows),
+            **self._cost(rows),
         }
         self._log("loop.jsonl", summary)
         if self.cfg.out is not None:
