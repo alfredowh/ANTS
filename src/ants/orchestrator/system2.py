@@ -24,7 +24,13 @@ from ants.adversary.diagnoser import diagnose, signature
 from ants.adversary.perturbations import CATEGORIES, Bounds
 from ants.adversary.planner import TestPlanner
 from ants.contracts import CaseSpec, Constraint, Split, to_dict
-from ants.evalkit.runlog import RunLog
+from ants.evalkit.corrections import (
+    CorrectionStore,
+    make_correction,
+    retrieve_corrections,
+    signature_from_trace,
+)
+from ants.evalkit.runlog import RunLog, unified_diff
 from ants.orchestrator.gate import regression_gate
 from ants.orchestrator.human_gate import GateAnswer, answer_to_constraint
 
@@ -58,6 +64,9 @@ class HardenConfig:
     strategy: str = "thompson"
     seed: int = 0
     bounds: Bounds = field(default_factory=Bounds)
+    memory_mode: str = "off"  # off | matched(k): signature-keyed correction retrieval
+    memory_k: int = 2
+    correction_store: Path | None = None  # JSONL; written at gate acceptance, read on retrieval
 
 
 @dataclass
@@ -120,7 +129,7 @@ def harden(
                  "run_dir": res.run_dir}
             )  # fmt: skip
             if not res.success:
-                failures.append((p, res))
+                failures.append((p, res, case))
         row: dict = {"cycle": cycle, "tests": tests, "constraints_new": [], "candidate": None}
         if not failures:
             row["decision"] = "no_failure"
@@ -131,14 +140,78 @@ def harden(
                 break
             continue
         sigs = []
-        for p, res in failures:
+        for p, res, _case in failures:
             sig = signature(p, res.feedback)
             sigs.append(sig)
             if all(c.failure_signature != sig for c in constraints):
                 c = diagnose(p, res.feedback, len(constraints))
                 constraints.append(c)
                 row["constraints_new"].append(to_dict(c))
-        gen = generate(incumbent, constraints, [r.feedback for _, r in failures])
+        # Signature-keyed correction retrieval: past gate-accepted repairs for the
+        # same failure signature, offered to the generator as extra constraints.
+        retrieval = {
+            "mode": cfg.memory_mode,
+            "used": False,
+            "reason": "memory_off" if cfg.memory_mode == "off" else "no_match",
+            "queries": [signature_from_trace(r.feedback).as_dict() for _, r, _ in failures],
+            "candidates": [],
+            "retrieved": [],
+        }
+        prompt_constraints = list(constraints)
+        retrieved_records: list[dict] = []
+        if cfg.memory_mode == "matched" and cfg.correction_store is not None:
+            store = CorrectionStore(cfg.correction_store)
+            records = store.load()
+            if not records:
+                retrieval["reason"] = "empty_store"
+            seen_ids: set[str] = set()
+            for _, res, _ in failures:
+                chosen, candidates = retrieve_corrections(records, res.feedback, cfg.memory_k)
+                retrieval["candidates"].extend(candidates)
+                for record in chosen:
+                    if record["correction_id"] in seen_ids:
+                        continue
+                    seen_ids.add(record["correction_id"])
+                    retrieved_records.append(record)
+                    prompt_constraints.append(
+                        Constraint(
+                            constraint_id=f"mem:{record['correction_id']}",
+                            failure_signature=record.get("failure_signature", ""),
+                            when_to_apply=record.get("when_to_apply", ""),
+                            rule=record["rule"]
+                            + "\nPast accepted repair for this failure:\n"
+                            + (record.get("repair_diff") or "")[:2000],
+                            evidence=list(record.get("evidence", [])),
+                        )
+                    )
+            if retrieved_records:
+                retrieval["used"] = True
+                retrieval["reason"] = "hit"
+                retrieval["retrieved"] = [
+                    {
+                        "correction_id": r["correction_id"],
+                        "signature": r.get("signature"),
+                        "rule": r.get("rule", ""),
+                        "repair_diff": (r.get("repair_diff") or "")[:2000],
+                        "trigger_case": r.get("trigger_case", ""),
+                        "help_count": r.get("help_count", 0),
+                        "hurt_count": r.get("hurt_count", 0),
+                    }
+                    for r in retrieved_records
+                ]
+                for record in retrieved_records:
+                    store.bump(record["correction_id"], retrieved_delta=1)
+            log.event(
+                "memory_retrieval",
+                cycle=cycle,
+                used=retrieval["used"],
+                reason=retrieval["reason"],
+                retrieved=[r["correction_id"] for r in retrieved_records],
+            )
+        elif cfg.memory_mode == "matched":
+            retrieval["reason"] = "no_store_configured"
+        row["retrieval"] = retrieval
+        gen = generate(incumbent, prompt_constraints, [r.feedback for _, r, _ in failures])
         if gen is None:
             row["decision"] = "budget_stop"
             rows.append(row)
@@ -152,6 +225,46 @@ def harden(
         row["gate"] = gate.__dict__
         row["incumbent_results"] = dict(results)
         row["candidate_results"] = cand_results
+        if gate.accepted and cfg.correction_store is not None:
+            store = CorrectionStore(cfg.correction_store)
+            try:
+                diff = unified_diff(
+                    incumbent.read_text(encoding="utf-8"),
+                    candidate.read_text(encoding="utf-8"),
+                    incumbent.name,
+                    candidate.name,
+                )
+            except OSError:
+                diff = ""
+            written = []
+            for (_p, res, case), sig in zip(failures, sigs, strict=False):
+                if case.case_id not in gate.improvements:
+                    continue
+                constraint = next((c for c in constraints if c.failure_signature == sig), None)
+                if constraint is None:
+                    continue
+                record = make_correction(
+                    constraint,
+                    res.feedback,
+                    case.case_id,
+                    incumbent.name,
+                    candidate.name,
+                    diff,
+                    gate.__dict__,
+                    epoch=cycle,
+                )
+                if all(r["correction_id"] != record["correction_id"] for r in store.load()):
+                    store.append(record)
+                    written.append(record["correction_id"])
+            row["corrections_written"] = written
+            for record in retrieved_records:
+                store.bump(record["correction_id"], help_delta=1)
+        elif gate.accepted:
+            row["corrections_written"] = []
+        if not gate.accepted and retrieved_records and cfg.correction_store is not None:
+            store = CorrectionStore(cfg.correction_store)
+            for record in retrieved_records:
+                store.bump(record["correction_id"], hurt_delta=1)
         if gate.accepted:
             incumbent, results = candidate, cand_results
             planner.reset()  # beliefs were about the old incumbent

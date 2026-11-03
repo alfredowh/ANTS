@@ -81,6 +81,63 @@ def test_loop_rejects_a_regressing_candidate_and_escalates_when_stalled(tmp_path
     assert res.escalation and res.escalation["signature"].startswith("size:")
 
 
+def test_correction_written_then_retrieved_by_signature_in_a_new_run(tmp_path):
+    run_case = _world(tmp_path, {"v0": "size", "v1": "pose", "v2": "none"})
+    store = tmp_path / "corrections.jsonl"
+    calls = {"n": 0}
+
+    def gen_train(inc, cons, fbs):
+        calls["n"] += 1
+        return (tmp_path / ("v1.py" if calls["n"] == 1 else "v2.py"), 100)
+
+    cfg = HardenConfig(
+        cycles=8,
+        tests_per_cycle=8,
+        min_tests_robust=1,
+        memory_mode="matched",
+        memory_k=2,
+        correction_store=store,
+    )
+    res = harden(tmp_path / "v0.py", cfg, run_case, gen_train, RunLog(tmp_path / "train"))
+    assert res.incumbent.name == "v2.py"
+    assert store.exists() and "Re-localize" not in store.read_text()  # rule text comes from RULES
+    records = [json.loads(x) for x in store.read_text().splitlines()]
+    admitted = [r for r in records if r["status"] == "admitted"]
+    assert admitted and admitted[-1]["signature"]["primitive"] == "move_to_pose"
+
+    seen = []
+
+    def gen_test(inc, cons, fbs):
+        seen.append([c.constraint_id for c in cons])
+        retrieved = any(cid.startswith("mem:") for cid in seen[-1])
+        return (tmp_path / ("v2.py" if retrieved else "v1.py"), 100)
+
+    cfg2 = HardenConfig(
+        cycles=8,
+        tests_per_cycle=8,
+        min_tests_robust=1,
+        memory_mode="matched",
+        memory_k=2,
+        correction_store=store,
+    )
+    res2 = harden(tmp_path / "v0.py", cfg2, run_case, gen_test, RunLog(tmp_path / "test"))
+    assert res2.incumbent.name == "v2.py" and len(seen) == 1  # fixed at the first attempt
+    rows = [json.loads(x) for x in (tmp_path / "test/system2.jsonl").read_text().splitlines()]
+    retrieval = next(r["retrieval"] for r in rows if r.get("retrieval"))
+    assert retrieval["used"] is True and retrieval["retrieved"]
+    assert retrieval["retrieved"][0]["correction_id"] == admitted[-1]["correction_id"]
+
+    # memory off: the same store is not consulted and the bad repair comes first
+    seen.clear()
+    cfg3 = HardenConfig(
+        cycles=8, tests_per_cycle=8, min_tests_robust=1, memory_mode="off", correction_store=store
+    )
+    harden(tmp_path / "v0.py", cfg3, run_case, gen_test, RunLog(tmp_path / "off"))
+    rows = [json.loads(x) for x in (tmp_path / "off/system2.jsonl").read_text().splitlines()]
+    assert all(r["retrieval"]["used"] is False for r in rows if r.get("retrieval"))
+    assert all(not any(cid.startswith("mem:") for cid in ids) for ids in seen)
+
+
 def test_loop_refuses_overlapping_splits_and_a_policy_that_fails_nominal(tmp_path):
     run_case = _world(tmp_path, {"v0": "nominal"})
     cfg = HardenConfig(held_out_seeds=(51, 1))

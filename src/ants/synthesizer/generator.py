@@ -7,6 +7,7 @@ constraints learned so far. Everything else is identical across arms.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 
@@ -91,6 +92,70 @@ def repair_message(
         + f"\nFind the cause and fix the program. {ask}",
         images,
     )
+
+
+def _bucket_number(value: object) -> object:
+    """Coarse magnitude bucket, so near-identical diagnostics share a repair key."""
+    if isinstance(value, bool) or value is None or isinstance(value, str):
+        return value
+    if isinstance(value, (int, float)):
+        magnitude = abs(float(value))
+        for bound in (0.0, 0.005, 0.02, 0.05):
+            if magnitude <= bound:
+                return f"<={bound:g}"
+        return ">0.05"
+    if isinstance(value, dict):
+        return {k: _bucket_number(v) for k, v in sorted(value.items())}
+    if isinstance(value, list):
+        return [_bucket_number(v) for v in value]
+    return str(value)
+
+
+def repair_cache_key(messages: list[dict], feedback: dict) -> str:
+    """Stable key for a repair request whose diagnostics differ only in volatile detail.
+
+    Exact parts (system prompt, task/demo/scene opening and every earlier program)
+    are hashed literally. Non-assistant text has its numbers masked, and feedback is
+    reduced to termination, failing tool/status and bucketed errors. Free error text,
+    step counts, stdout and exact poses never enter the key. The caller still runs
+    the rollout/gate on any program returned through this key.
+    """
+    stable_messages = []
+    for message in messages:
+        content = message.get("content", "")
+        if message.get("role") == "assistant":
+            stable_messages.append({"role": "assistant", "sha": _content_sha(content)})
+        else:
+            text = json.dumps(content, sort_keys=True, ensure_ascii=False)
+            stable_messages.append(
+                {
+                    "role": message.get("role"),
+                    "sha": _content_sha(re.sub(r"\d+(?:\.\d+)?", "#", text)),
+                }
+            )
+    failed = [
+        {
+            "tool": call.get("tool"),
+            "status": call.get("status"),
+            "final_position_error_m": _bucket_number(call.get("final_position_error_m")),
+        }
+        for call in (feedback.get("failed_calls") or [])
+    ]
+    material = {
+        "schema": 1,
+        "messages": stable_messages,
+        "termination_reason": feedback.get("termination_reason"),
+        "failed_calls": failed,
+    }
+    return hashlib.sha256(
+        json.dumps(material, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
+
+
+def _content_sha(content: object) -> str:
+    return hashlib.sha256(
+        json.dumps(content, sort_keys=True, ensure_ascii=False).encode("utf-8")
+    ).hexdigest()
 
 
 def extract_code(text: str) -> str:

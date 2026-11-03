@@ -66,3 +66,5 @@ def test_system2_tab_data_and_view_are_embedded(tmp_path):
     (run / "system2.jsonl").write_text(json.dumps(row) + "\n", encoding="utf-8")
     html = build(run).read_text(encoding="utf-8")
     assert "function system2View" in html and '"decision": "no_failure"' in html
+    assert "Correction retrieval (signature cache)" in html
+    assert "retrieval not used" in html and "memory_off" in html

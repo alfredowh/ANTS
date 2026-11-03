@@ -24,7 +24,12 @@ from ants.contracts import CaseSpec, Split, to_dict
 from ants.evalkit.aspire_harness import CapHarness, feedback
 from ants.evalkit.contacts import analyse, evidence_text
 from ants.evalkit.runlog import RunLog, unified_diff
-from ants.synthesizer.generator import build_messages, extract_code, repair_message
+from ants.synthesizer.generator import (
+    build_messages,
+    extract_code,
+    repair_cache_key,
+    repair_message,
+)
 from ants.synthesizer.llm import BudgetExceeded, ChatClient, load_dotenv
 from ants.synthesizer.sam_api import add_sam_model_arg, normalize_sam_model
 
@@ -81,11 +86,20 @@ def run_sample(
     )
     log.event("sample_start", arm=arm, sample=sample, temperature=temperature)
     program = previous_text = None
+    last_feedback: dict | None = None
     for attempt in range(args.repairs + 1):
         role = "initial" if attempt == 0 else "repair"
         try:
             reply = client.chat(
-                messages, temperature=temperature, tag=f"{arm}/s{sample}/a{attempt}"
+                messages,
+                temperature=temperature,
+                tag=f"{arm}/s{sample}/a{attempt}",
+                sample_index=sample,
+                canonical_key=(
+                    repair_cache_key(messages, last_feedback)
+                    if attempt > 0 and last_feedback is not None
+                    else None
+                ),
             )
         except BudgetExceeded as err:
             record["stopped"] = str(err)
@@ -105,7 +119,7 @@ def run_sample(
         log.event(
             "program", arm=arm, sample=sample, attempt=attempt, role=role, tokens=tokens,
             reasoning_tokens=reply.reasoning_tokens,
-            from_cache=reply.from_cache, lines=len(text.splitlines()),
+            from_cache=reply.from_cache, cache_kind=reply.cache_kind, lines=len(text.splitlines()),
             diff_lines=len(diff.splitlines()),
         )  # fmt: skip
         harness = harnesses[args.debug_scene]
@@ -130,7 +144,8 @@ def run_sample(
                 log.event("contact_analysis_failed", arm=arm, attempt=attempt, error=str(err)[:200])
         record["attempts"].append(
             {"attempt": attempt, "role": role, "tokens": tokens,
-             "from_cache": reply.from_cache, "trace": to_dict(trace),
+             "from_cache": reply.from_cache, "cache_kind": reply.cache_kind,
+             "trace": to_dict(trace),
              "blocking": [(e["part"], e["object"], e["n_steps"]) for e in analysis["blocking"]]
              if analysis else None,
              "clean_success": bool(trace.task_success and analysis and not analysis["blocking"])}
@@ -147,6 +162,7 @@ def run_sample(
         if trace.task_success or attempt == args.repairs or not trace.run_dir:
             break
         fb = feedback(Path(trace.run_dir))
+        last_feedback = fb
         log.write_json(f"{rel}/feedback_attempt{attempt}.json", fb)
         log.event("feedback", arm=arm, sample=sample, attempt=attempt, keys=sorted(fb))
         repair = repair_message(fb, args.explain)

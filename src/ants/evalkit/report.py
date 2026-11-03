@@ -628,11 +628,11 @@ function updCnt(){const c=$("#cnt");if(c)c.textContent=`${filt().length} of ${RO
 function renderRes(){const e=$("#res");if(e)e.innerHTML=cur==="dash"?dashRes():rowsRes();updCnt()}
 
 /* ---------- synced player + signal plot ---------- */
-const P={vids:[],master:null,raf:0,rs:[],view:null};
+const P={vids:[],master:null,raf:0,rs:[],view:null,rate:3};
 function stopPlayer(){cancelAnimationFrame(P.raf);P.vids.forEach(v=>v.pause());P.vids=[];P.master=null}
 const dur=r=>r.steps!=null?(r.steps+1)/(r.fps||20):(r.signals?r.signals.t.at(-1):1);
 function videoTag(r,cam,cap){const src=r.videos?.[cam];return src?`<figure><video data-sync data-dur="${dur(r)}" src="${esc(src)}" muted playsinline preload="auto"></video><figcaption>${esc(cap)}</figcaption></figure>`:`<figure><div class="card pad muted">no ${esc(cam)} video recorded</div></figure>`}
-function controls(rs){const d=Math.max(...rs.map(dur));return `<div class="ctl"><button id="pp" onclick="toggle()" title="space">▶</button><button onclick="stepF(-1)" title="←">⏮</button><button onclick="stepF(1)" title="→">⏭</button><input id="sc" type="range" min="0" max="${d}" step="0.01" value="0" oninput="seek(+this.value)"><span id="tl" class="mono">0.00 / ${d.toFixed(2)} s</span><select onchange="setRate(+this.value)" title="speed">${[.25,.5,1,2].map(x=>`<option ${x===1?"selected":""} value="${x}">${x}×</option>`).join("")}</select></div>`}
+function controls(rs){const d=Math.max(...rs.map(dur));return `<div class="ctl"><button id="pp" onclick="toggle()" title="space">▶</button><button onclick="stepF(-1)" title="←">⏮</button><button onclick="stepF(1)" title="→">⏭</button><input id="sc" type="range" min="0" max="${d}" step="0.01" value="0" oninput="seek(+this.value)"><span id="tl" class="mono">0.00 / ${d.toFixed(2)} s</span><select onchange="setRate(+this.value)" title="speed">${[.25,.5,1,2,3].map(x=>`<option ${x===P.rate?"selected":""} value="${x}">${x}×</option>`).join("")}</select></div>`}
 function mount(rs,mode){stopPlayer();P.vids=[...document.querySelectorAll("video[data-sync]")];P.rs=rs;P.view=mode;
  P.master=P.vids.reduce((a,b)=>(+b.dataset.dur>+(a?.dataset.dur||0)?b:a),null);
  if(P.master)P.master.addEventListener("ended",()=>{$("#pp").textContent="▶"});
@@ -640,12 +640,14 @@ function mount(rs,mode){stopPlayer();P.vids=[...document.querySelectorAll("video
  const svg=$("#plot");if(svg){const W=1000,T=+svg.dataset.t,L=+svg.dataset.l,R=+svg.dataset.r;svg._m={T,L,R,X:t=>L+(W-L-R)*t/T};const tOf=e=>{const b=svg.getBoundingClientRect(),m=svg._m;return Math.max(0,Math.min(m.T,((e.clientX-b.left)/b.width*W-m.L)/(W-m.L-m.R)*m.T))};
   svg.addEventListener("pointerdown",e=>{svg.setPointerCapture(e.pointerId);seek(tOf(e))});
   svg.addEventListener("pointermove",e=>{const t=tOf(e);ghost(t);if(e.buttons)seek(t)});svg.addEventListener("pointerleave",()=>ghost(null))}
- cursor(0)}
+ P.vids.forEach(v=>v.playbackRate=P.rate);
+ cursor(0);
+ if(P.master)toggle();}
 function toggle(){if(!P.master)return;if(P.master.paused){if(P.master.ended||P.master.currentTime>=+P.master.dataset.dur-.06)seek(0);P.vids.forEach(v=>v.play());$("#pp").textContent="⏸";loop()}else{P.vids.forEach(v=>v.pause());$("#pp").textContent="▶"}}
 function loop(){cancelAnimationFrame(P.raf);const f=()=>{if(!P.master)return;cursor(P.master.currentTime);if(!P.master.paused&&!P.master.ended)P.raf=requestAnimationFrame(f);else $("#pp").textContent="▶"};f()}
 function seek(t){P.vids.forEach(v=>{v.currentTime=Math.max(0,Math.min(t,(v.duration||t)-.001))});cursor(t)}
 function stepF(n){if(!P.master)return;P.vids.forEach(v=>v.pause());$("#pp").textContent="▶";seek(P.master.currentTime+n/(P.rs[0].fps||20))}
-function setRate(x){P.vids.forEach(v=>v.playbackRate=x)}
+function setRate(x){P.rate=x;P.vids.forEach(v=>v.playbackRate=x)}
 function cursor(t){const sc=$("#sc");if(sc)sc.value=t;const tl=$("#tl");if(tl)tl.textContent=`${t.toFixed(2)} / ${(+sc?.max||0).toFixed(2)} s`;
  const svg=$("#plot");if(svg&&svg._m){const x=svg._m.X(t);svg.querySelectorAll(".cur").forEach(l=>{l.setAttribute("x1",x);l.setAttribute("x2",x)})}
  const ro=$("#readout");if(ro)ro.innerHTML=readout(t)}
