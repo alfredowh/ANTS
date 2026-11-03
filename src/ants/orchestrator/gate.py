@@ -75,3 +75,16 @@ def gate(
     if not improvements:
         return GateDecision(False, "no improvement over the incumbent", **base)
     return GateDecision(True, f"fixes {len(improvements)} case(s), no regression", **base)
+
+
+def regression_gate(incumbent: Mapping[str, bool], candidate: Mapping[str, bool]) -> GateDecision:
+    """System 1's boolean gate signature (`harden()` on branch `synthesizer`), on the outcome gate.
+
+    True is a pass and False a failure; a missing candidate result still never passes. Kept so
+    `harden()` and its tests run unchanged when `synthesizer` merges; new code calls `gate()`.
+    """
+
+    def to_outcomes(results: Mapping[str, bool]) -> dict[str, Outcome]:
+        return {c: Outcome.SUCCESS if ok else Outcome.FAILURE for c, ok in results.items()}
+
+    return gate(to_outcomes(incumbent), to_outcomes(candidate), "strict")

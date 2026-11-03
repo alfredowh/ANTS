@@ -237,6 +237,8 @@ class Loop:
             cand = {cid: self._run(candidate, c).outcome for cid, c in self.cases.items()}
             decision: GateDecision = gate(self.outcomes, cand, cfg.gate_mode)
             row["candidate_version"] = candidate.version
+            if "tokens" in candidate.metadata:  # what this rewrite cost (System 1's count)
+                row["rewrite_tokens"] = candidate.metadata["tokens"]
             row["diff"] = "".join(
                 difflib.unified_diff(
                     incumbent.code.splitlines(keepends=True),
@@ -312,6 +314,7 @@ class Loop:
             "constraints": [c.to_dict() for c in self.constraints],
             "escalation": escalation,
             "cases": len(self.cases),
+            "rewrite_tokens": sum(r.get("rewrite_tokens", 0) for r in rows),
         }
         self._log("loop.jsonl", summary)
         if self.cfg.out is not None:

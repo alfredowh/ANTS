@@ -7,9 +7,11 @@ Writes `<out>/loop.jsonl` (every loop decision), `<out>/attacks.jsonl` (one stud
 attack), `<out>/history.jsonl` (System 2's history), `<out>/policies/v<N>.py`, `<out>/summary.json`
 and `<out>/studio.html` (Harden, Replay and Versions views).
 
-System 1 is the patch fixture (`--synthesizer patch`) until System 1's Muse generator is merged:
-it applies hand-written patches that the MOCK world rewards, so a run with it shows that the loop,
-gate and escalation work, never that a policy got more robust. Mock-world numbers are not results.
+`--synthesizer patch` (default) is an offline fixture: it applies hand-written patches that the
+MOCK world rewards, so a run with it shows that the loop, gate and escalation work, never that a
+policy got more robust. Mock-world numbers are not results. `--synthesizer muse-code
+--synth-token-budget N` uses System 1's Muse Code repair step (`MuseOrchestrator`, branch
+`synthesizer`) through `GenerateSynthesizer`; tokens per rewrite are logged in each cycle.
 """
 
 from __future__ import annotations
@@ -24,7 +26,7 @@ from ants.adversary.perturbations import CATEGORIES, Bounds
 from ants.adversary.rollout import AspireConfig
 from ants.contracts import Policy
 from ants.orchestrator.loop import Loop, LoopConfig, LoopResult
-from ants.orchestrator.synthesis import PatchSynthesizer, Synthesizer
+from ants.orchestrator.synthesis import GenerateSynthesizer, PatchSynthesizer, Synthesizer
 from ants.studio.build import build
 from ants.studio.run import append_row, attack_row, nominal_events
 
@@ -88,6 +90,19 @@ def run_loop(
     return res, build(out)
 
 
+def muse_code_synthesizer(out: Path, token_budget: int) -> GenerateSynthesizer:
+    """System 1's Muse Code repair step behind the loop's `Synthesizer` (imported lazily)."""
+    try:
+        from ants.orchestrator.muse_orchestrator import MuseOrchestrator
+    except ImportError as exc:  # not merged yet
+        raise SystemExit(
+            "muse-code needs System 1's MuseOrchestrator (branch `synthesizer`); "
+            f"it is not on this branch: {exc}"
+        ) from exc
+    generate = MuseOrchestrator(out_dir=out / "muse", token_budget=token_budget)
+    return GenerateSynthesizer(generate, out / "muse" / "incumbents", name="muse-code")
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     ap.add_argument("--cycles", type=int, default=30)
@@ -98,7 +113,20 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--model", default="mock", help='"mock" (rules only) or "muse-spark"')
     ap.add_argument("--backend", default="mock", choices=["mock", "cap_harness"])
     ap.add_argument("--aspire", type=Path, default=None, help="ASPIRE checkout (cap_harness)")
-    ap.add_argument("--synthesizer", default="patch", choices=["patch"])
+    ap.add_argument(
+        "--synthesizer",
+        default="patch",
+        choices=["patch", "muse-code"],
+        help="patch: offline test fixture. muse-code: System 1's MuseOrchestrator (needs the "
+        "synthesizer branch merged and the `muse` CLI; costs Muse tokens)",
+    )
+    ap.add_argument(
+        "--synth-token-budget",
+        type=int,
+        default=None,
+        help="tokens the muse-code synthesizer may spend this run (required for muse-code; "
+        "about 43k per cycle observed)",
+    )
     ap.add_argument("--gate", default="strict", choices=["strict", "off"])
     ap.add_argument("--stall-window", type=int, default=3)
     ap.add_argument("--min-severity", type=float, default=0.3)
@@ -122,7 +150,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     policy = Policy("bowl_on_plate", 0, args.task, args.policy.read_text(encoding="utf-8"))
     loop_cfg = LoopConfig(cycles=args.cycles, gate_mode=args.gate, stall_window=args.stall_window)
-    res, page = run_loop(out, adv_cfg, loop_cfg, policy, severity_bound=args.severity_bound)
+    synth = None
+    if args.synthesizer == "muse-code":
+        if args.synth_token_budget is None:
+            ap.error("--synthesizer muse-code needs an explicit --synth-token-budget")
+        synth = muse_code_synthesizer(out, args.synth_token_budget)
+    res, page = run_loop(
+        out, adv_cfg, loop_cfg, policy, synthesizer=synth, severity_bound=args.severity_bound
+    )
     for r in res.cycles:
         sig = r.get("signature", "")
         print(f"{r['cycle']:3d} v{r['policy_version']} {r['category']:9s} {r['outcome']:7s} "

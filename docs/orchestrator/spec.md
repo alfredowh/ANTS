@@ -27,8 +27,9 @@ moved onto the `Adversary` facade and the shared contracts.
 
 ```
 orchestrator/
-├── gate.py         gate(), GateDecision, GATE_MODES
-├── synthesis.py    Synthesizer protocol; PatchSynthesizer test fixture, MOCK_WORLD_PATCHES
+├── gate.py         gate(), GateDecision, GATE_MODES; regression_gate() keeps System 1's boolean form
+├── synthesis.py    Synthesizer protocol; GenerateSynthesizer (System 1's Generate, e.g. MuseOrchestrator);
+│                   PatchSynthesizer test fixture, MOCK_WORLD_PATCHES
 ├── loop.py         Loop, LoopConfig, LoopResult: one attack per cycle, gate, stall, escalation
 ├── human_gate.py   a person's text answer to an escalation becomes a constraint (System 1's)
 ├── workflow.md     the workflow Muse Wonder reads: steps, roles, how a rewrite is judged, enforced rules
@@ -72,8 +73,11 @@ version it hit and, for failures, the rewrite and its verdict. Read-only: it nev
 
 ## Next
 
-- Plug in System 1's Muse `synthesize()` behind `Synthesizer` once `synthesizer` merges, with
-  `load_workflow()` in its system prompt.
+- System 1's repair step is `MuseOrchestrator` (Muse Code, branch `synthesizer`), whose prompt
+  context is `docs/orchestrator/phases.md`. `GenerateSynthesizer` adapts its `Generate` signature
+  to `Synthesizer`; `run.py --synthesizer muse-code --synth-token-budget N` uses it once
+  `synthesizer` merges (about 43k tokens per rewrite observed). Merge `phases.md` and
+  `workflow.md` into one file with System 1.
 - Grow `workflow.md` step by step (deployment loop with human approval, recovery skills) as each
   step gets code behind it.
 - Several rollouts per case for `Policy.deterministic=False`.
