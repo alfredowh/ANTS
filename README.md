@@ -8,7 +8,7 @@ Our entry for the [Meta Global AI Developer Hackathon 2026](https://dev.meta.ai/
 
 - **System 1, write the skill:** SAM 3.1 tracks hand, object and gripper in one demo video; Muse Wonder (via Muse Code) turns it into a policy.
 - **System 2, break the skill:** Muse Spark plans perturbations on the weakest category, a LIBERO simulation runs them, and Muse Spark diagnoses each failure.
-- **Closed loop:** each failure goes back to the generator as context, never as a weight update. A regression gate accepts a rewrite only if it does at least as well on every case seen so far. If stuck after N cycles, ANTS asks for one targeted demo.
+- **Closed loop:** each failure goes back to the generator as context, never as a weight update. A regression gate accepts a rewrite only if it is no worse on every case seen so far and better on at least one. If stuck after N cycles, ANTS asks for one targeted demo.
 - **Deliverable:** one closed loop on one pick-and-place task with a Franka arm in LIBERO.
 
 ## Results
