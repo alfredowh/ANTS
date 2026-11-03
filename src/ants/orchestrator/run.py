@@ -9,9 +9,13 @@ and `<out>/studio.html` (Harden, Replay and Versions views).
 
 `--synthesizer patch` (default) is an offline fixture: it applies hand-written patches that the
 MOCK world rewards, so a run with it shows that the loop, gate and escalation work, never that a
-policy got more robust. Mock-world numbers are not results. `--synthesizer muse-code
---synth-token-budget N` uses System 1's Muse Code repair step (`MuseOrchestrator`, branch
-`synthesizer`) through `GenerateSynthesizer`; tokens per rewrite are logged in each cycle.
+policy got more robust. Mock-world numbers are not results. System 1's real repair step, both
+sending `docs/orchestrator/phases.md` and both needing `--synth-token-budget N`:
+- `--synthesizer muse-code`: Muse Code through the `muse` CLI (`MuseOrchestrator`, via
+  `GenerateSynthesizer`).
+- `--synthesizer muse-api`: Muse Wonder through the Meta API (`default_synthesizer()`); needs only
+  `META_API_KEY` and the ASPIRE checkout (its API reference and example program), no `muse` CLI.
+Tokens and $ per rewrite are logged in each cycle.
 """
 
 from __future__ import annotations
@@ -120,6 +124,23 @@ def muse_code_synthesizer(out: Path, token_budget: int) -> GenerateSynthesizer:
     return GenerateSynthesizer(generate, out / "muse" / "incumbents", name="muse-code")
 
 
+def muse_api_synthesizer(out: Path, token_budget: int, task: str) -> Synthesizer:
+    """System 1's Meta-API repair step (`default_synthesizer`), imported lazily.
+
+    Its ChatClient writes its cache and ledger under `out/muse_api/` and stops at `token_budget`
+    (a spent budget makes `rewrite()` return None, which the loop logs as a budget stop).
+    """
+    from ants.synthesizer.muse_synthesizer import default_synthesizer
+
+    try:
+        return default_synthesizer(task, token_budget=token_budget, run_dir=out / "muse_api")
+    except FileNotFoundError as exc:  # its API reference and example come from ASPIRE
+        raise SystemExit(
+            "muse-api reads its API reference and example program from the ASPIRE checkout: "
+            f"run `git submodule update --init ASPIRE` ({exc})"
+        ) from exc
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     ap.add_argument("--cycles", type=int, default=30)
@@ -133,15 +154,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--synthesizer",
         default="patch",
-        choices=["patch", "muse-code"],
-        help="patch: offline test fixture. muse-code: System 1's MuseOrchestrator (needs the "
-        "synthesizer branch merged and the `muse` CLI; costs Muse tokens)",
+        choices=["patch", "muse-code", "muse-api"],
+        help="patch: offline test fixture. muse-code: System 1's Muse Code repair step (needs the "
+        "`muse` CLI). muse-api: System 1's Meta-API repair step (needs META_API_KEY and the "
+        "ASPIRE checkout). Both real ones cost Muse tokens",
     )
     ap.add_argument(
         "--synth-token-budget",
         type=int,
         default=None,
-        help="tokens the muse-code synthesizer may spend this run (required for muse-code; "
+        help="tokens the synthesizer may spend this run (required for muse-code and muse-api; "
         "about 43k per cycle observed)",
     )
     ap.add_argument("--gate", default="strict", choices=["strict", "off"])
@@ -188,10 +210,12 @@ def main(argv: list[str] | None = None) -> int:
         usd_per_million_tokens=args.usd_per_million_tokens,
     )
     synth = None
+    if args.synthesizer != "patch" and args.synth_token_budget is None:
+        ap.error(f"--synthesizer {args.synthesizer} needs an explicit --synth-token-budget")
     if args.synthesizer == "muse-code":
-        if args.synth_token_budget is None:
-            ap.error("--synthesizer muse-code needs an explicit --synth-token-budget")
         synth = muse_code_synthesizer(out, args.synth_token_budget)
+    elif args.synthesizer == "muse-api":
+        synth = muse_api_synthesizer(out, args.synth_token_budget, args.task)
     res, page = run_loop(
         out, adv_cfg, loop_cfg, policy, synthesizer=synth, severity_bound=args.severity_bound
     )
