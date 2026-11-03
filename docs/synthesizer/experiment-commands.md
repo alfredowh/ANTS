@@ -307,8 +307,8 @@ Can ANTS fuse a multi-view camera scan of the LIBERO scene into a persistent 3D 
 LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py
 ```
 
-**Fuse orbit-scan frames into a cuRobo Mapper mesh**
+**Real arm-driven scan: sweep the Franka's wrist camera (not a teleport)**
 
 ```bash
-.venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py
+LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
 ```

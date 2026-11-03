@@ -886,6 +886,7 @@
       ],
       "commands": [
         "scene_recon.scan",
+        "scene_recon.scan_arm",
         "scene_recon.fuse"
       ],
       "inputs": [
@@ -3147,6 +3148,48 @@
       "out": [
         "data/runs/mapper_probe/frames/*.npz",
         "data/runs/mapper_probe/frames/manifest.txt"
+      ],
+      "cost": "free",
+      "minutes": 1,
+      "doc": "docs/perception/scene-reconstruction-probe.md"
+    },
+    {
+      "id": "scene_recon.scan_arm",
+      "title": "Real arm-driven scan: sweep the Franka's wrist camera (not a teleport)",
+      "group": "scene-recon",
+      "runner": "libero",
+      "base": "../tools/mapper_probe/scan_arm.py",
+      "args": [
+        {
+          "flag": "--pan-offsets",
+          "value": "-0.5 -0.3 -0.1 0.1 0.3 0.5",
+          "kind": "value",
+          "on": false,
+          "desc": "Radians added to the reset shoulder-pan joint per waypoint."
+        },
+        {
+          "flag": "--out-dir",
+          "value": "../data/runs/mapper_probe/frames_arm",
+          "kind": "value",
+          "on": false,
+          "desc": "Where per-frame .npz files and manifest.txt are written."
+        }
+      ],
+      "description": "Closed-loop drives the Franka's shoulder-pan joint through N waypoints using the exact delta-joint formula LiberoActionCodec.encode uses, then saves robot0_eye_in_hand RGB-D + world-frame camera pose per waypoint -- genuine robot motion, not a camera teleport.",
+      "examples": [
+        {
+          "title": "Default 6-waypoint pan sweep",
+          "cmd": "cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py"
+        }
+      ],
+      "modules": [
+        "scene_recon",
+        "aspire"
+      ],
+      "in": [],
+      "out": [
+        "data/runs/mapper_probe/frames_arm/*.npz",
+        "data/runs/mapper_probe/frames_arm/manifest.txt"
       ],
       "cost": "free",
       "minutes": 1,

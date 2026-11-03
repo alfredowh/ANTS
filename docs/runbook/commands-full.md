@@ -1245,6 +1245,25 @@ Default bowl-on-plate orbit scan (what produced the 2026-11-03 result):
 cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py
 ```
 
+### `scene_recon.scan_arm`: Real arm-driven scan: sweep the Franka's wrist camera (not a teleport)
+
+Closed-loop drives the Franka's shoulder-pan joint through N waypoints using the exact delta-joint formula LiberoActionCodec.encode uses, then saves robot0_eye_in_hand RGB-D + world-frame camera pose per waypoint -- genuine robot motion, not a camera teleport.
+
+```bash
+LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `--pan-offsets` | `-0.5 -0.3 -0.1 0.1 0.3 0.5` | no | Radians added to the reset shoulder-pan joint per waypoint. |
+| `--out-dir` | `../data/runs/mapper_probe/frames_arm` | no | Where per-frame .npz files and manifest.txt are written. |
+
+Default 6-waypoint pan sweep:
+
+```bash
+cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
+```
+
 ### `scene_recon.fuse`: Fuse orbit-scan frames into a cuRobo Mapper mesh
 
 Integrates every saved frame into curobo.perception.Mapper (Warp backend), computes the ESDF, extracts a surface mesh, and saves it plus a few shaded renders.

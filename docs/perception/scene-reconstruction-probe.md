@@ -32,11 +32,26 @@ Run with `uv run python -m ants.evalkit.runbook cmd scene_recon.scan` and
   single-file HTML for embedding elsewhere):
   https://claude.ai/artifact/1YhU9TBJAhwBdmUBhVLpzS
 
+## Real arm-driven scan (2026-11-03, `tools/mapper_probe/scan_arm.py`)
+
+Added a second scan mode that drives the actual Franka arm instead of teleporting a camera body:
+it closed-loop controls the arm's shoulder-pan joint through a 6-waypoint sweep using the exact
+delta-joint formula `cap_harness.libero.codec.LiberoActionCodec.encode` uses
+(`native = (target - current) * control_frequency`, clipped to the native action bounds), so
+`robot0_eye_in_hand` moves through real forward kinematics, not an overwritten camera pose. Logged
+run: 6 waypoints, joint error converged to <0.02 rad each time, fused into a 5,948-vertex mesh
+(`data/runs/mapper_probe/arm_scan/`) showing the close-range table surface and gripper edge the
+wrist camera actually saw. Sparser than the 16-frame orbit (fewer, narrower-swept views, and the
+wrist camera sits much closer to the surface than `agentview`), but it is genuine robot motion.
+
+Run with `uv run python -m ants.evalkit.runbook cmd scene_recon.scan_arm`, then fuse with
+`fuse_mapper.py --frames-dir data/runs/mapper_probe/frames_arm --out-dir data/runs/mapper_probe/arm_scan`.
+
 ## Honest caveats
 
-- The scan is a **virtual orbiting camera** (the `agentview` MuJoCo camera body is teleported
-  through waypoints each frame), not yet the Franka's own eye-in-hand camera driven by
-  `move_to_pose`. That is the next step.
+- The original orbit scan (`scan_orbit.py`, `agentview`) is a **virtual camera teleport**, not
+  robot motion. `scan_arm.py` fixes this for `robot0_eye_in_hand` but only sweeps one joint over a
+  modest range so far; a fuller scan (more joints, a real look-at trajectory via IK) is still open.
 - Coverage is table-top only: a single orbit at roughly table height never observes the scene from
   below or very close up, so most of the configured 2m x 2m x 1.5m extent is unobserved/far-field in
   the ESDF.
