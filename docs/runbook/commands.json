@@ -3249,6 +3249,27 @@
       "doc": "docs/perception/scene-reconstruction-probe.md"
     },
     {
+      "id": "scene_recon.plan_esdf",
+      "title": "Plan one motion against the fused mesh vs the single-frame mesh",
+      "group": "scene-recon",
+      "runner": "curobo",
+      "base": "../tools/mapper_probe/plan_esdf.py",
+      "args": [],
+      "description": "Fuses the orbit frames into a Mapper ESDF mesh, plans home-to-pan-sweep with it as the cuRobo world obstacle, and repeats with the single-frame voxel mesh. Planning only, nothing executes.",
+      "examples": [],
+      "modules": [
+        "scene_recon",
+        "aspire"
+      ],
+      "in": [
+        "data/runs/mapper_probe/frames/*.npz"
+      ],
+      "out": [],
+      "cost": "free",
+      "minutes": 3,
+      "doc": "docs/perception/scene-reconstruction-probe.md"
+    },
+    {
       "id": "scene_recon.viewer",
       "title": "Build the single-file HTML viewer for the fused meshes",
       "group": "scene-recon",

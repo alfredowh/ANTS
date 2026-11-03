@@ -91,6 +91,26 @@ frames anyway: **14,995 vertices, 27,256 faces** (`data/runs/mapper_probe/lookat
 dense around the fixated bowl area). Fixing the stall needs collision-aware joint
 interpolation — which is exactly what the ESDF-as-obstacle step below would provide.
 
+## Planning against the fused mesh (2026-11-03, `tools/mapper_probe/plan_esdf.py`)
+
+Closes the loop at the mechanism level: builds cuRobo's `MotionPlanner` exactly the
+way ASPIRE's curobo service does (`franka.yml`, `update_world(Scene(mesh=...))`) but
+with the fused orbit-scan mesh as the world obstacle, and compares against the live
+single-frame path (one orbit frame back-projected to world points through ASPIRE's
+own patched `_voxelized_scene_mesh`). Same query both arms: home → home + 0.5 rad
+shoulder pan, an elbow sweep the real arm physically executed. Run with
+`uv run python -m ants.evalkit.runbook cmd scene_recon.plan_esdf` (needs CUDA).
+
+Logged run: **both arms succeed** — fused: 2.62 s, path 0.5 rad; single-frame: 0.55 s,
+path 0.5 rad. No face-flip needed (Mapper marching-cubes winding is outward-correct,
+unlike the hand-rolled voxel extraction the service had to patch). Honest reading: the
+reconstruction is proven plannable — the planner accepts the fused mesh as its world
+and returns a valid trajectory — but this free-space sweep needs no avoidance under
+either representation, so it shows parity, not superiority. The discriminating query
+(a motion threading the wine-rack bars from `dev/curobo/`, where the single-frame
+filter drops thin obstacles) is the follow-up, and it belongs in System 2's package —
+flag with Daniel before landing it there.
+
 ## Honest caveats
 
 - The original orbit scan (`scan_orbit.py`, `agentview`) is a **virtual camera teleport**, not
