@@ -36,6 +36,7 @@ orchestrator/
 ├── human_gate.py   a person's text answer to an escalation becomes a constraint (System 1's)
 ├── workflow.md     the workflow Muse Wonder reads: steps, roles, how a rewrite is judged, enforced rules
 ├── workflow.py     load_workflow(), workflow_info() (version + hash, logged in every run's start line)
+├── preflight.py    GPU-run readiness: ASPIRE, launcher, services, GPU, disk, key, muse CLI; --smoke
 ├── heldout.py      held-out evaluation of v0 and final (Split.HELD_OUT cases, ASPIRE seeds 1-50)
 └── run.py          CLI + run_loop(): logs in the studio format and builds studio.html
 tests/orchestrator/ test_gate.py, test_loop.py, test_workflow.py (md names match the loop's)
