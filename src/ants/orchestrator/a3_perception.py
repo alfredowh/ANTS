@@ -15,8 +15,8 @@ import json
 from pathlib import Path
 
 from ants.adversary.collision_world import load_world
-from ants.adversary.rollout import CapHarness
-from ants.contracts import CaseSpec
+from ants.contracts import CaseSpec, Split
+from ants.evalkit.aspire_harness import CapHarness
 from ants.orchestrator.scene_context_exp import load_levels, scene_for, scene_spec
 from ants.synthesizer.llm import load_dotenv
 from ants.synthesizer.sam_api import add_sam_model_arg, normalize_sam_model
@@ -35,7 +35,7 @@ def probe(args: argparse.Namespace, name: str, level: dict) -> dict:
         launcher=Path("tools/aspire_launch.py").resolve(),
         scene=scene_spec(level, out / "contacts.jsonl"),
     )
-    case = CaseSpec(f"a3-{name}", "libero_goal_swap", 8, 51, "acceptance")
+    case = CaseSpec(f"a3-{name}", "libero_goal_swap", 8, 51, Split.ACCEPTANCE)
     last = None
     for _ in range(3):  # a service timeout is retried
         try:

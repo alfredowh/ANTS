@@ -23,8 +23,8 @@ import time
 from pathlib import Path
 
 from ants.adversary.collision_world import describe, load_world, view
-from ants.adversary.rollout import CapHarness, feedback
-from ants.contracts import CaseSpec, to_json
+from ants.contracts import CaseSpec, Split, to_dict
+from ants.evalkit.aspire_harness import CapHarness, feedback
 from ants.evalkit.contacts import analyse, evidence_text, shifted_evidence
 from ants.evalkit.runlog import RunLog, unified_diff
 from ants.orchestrator.demo_vs_nodemo import EXAMPLE, EXAMPLE_TASK, REAL_SIZE
@@ -177,7 +177,7 @@ def prep_levels(args: argparse.Namespace, levels: dict) -> None:
             scene=scene_spec(level, out / "contacts.jsonl"),
         )
         harness.run(
-            CaseSpec(f"dump-{name}", args.suite, args.task_id, args.debug_seed, "acceptance"),
+            CaseSpec(f"dump-{name}", args.suite, args.task_id, args.debug_seed, Split.ACCEPTANCE),
             noop,
             out / "run",
             "dump",
@@ -288,7 +288,7 @@ def run_case(
         scene=scene_spec(level, contacts),
     )
     case = CaseSpec(
-        f"debug-{args.debug_seed}", args.suite, args.task_id, args.debug_seed, "acceptance"
+        f"debug-{args.debug_seed}", args.suite, args.task_id, args.debug_seed, Split.ACCEPTANCE
     )
     for _try in range(3):  # a local-service timeout or crash is retried, never fatal
         try:
@@ -309,7 +309,7 @@ def run_case(
             "role": role,
             "tokens": tokens,
             "from_cache": reply.from_cache,
-            "trace": json.loads(to_json(trace)),
+            "trace": to_dict(trace),
         }
     )
     summary: dict = {}

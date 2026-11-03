@@ -27,7 +27,10 @@ Owner: Daniel. System 1 (`synthesizer/`) is owned by Alfredo. Only `contracts/` 
 3. **Contracts only across boundaries.** `adversary/` imports from `contracts/` and nothing else in the
    repo. Never import from `synthesizer/`, `orchestrator/` or `evalkit/`.
 4. **Generated code is untrusted.** Policies run sandboxed (restricted builtins, only `RobotAPI` in
-   scope, wall-clock timeout). A crash is `Outcome.ERROR`, never counted as a task failure.
+   scope, wall-clock timeout). A crash is `Outcome.ERROR`, never counted as a task failure. A
+   deterministic line budget catches loops (`FAILURE`, reason `timeout`); the wall clock is a
+   machine-dependent safety net (`ERROR`, reason `wall_clock_timeout`). The whitelist is not a
+   security boundary; on the real simulator ASPIRE's process isolation is.
 5. **Severity is enforced in code, not in prompts.** Every perturbation passes through
    `PerturbationSpace.validate()` (clamp to bounds, severity ≤ ρ) whatever the model returned.
 6. **The loop never crashes on the model.** Model errors, timeouts or invalid JSON fall back to
@@ -79,10 +82,10 @@ FailureHistory ──counts per category──▶ CategorySelector ──categor
 
 ```python
 adv = Adversary.from_config(AdversaryConfig(model="muse-spark", backend="libero"))
-report: AttackReport = adv.attack(policy)              # one cycle
+report: AttackReport = adv.attack(policy)  # one cycle
 results: list[RolloutResult] = adv.replay(policy, ps)  # fixed cases: gate, acceptance, held-out
 cases: list[Perturbation] = adv.discovered_failures()  # F_n
-status: RobustnessStatus = adv.status(policy)          # .robust when max_c Q_0.95(θ_c) < τ
+status: RobustnessStatus = adv.status(policy)  # .robust when max_c Q_0.95(θ_c) < τ
 ```
 
 ### Config (defaults)
@@ -97,7 +100,7 @@ status: RobustnessStatus = adv.status(policy)          # .robust when max_c Q_0.
 | `n_agents` | 4 | M parallel proposers |
 | `tau` | 0.1 | target maximum failure rate per category |
 | `stop_quantile` | 0.95 | stop when every category's upper posterior quantile is below τ |
-| `rollout_timeout_s` | 30 | per-rollout wall clock |
+| `rollout_timeout_s` | 900 | per-rollout wall clock (System 1's cap_harness rollout uses 900; one LIBERO run is ~40 s) |
 | `record_failures` | true | video and keyframes for multimodal diagnosis |
 
 ## Layout to create
@@ -115,18 +118,21 @@ adversary/
 │   ├── mock.py              deterministic offline model
 │   └── __init__.py          get_model(spec)
 ├── perturbations/
-│   └── space.py             Param, PerturbationSpace, DEFAULT_SPACE
+│   ├── space.py             Param, PerturbationSpace, DEFAULT_SPACE (launcher-wired categories)
+│   ├── launcher.py          to_launcher_spec for tools/aspire_launch.py (from System 1's v0)
+│   └── scalar.py            make, Bounds, CATEGORIES: System 1's scalar-severity interface
 ├── planner/
 │   ├── selector.py          Thompson sampling, posterior mean and quantiles
 │   ├── proposer.py          model agents + validation + novelty + fallback
-│   └── planner.py           TestPlanner = selector + proposer
+│   └── planner.py           TestPlanner (System 1's v0 interface) = selector + proposer
 ├── rollout/
 │   ├── backend.py           SimBackend, Episode protocols
 │   ├── runner.py            sandboxed execution, timeout, evidence packaging
 │   ├── mock_backend.py      toy world, one failure mechanism per category
-│   └── libero_backend.py    LIBERO implementation
-├── diagnosis/
-│   └── diagnoser.py         model diagnoser + RuleDiagnoser, failure-mode list
+│   └── aspire_backend.py    cap_harness program backend (subprocess), from System 1's rollout.py
+├── diagnoser/
+│   ├── rules.py             RULES, signature, classify, diagnose (from System 1's v0)
+│   └── model.py             model diagnoser with the rules as fallback
 ├── history/
 │   └── store.py             FailureHistory, AttackRecord
 └── prompts/
@@ -134,12 +140,22 @@ adversary/
     └── diagnose.md
 ```
 
+System 1's v0 on branch `synthesizer` has `adversary/perturbations.py`, `planner.py` and
+`diagnoser.py` as single modules. The packages above export the same names (`CATEGORIES`,
+`Bounds`, `make`, `to_launcher_spec`, `TestPlanner`, `diagnose`, `signature`, `RULES`), so its
+experiment loop keeps working. **When `synthesizer` merges, delete those three module files:** a
+package and a module with the same name do not conflict in git, and Python silently imports the
+package.
+
 Tests live in the repo-level `tests/`, mirroring the package (see AGENTS.md):
 
 ```
 tests/adversary/
 ├── test_space.py            clamping, severity ≤ ρ
-├── test_selector.py         posteriors, exploration, reset on new policy
+├── test_launcher.py         scalar severity, launcher spec per category
+├── test_selector.py         posteriors, exploration
+├── test_planner.py          TestPlanner interface, both stop modes, reset on new policy
+├── test_diagnoser.py        signature format, modes, constraints
 ├── test_runner.py           sandbox, timeout, crash → ERROR
 └── test_loop.py             full loop offline: finds failures, rewrites pass a gate, failure rate drops
 ```
@@ -156,13 +172,23 @@ Build in this order. Each step must pass its tests before the next one starts.
 5. **Runner and mock backend.** Sandbox and timeout, with a toy world in which each category has a
    failure mechanism that the matching robust coding pattern defeats.
 6. **Diagnoser and history.** At this point the whole loop runs offline (`test_loop.py`).
-7. **LIBERO backend.** The largest piece (see below).
+7. **ASPIRE backend.** The largest piece (see below).
 8. **Muse Spark adapter.** Swap the mock for the real model.
 9. **Prompt tuning.** Use real programs and real failures.
 
 ## What still has to be built, and how
 
-### LIBERO backend (`rollout/libero_backend.py`)
+### ASPIRE backend (`rollout/aspire_backend.py`)
+
+**Built (2026-11-02), not yet run on the GPU.** A `ProgramBackend`: it writes the program to a
+file and runs `cap-harness run` (nominal) or System 1's `tools/aspire_launch.py` (perturbed) as a
+subprocess with the wall-clock timeout, then reads `outcome.json`, `source/program-result.json`,
+`episode/steps.jsonl` and `media/` into a `RolloutResult`. Seeds: `--init-mode seeded`, attack
+seeds mapped onto ASPIRE dev 51–65 (acceptance); a held-out backend uses 1–50. The appliers below
+live in System 1's launcher today (pose, physics, size, actuation, camera, lighting); clutter and
+occlusion are not built. The list below is the original plan, kept for the remaining pieces.
+
+- Run on ASPIRE `cap_harness` (LIBERO-Pro); its seed split maps onto our acceptance and held-out sets.
 - Load the LIBERO scene matching the recorded demo (Franka Panda, bowl and plate, OSC_POSE controller).
 - Use one applier per category, run after `reset(seed)`, then step a few no-ops to settle physics:
   - **pose:** set the object's free-joint position (x, y, yaw).
@@ -172,12 +198,13 @@ Build in this order. Each step must pass its tests before the next one starts.
   - **camera:** offset the agent-view camera pose (yaw, pitch, distance).
   - **occlusion:** place a box between camera and target, sized to `coverage`.
   - **actuation:** wrap `env.step` with Gaussian action noise and a latency queue.
-- `RobotAPI` over OSC:
-  - `locate`: start with privileged simulator state; then add camera perception (SAM 3.1 mask, depth,
-    centroid) so lighting, camera and occlusion attacks matter.
-  - `move_to`: closed-loop motion, routing via a waypoint when `clearance > 0`.
-  - `grasp`: returns held or not from finger contact.
-  - `place`.
+- `RobotAPI` as a thin adapter over `cap_harness` primitives:
+  - `localize_object`: harness perception (SAM 3, RGB-D); privileged state only as a debug mode, so
+    lighting, camera and occlusion attacks matter.
+  - `generate_grasps` / `select_grasp`: harness grasp generation (Contact-GraspNet).
+  - `move_to_pose`: harness motion planning (PyRoki / cuRobo).
+  - `close_gripper` / `open_gripper`: report held or not from finger contact.
+  - `phase`: recorded by the adapter, not the harness.
   - Every primitive logs events (`grasp_slip`, `collision`, `object_dropped`) and the last phase reached.
 - `success()`: the LIBERO task predicate plus a no-collision flag.
 - When recording: an mp4, plus keyframes at the start, the grasp, the failure moment and the end.
@@ -198,8 +225,8 @@ Build in this order. Each step must pass its tests before the next one starts.
 ## Conventions
 
 - Python 3.10+, type hints everywhere, frozen dataclasses for anything that crosses a boundary.
-- No hard dependencies in the core: standard library only; LIBERO and robosuite only inside
-  `libero_backend.py`.
+- No hard dependencies in the core: standard library only; `cap_harness`, LIBERO and robosuite only inside
+  `aspire_backend.py`.
 - Log every decision with its inputs: selector draws, proposals, validated perturbation, diagnosis.
   A judge should be able to replay why each test was chosen.
 - Commit or delete; no dead code. No secrets in the repo: API keys come from environment variables
@@ -216,6 +243,6 @@ Build in this order. Each step must pass its tests before the next one starts.
 
 - `test_loop.py` passes offline: the adversary finds failures, rewrites pass a gate, and the posterior
   failure rate falls.
-- With the LIBERO backend, one real program fails under at least two categories, gets diagnosed, and
+- With the ASPIRE backend, one real program fails under at least two categories, gets diagnosed, and
   a constraint-guided rewrite passes all discovered cases.
 - Switching between `model="mock"` and `model="muse-spark"` needs no code change.

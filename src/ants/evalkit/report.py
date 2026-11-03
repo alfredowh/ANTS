@@ -26,7 +26,7 @@ import webbrowser
 from datetime import datetime
 from pathlib import Path
 
-from ants.adversary.rollout import feedback
+from ants.evalkit.aspire_harness import feedback
 from ants.evalkit.phases import STAGES, targets_from_run, task_phases
 from ants.evalkit.runlog import unified_diff
 from ants.evalkit.scene_view import JS as SCENE_JS

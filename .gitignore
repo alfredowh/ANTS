@@ -219,7 +219,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Local datasets and run outputs (never committed)
+# Local datasets, run outputs, model cache and ledger (never committed)
 /data/
 
 # Local dev notes (not committed)

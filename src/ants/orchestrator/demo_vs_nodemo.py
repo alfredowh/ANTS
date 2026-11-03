@@ -20,8 +20,8 @@ import json
 import time
 from pathlib import Path
 
-from ants.adversary.rollout import CapHarness, feedback
-from ants.contracts import CaseSpec, to_json
+from ants.contracts import CaseSpec, Split, to_dict
+from ants.evalkit.aspire_harness import CapHarness, feedback
 from ants.evalkit.contacts import analyse, evidence_text
 from ants.evalkit.runlog import RunLog, unified_diff
 from ants.synthesizer.generator import build_messages, extract_code, repair_message
@@ -77,7 +77,7 @@ def run_sample(
     )
     record: dict = {"arm": arm, "sample": sample, "temperature": temperature, "attempts": []}
     debug_case = CaseSpec(
-        f"debug-{args.debug_seed}", args.suite, args.task_id, args.debug_seed, "acceptance"
+        f"debug-{args.debug_seed}", args.suite, args.task_id, args.debug_seed, Split.ACCEPTANCE
     )
     log.event("sample_start", arm=arm, sample=sample, temperature=temperature)
     program = previous_text = None
@@ -130,7 +130,7 @@ def run_sample(
                 log.event("contact_analysis_failed", arm=arm, attempt=attempt, error=str(err)[:200])
         record["attempts"].append(
             {"attempt": attempt, "role": role, "tokens": tokens,
-             "from_cache": reply.from_cache, "trace": json.loads(to_json(trace)),
+             "from_cache": reply.from_cache, "trace": to_dict(trace),
              "blocking": [(e["part"], e["object"], e["n_steps"]) for e in analysis["blocking"]]
              if analysis else None,
              "clean_success": bool(trace.task_success and analysis and not analysis["blocking"])}
@@ -164,12 +164,12 @@ def run_sample(
         for scene, harness in harnesses.items():
             for seed in args.eval_seeds:
                 case = CaseSpec(
-                    f"eval-{scene}-{seed}", args.suite, args.task_id, seed, "acceptance"
+                    f"eval-{scene}-{seed}", args.suite, args.task_id, seed, Split.ACCEPTANCE
                 )
                 trace = harness.run(
                     case, program, out / f"eval_{scene}_seed{seed}", f"{arm}-s{sample}-final"
                 )
-                record["evaluation"].append({"scene": scene, **json.loads(to_json(trace))})
+                record["evaluation"].append({"scene": scene, **to_dict(trace)})
                 log.event(
                     "eval", arm=arm, sample=sample, scene=scene, seed=seed,
                     success=trace.task_success, reason=trace.termination_reason,
@@ -196,13 +196,13 @@ def reevaluate(args: argparse.Namespace, harnesses: dict[str, CapHarness], log: 
         for scene in scenes:
             for seed in args.eval_seeds:
                 case = CaseSpec(
-                    f"eval-{scene}-{seed}", args.suite, args.task_id, seed, "acceptance"
+                    f"eval-{scene}-{seed}", args.suite, args.task_id, seed, Split.ACCEPTANCE
                 )
                 tag = f"{record['arm']}-s{record['sample']}-final"
                 trace = harnesses[scene].run(
                     case, program, sample_dir / f"eval_{scene}_seed{seed}", tag
                 )
-                record["evaluation"].append({"scene": scene, **json.loads(to_json(trace))})
+                record["evaluation"].append({"scene": scene, **to_dict(trace)})
                 log.event(
                     "reeval", arm=record["arm"], sample=record["sample"], scene=scene, seed=seed,
                     success=trace.task_success, reason=trace.termination_reason,

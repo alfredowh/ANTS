@@ -74,8 +74,8 @@ EXTENT_SWEEP = ((0.0, 1.0), (0.005, 0.995), (0.01, 0.99), (0.02, 0.98))
 
 # ---------------------------------------------------------------- probe
 def probe(args: argparse.Namespace) -> None:
-    from ants.adversary.rollout import CapHarness
-    from ants.contracts import CaseSpec
+    from ants.contracts import CaseSpec, Split
+    from ants.evalkit.aspire_harness import CapHarness
     from ants.orchestrator.scene_context_exp import load_levels, scene_spec
 
     levels = load_levels(Path("data/scenes/levels.json"))
@@ -87,7 +87,7 @@ def probe(args: argparse.Namespace) -> None:
             launcher=Path("tools/aspire_launch.py").resolve(),
             scene=scene_spec(levels["L1"], out / "contacts.jsonl"),
         )
-        case = CaseSpec(f"e5-{tag}", "libero_goal_swap", 8, 51, "acceptance")
+        case = CaseSpec(f"e5-{tag}", "libero_goal_swap", 8, 51, Split.ACCEPTANCE)
         trace = harness.run(
             case, (Path("data/scenes") / script).resolve(), out / "run", f"e5-{tag}"
         )

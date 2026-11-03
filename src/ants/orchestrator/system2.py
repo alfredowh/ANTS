@@ -16,7 +16,6 @@ the loop is testable without a GPU or model tokens. Every cycle is appended to `
 
 from __future__ import annotations
 
-import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -24,7 +23,7 @@ from pathlib import Path
 from ants.adversary.diagnoser import diagnose, signature
 from ants.adversary.perturbations import CATEGORIES, Bounds
 from ants.adversary.planner import TestPlanner
-from ants.contracts import CaseSpec, Constraint, to_json
+from ants.contracts import CaseSpec, Constraint, Split, to_dict
 from ants.evalkit.runlog import RunLog
 from ants.orchestrator.gate import regression_gate
 from ants.orchestrator.human_gate import GateAnswer, answer_to_constraint
@@ -33,7 +32,7 @@ from ants.orchestrator.human_gate import GateAnswer, answer_to_constraint
 @dataclass
 class CaseResult:
     success: bool
-    feedback: dict = field(default_factory=dict)  # `rollout.feedback()` of a failed episode
+    feedback: dict = field(default_factory=dict)  # `aspire_harness.feedback()` of a failed episode
     run_dir: str | None = None
 
 
@@ -96,7 +95,7 @@ def harden(
         return res
 
     for seed in cfg.nominal_seeds:
-        add_case(CaseSpec(f"nominal-{seed}", cfg.suite, cfg.task_id, seed, "acceptance"))
+        add_case(CaseSpec(f"nominal-{seed}", cfg.suite, cfg.task_id, seed, Split.ACCEPTANCE))
     nominal_ok = all(results[f"nominal-{s}"] for s in cfg.nominal_seeds)
     log.event("system2_start", incumbent=str(incumbent), nominal_ok=nominal_ok, cfg=str(cfg))
     if not nominal_ok:
@@ -111,7 +110,7 @@ def harden(
             counter += 1
             case = CaseSpec(
                 f"c{cycle}-t{i}-{p.category}-s{seed}",
-                cfg.suite, cfg.task_id, seed, "acceptance", [p],
+                cfg.suite, cfg.task_id, seed, Split.ACCEPTANCE, (p,),
             )  # fmt: skip
             res = add_case(case)
             planner.update(p.category, failed=not res.success)
@@ -138,7 +137,7 @@ def harden(
             if all(c.failure_signature != sig for c in constraints):
                 c = diagnose(p, res.feedback, len(constraints))
                 constraints.append(c)
-                row["constraints_new"].append(json.loads(to_json(c)))
+                row["constraints_new"].append(to_dict(c))
         gen = generate(incumbent, constraints, [r.feedback for _, r in failures])
         if gen is None:
             row["decision"] = "budget_stop"

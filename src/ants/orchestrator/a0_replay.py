@@ -14,8 +14,8 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from ants.adversary.rollout import CapHarness
-from ants.contracts import CaseSpec
+from ants.contracts import CaseSpec, Split
+from ants.evalkit.aspire_harness import CapHarness
 from ants.evalkit.contacts import analyse
 from ants.orchestrator.scene_context_exp import scene_spec
 
@@ -48,7 +48,7 @@ def _replay_once(args: argparse.Namespace, clip: str, attempt: int) -> dict:
         launcher=Path("tools/aspire_launch.py").resolve(),
         scene=scene_spec({}, out / "contacts.jsonl"),
     )
-    case = CaseSpec("debug-51", "libero_goal_swap", 8, 51, "acceptance")
+    case = CaseSpec("debug-51", "libero_goal_swap", 8, 51, Split.ACCEPTANCE)
     trace = harness.run(case, program.resolve(), out / "run", f"a0-{clip}-a{attempt}")
     if not trace.run_dir or not (out / "contacts_scene.json").exists():
         res = {"clip": clip, "attempt": attempt, "error": trace.error or trace.termination_reason}

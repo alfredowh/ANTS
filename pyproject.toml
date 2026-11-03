@@ -26,6 +26,8 @@ line-length = 100
 src = ["src", "tests"]
 # hurobo and ASPIRE are git submodules: separate repos with their own configs
 exclude = ["hurobo", "ASPIRE"]
+# generated robot programs are logged artifacts, kept byte-identical; they use the harness globals
+extend-exclude = ["examples/*/policy.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

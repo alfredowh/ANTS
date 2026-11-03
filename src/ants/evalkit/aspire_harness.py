@@ -2,6 +2,11 @@
 
 The harness lives outside the ants package (its own Linux venv); this module only builds the
 command line and parses the run directory, so it imports nothing heavy.
+
+Relocated from System 1's draft `adversary/rollout.py` once System 2's real package (with its own
+`AspireBackend`, tailored to attack-seed mapping) took that name: `EpisodeTrace` and `CallRecord`
+were never part of the shared contracts, so they live here now, local to the experiment scripts
+and the run viewer that use them.
 """
 
 from __future__ import annotations
@@ -10,11 +15,38 @@ import json
 import os
 import subprocess
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from ants.adversary.perturbations import to_launcher_spec
-from ants.contracts import CallRecord, CaseSpec, EpisodeTrace
+from ants.contracts import CaseSpec
+
+
+@dataclass
+class CallRecord:
+    """One primitive call in an episode, as the harness traced it."""
+
+    name: str
+    ok: bool
+    failure_code: str | None = None
+    duration_s: float = 0.0
+
+
+@dataclass
+class EpisodeTrace:
+    """What one rollout did: the same record for every kind of policy runner."""
+
+    case_id: str
+    policy_id: str
+    program_ok: bool
+    task_success: bool
+    termination_reason: str
+    calls: list[CallRecord] = field(default_factory=list)
+    error: str | None = None
+    run_dir: str | None = None
+    model_calls: int = 0
+    tokens: int = 0
+    wall_s: float = 0.0
 
 
 @dataclass
