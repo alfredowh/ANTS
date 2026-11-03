@@ -36,7 +36,7 @@ Learn a robot skill from one demonstration with a frozen generative model, then 
 - **System 2, adversary:** a test planner proposes perturbations within a bounded severity; a simulator runs them; a diagnoser explains each failure.
 - **Closed loop:** every failure becomes a constraint added to the generator's context, and the generator proposes a new candidate policy.
 - **Adaptive testing:** spend the test budget on the failure categories most likely to break the policy, not uniform sampling.
-- **Gate:** accept a candidate only if it is no worse than the current best on every case seen so far and better on at least one, so robustness never regresses. A crash on a case the incumbent passed is a regression.
+- **Gate:** accept a candidate only if it is no worse than the current best on every case seen so far and better on at least one, so robustness never regresses and every accepted version is a real improvement. A crash on a case the incumbent passed is a regression. A skill is admitted only when a policy that uses it passes the gate.
 - **Memory:** store past policies, retrieve by similarity weighted by how often they helped, and fade unused ones. This is how skills are shared.
 - **Stop or escalate:** stop when every category is confidently robust. If the generator stalls, escalate and ask a human for one targeted demonstration.
 

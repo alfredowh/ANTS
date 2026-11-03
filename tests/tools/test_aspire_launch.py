@@ -1,0 +1,103 @@
+"""The footprint-overlap rule used for "bowl on plate" on a scaled scene."""
+
+import importlib.util
+import sys
+import types
+from pathlib import Path
+
+import pytest
+
+pytest.importorskip("numpy")  # the launcher runs in ASPIRE's venv; skipped in the ANTS env
+
+# the launcher imports numpy only at module level; the simulator imports happen inside functions
+_PATH = Path(__file__).resolve().parents[2] / "tools" / "aspire_launch.py"
+sys.modules.setdefault("cap_harness", types.ModuleType("cap_harness"))
+_spec = importlib.util.spec_from_file_location("aspire_launch", _PATH)
+launch = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(launch)
+
+
+def test_bowl_inside_plate_is_fully_covered():
+    assert launch.circle_overlap_fraction((0, 0), 0.07, (0.02, 0), 0.12) == pytest.approx(1.0)
+
+
+def test_far_apart_is_zero():
+    assert launch.circle_overlap_fraction((0, 0), 0.07, (0.5, 0), 0.12) == 0.0
+
+
+def test_half_of_bowl_on_the_plate_edge():
+    # bowl centre on the plate edge, bowl much smaller than plate: just under half is inside
+    f = launch.circle_overlap_fraction((0.12, 0), 0.02, (0, 0), 0.12)
+    assert 0.45 < f < 0.5
+
+
+def test_plate_smaller_than_bowl_caps_the_share():
+    assert launch.circle_overlap_fraction((0, 0), 0.1, (0, 0), 0.05) == pytest.approx(0.25)
+
+
+PROFILE = [(0.0, 0.0279), (0.0124, 0.0562), (0.0372, 0.0667), (0.062, 0.0658)]
+SPHERE_R = 0.015
+
+
+def test_bowl_spheres_cover_the_known_profile():
+    import numpy as np
+
+    # the exp09-11 attach spec: 42 spheres of 1.5 cm, as logged in data/runs/curobo/attach.log
+    spheres = launch.bowl_spheres(PROFILE, (0.45, 0.03), 0.19, SPHERE_R)
+    assert len(spheres) == 42
+    # every point of the wall profile is within a sphere radius (+1 voxel) of a sphere
+    worst = 0.0
+    for h, radius in PROFILE:
+        ring = np.array(
+            [
+                [0.45 + radius * np.cos(a), 0.03 + radius * np.sin(a), 0.19 + max(h, SPHERE_R)]
+                for a in np.linspace(0, 2 * np.pi, 36, endpoint=False)
+            ]
+        )
+        d = np.linalg.norm(ring[:, None, :] - spheres[None, :, :], axis=-1).min(axis=1)
+        worst = max(worst, float(d.max()))
+    assert worst <= SPHERE_R + 0.01
+
+
+def test_sphere_frames_round_trip():
+    import numpy as np
+
+    rng = np.random.default_rng(0)
+    world = rng.random((10, 3))
+    t = np.array([0.45, 0.03, 0.26])
+    rot = np.array([[0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 1.0]])  # 90 deg about z
+    local = launch.spheres_to_local(world, t, rot)
+    assert np.allclose(launch.spheres_to_world(local, t, rot), world)
+
+
+def test_latch_stays_shut_on_a_flickering_mask():
+    # first held frame attaches; a later frame with a missed mask must not detach
+    assert launch.latch_action(False, True, True) == "keep"  # attach
+    assert launch.latch_action(True, True, False) == "keep"  # flicker: the exp11 fix
+    assert launch.latch_action(True, True, True) == "keep"
+    assert launch.latch_action(True, False, False) == "release"  # gripper opened
+    assert launch.latch_action(False, False, False) == "release"
+    assert launch.latch_action(False, True, False) == "wait"  # never attached
+
+
+def test_removal_mask_cuts_around_predicted_spheres_without_bowl_points():
+    import numpy as np
+
+    # no observed bowl points at all (missed mask): the predicted spheres still cut
+    points = np.array([[0.0, 0.0, 0.0], [0.5, 0.5, 0.5]])
+    pred = np.array([[0.0, 0.0, 0.0]])
+    cut = launch.removal_mask(points, np.zeros((0, 3)), 0.02, pred, 0.015 + 0.02)
+    assert cut.tolist() == [True, False]
+    # empty scene cuts nothing
+    assert launch.removal_mask(np.zeros((0, 3)), np.zeros((0, 3)), 0.02, pred, 0.035).size == 0
+
+
+def test_removal_mask_cuts_around_observed_bowl_points():
+    scipy = pytest.importorskip("scipy")
+    import numpy as np
+
+    del scipy  # the import is the skip gate; removal_mask imports it lazily itself
+    points = np.array([[0.0, 0.0, 0.0], [0.5, 0.5, 0.5]])
+    bowl = np.array([[0.0, 0.0, 0.005]])
+    cut = launch.removal_mask(points, bowl, 0.02, np.zeros((0, 3)), 0.035)
+    assert cut.tolist() == [True, False]

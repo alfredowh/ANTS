@@ -221,3 +221,12 @@ __marimo__/
 
 # Local datasets, run outputs, model cache and ledger (never committed)
 /data/
+
+# Local dev notes (not committed)
+/docs/dev/
+
+# Personal agent instructions (per-user, never committed)
+/CLAUDE.local.md
+
+# Claude Code skills (per-user, never committed)
+/.claude/skills/

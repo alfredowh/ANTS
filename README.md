@@ -11,6 +11,8 @@ Our entry for the [Meta Global AI Developer Hackathon 2026](https://dev.meta.ai/
 - **Closed loop:** each failure goes back to the generator as context, never as a weight update. A regression gate accepts a rewrite only if it is no worse on every case seen so far and better on at least one. If stuck after N cycles, ANTS asks for one targeted demo.
 - **Deliverable:** one closed loop on one pick-and-place task with a Franka arm in LIBERO.
 
+**What is new.** Turning one demo into a robot program has been published ([RAPID](https://arxiv.org/abs/2609.30249)), and so has a frozen coding agent that improves through a skill library ([ASPIRE](https://arxiv.org/abs/2607.00272), [CaP-X](https://arxiv.org/abs/2603.22435)). ANTS adds the parts they lack: an adversary that chooses where to test, a gate that never regresses on any case seen so far, and escalation to one targeted human demo. See [positioning](docs/concept.md#positioning).
+
 ## Results
 
 *Coming soon.* Numbers will come from logged runs on a held-out test set.
@@ -40,6 +42,8 @@ uv run pytest
 ## Docs
 
 - [Concept and evaluation](docs/concept.md)
+- [System 1 discussion: stack, method, policy format](docs/synthesizer/discussion.md)
+- [Should System 1 build on ASPIRE? Assessment, checklist and build plan](docs/synthesizer/aspire-assessment.md)
 - [Instructions for AI coding agents](AGENTS.md)
 
 ## License

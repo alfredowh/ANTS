@@ -1,0 +1,76 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>cuRobo Plan Viewer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1c2230;--mut:#6a7385;--line:#dfe3ea;--acc:#2f5fd0;--bad:#c4392f;--ok:#2a8a57;--warn:#d4800f}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#12151c;--card:#1b202a;--fg:#e6e9f0;--mut:#98a1b3;--line:#2b3240;--acc:#7aa2ff;--bad:#ff7a70;--ok:#5fd093;--warn:#f2a64a;color-scheme:dark}}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;padding:12px max(16px,env(safe-area-inset-left,0px))}
+.wrap{max-width:1200px;margin:0 auto}h1{font-size:18px;margin:0 0 6px}.mut{color:var(--mut)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;margin:0 0 10px}
+button{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:3px 10px;cursor:pointer}
+button.on{border-color:var(--acc);color:var(--acc);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}.chip{padding:2px 8px;border-radius:12px;border:1px solid var(--line);cursor:pointer;font-size:12px}
+.chip.ok{border-color:var(--ok);color:var(--ok)}.chip.f{border-color:var(--bad);color:var(--bad)}.chip.sel{background:var(--acc);color:#fff;border-color:var(--acc)}
+#cv{width:100%;height:min(72vh,640px);min-height:340px;border:1px solid var(--line);border-radius:10px;background:var(--card);touch-action:none}
+.leg span{display:inline-flex;align-items:center;gap:5px;margin-right:12px;font-size:12px}.leg i{display:inline-block;width:12px;height:12px;border-radius:50%;opacity:.8}
+</style></head><body><div class="wrap">
+<h1>What cuRobo sees, in 3D</h1>
+<div class="mut">Drag to rotate, scroll to zoom, right-drag to pan. Robot base frame, metres, z up. Spheres are cuRobo's collision spheres at 50% opacity.</div>
+<!--CARD--><div class="card"><b>Experiments 06 to 08 (cuRobo planning on the SAM 3 depth cloud)</b>
+<p style="margin:6px 0">One run per cell, 43 rollouts. Solved: exp06 (no scene text) 1 of 3, exp07 (perceived scene) 2 of 3, exp08 (simulator scene) 2 of 3. Of 182 failed <code>move_to_pose</code> calls, 142 were "goal state infeasible (scene_collision)", 22 other cuRobo refusals, 10 timeouts (cause not investigated), 8 "episode ended".</p>
+<p style="margin:6px 0"><b>Why:</b> the bowl in the gripper is not attached to the robot and none of the 43 programs passes it as <code>target_point_cloud</code>, so its depth points stay in the cloud, 10 to 18 cm under the hand flange (median 14 cm). A goal that lowers the hand moves the hand into them and cuRobo refuses it.</p>
+<p style="margin:6px 0"><b>Toggle below:</b> before = as in the run; after = the bowl's points removed and replaced by spheres attached to the hand. This is a replay with my own collision check, not the real cuRobo (the service may not accept attached objects), fitted after seeing the failures: 13 of 15 refused plans in the failed run have the hand inside the cloud at the goal, none collide after attaching; in the successful run 6 of 9 still touch because the bowl is lowered onto the plate.</p>
+<a href="plans2d.html">2D side and top views</a> · source: docs/synthesizer/experiment-06-08-curobo.md, dev/curobo/plan_data.py, plan_view.py</div>
+<!--/CARD--><div class="card"><div style="margin-bottom:8px"><b>Planner model:</b> <button id="mb" class="on">before: the held bowl is a cloud obstacle</button> <button id="ma">after: the bowl is attached to the hand</button></div><div id="sumry" class="mut" style="margin-bottom:8px"></div><div id="runs"></div><div class="chips" id="plans"></div></div>
+<div class="card"><div id="info"></div>
+<div class="leg" style="margin:6px 0"><span><i style="background:#8a93a6"></i>depth cloud</span><span><i style="background:#e0463a"></i>cloud points / spheres in collision</span><span><i style="background:#3b6fe0"></i>start robot</span><span><i style="background:#9b59d0"></i>attached bowl (after)</span><span><i style="background:#9aa3b5"></i>goal robot</span><span><i style="background:#e8890c"></i>straight path</span><span><i style="background:#25a15f"></i>cuRobo path</span></div>
+<canvas id="cv"></canvas>
+<div style="margin-top:8px">layers: <button data-l="cloud" class="on">cloud</button> <button data-l="start" class="on">start spheres</button> <button data-l="goal" class="on">goal spheres</button> <button data-l="straight" class="on">straight path</button> <button data-l="planned" class="on">cuRobo path</button> · view: <button id="vs">side</button> <button id="vt">top</button> <button id="vh">hand</button></div></div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const DATA=__DATA__;let R=0,P=0,MODE='before';const L={cloud:1,start:1,goal:1,straight:1,planned:1};
+const esc=s=>String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const cv=document.getElementById("cv");
+const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true,preserveDrawingBuffer:true});
+const scene=new THREE.Scene();const cam=new THREE.PerspectiveCamera(45,1,0.01,10);cam.up.set(0,0,1);
+const ctl=new THREE.OrbitControls(cam,cv);ctl.target.set(0.5,0.05,0.2);
+scene.add(new THREE.AmbientLight(0xffffff,0.8));const dl=new THREE.DirectionalLight(0xffffff,0.6);dl.position.set(1,-1,2);scene.add(dl);
+const g=new THREE.GridHelper(1.6,16,0x888888,0xbbbbbb);g.rotation.x=Math.PI/2;g.position.set(0.5,0,-0.011);scene.add(g);
+const ax=new THREE.AxesHelper(0.2);scene.add(ax);
+let dyn=new THREE.Group();scene.add(dyn);
+function setView(k){const t=ctl.target;if(k==="s"){ctl.target.set(0.5,0.05,0.2);cam.position.set(0.5,-1.5,0.3)}else if(k==="t"){ctl.target.set(0.5,0.05,0.2);cam.position.set(0.5,0.04,1.7)}else{const p=DATA[R].plans[P];const h=p.goal.length?p.goal[0]:[0.45,0.03,0.25];ctl.target.set(h[0],h[1],h[2]-0.1);cam.position.set(h[0]+0.55,h[1]-0.75,h[2]+0.25)}ctl.update()}
+const held=p=>p.after&&p.after.held;
+const view=p=>MODE==='after'&&held(p)?{hits:p.after.goal_hits,att:p.after.attached_goal_hits,sh:p.after.straight_hits,ph:p.after.planned_hits}:{hits:p.goal_hits,att:0,sh:p.straight.hits,ph:p.planned&&p.planned.hits};
+const nHit=h=>h.reduce((a,x)=>a+x.n,0);
+function summary(){return DATA.map(d=>{const f=d.plans.filter(p=>!p.ok);const b=f.filter(p=>nHit(p.goal_hits)>0).length;const a=f.filter(p=>{const v=view2(p);return nHit(v.hits)>0||v.att>0}).length;return `${d.title}: of ${f.length} refused plans, ${b} have the hand inside the cloud at the goal (before); ${a} still collide after attaching the bowl, ${f.length-a} are clear`}).join(' · ')}
+function view2(p){return held(p)?{hits:p.after.goal_hits,att:p.after.attached_goal_hits}:{hits:p.goal_hits,att:0}}
+function sph(arr,color,hitLinks,op){const gr=new THREE.Group();for(const s of arr){const bad=hitLinks&&hitLinks.has(s[4]);const m=new THREE.Mesh(new THREE.SphereGeometry(s[3],14,10),new THREE.MeshStandardMaterial({color:bad?0xe0463a:color,transparent:true,opacity:op}));m.position.set(s[0],s[1],s[2]);gr.add(m)}return gr}
+function attGroup(cs,flags){const gr=new THREE.Group();cs.forEach((c,i)=>{const bad=flags&&flags[i];const m=new THREE.Mesh(new THREE.SphereGeometry(0.025,10,8),new THREE.MeshStandardMaterial({color:bad?0xe0463a:0x9b59d0,transparent:true,opacity:.5}));m.position.set(c[0],c[1],c[2]);gr.add(m)});return gr}
+function line(pp,color,dash,hits){const pts=pp.tcp.map(t=>new THREE.Vector3(t[0],t[1],t[2]));const gr=new THREE.Group();
+ const geo=new THREE.BufferGeometry().setFromPoints(pts);const mat=dash?new THREE.LineDashedMaterial({color,dashSize:.02,gapSize:.015}):new THREE.LineBasicMaterial({color});
+ const l=new THREE.Line(geo,mat);if(dash)l.computeLineDistances();gr.add(l);
+ (hits||pp.hits).forEach((h,i)=>{if(h){const m=new THREE.Mesh(new THREE.SphereGeometry(.007,8,6),new THREE.MeshBasicMaterial({color:0xe0463a}));m.position.copy(pts[i]);gr.add(m)}});
+ const e=new THREE.Mesh(new THREE.BoxGeometry(.016,.016,.016),new THREE.MeshBasicMaterial({color}));e.position.copy(pts[pts.length-1]);gr.add(e);return gr}
+function build(){scene.remove(dyn);dyn=new THREE.Group();scene.add(dyn);const run=DATA[R],p=run.plans[P];
+ const V=view(p);let cl=p.cloud;
+ if(MODE==='after'&&held(p)){const rm=new Set(p.after.removed.map(q=>[Math.floor(q[0]/0.02),Math.floor(q[1]/0.02),Math.floor(q[2]/0.02)].join()));cl=cl.filter(c=>!rm.has([(c[0]-1)/2,(c[1]-1)/2,(c[2]-1)/2].join()))}
+ if(L.cloud){const pos=new Float32Array(cl.length*3);cl.forEach((c,i)=>{pos[i*3]=c[0]/100;pos[i*3+1]=c[1]/100;pos[i*3+2]=c[2]/100});const geo=new THREE.BufferGeometry();geo.setAttribute("position",new THREE.BufferAttribute(pos,3));dyn.add(new THREE.Points(geo,new THREE.PointsMaterial({color:0x8a93a6,size:3,sizeAttenuation:false,transparent:true,opacity:.55})))}
+ const hl=new Set(V.hits.map(h=>h.link));
+ if(L.start)dyn.add(sph(p.start,0x3b6fe0,null,.5));
+ if(L.goal)dyn.add(sph(p.goal,0x9aa3b5,hl,.5));
+ if(MODE==='after'&&held(p)){const a=p.after;if(L.start)dyn.add(attGroup(a.attached_start,null));if(L.goal)dyn.add(attGroup(a.attached_goal,a.attached_goal_flags))}
+ const pts=V.hits.flatMap(h=>h.pts);if(pts.length){const pos=new Float32Array(pts.length*3);pts.forEach((q,i)=>{pos[i*3]=q[0];pos[i*3+1]=q[1];pos[i*3+2]=q[2]});const geo=new THREE.BufferGeometry();geo.setAttribute("position",new THREE.BufferAttribute(pos,3));dyn.add(new THREE.Points(geo,new THREE.PointsMaterial({color:0xe0463a,size:7,sizeAttenuation:false})))}
+ if(L.straight)dyn.add(line(p.straight,0xe8890c,true,V.sh));if(L.planned&&p.planned)dyn.add(line(p.planned,0x25a15f,false,V.ph));
+ const hits=nHit(V.hits),sp=p.straight,pl=p.planned;document.getElementById('sumry').textContent=summary();
+ document.getElementById("runs").innerHTML=DATA.map((d,i)=>`<button class="${i===R?"on":""}" onclick="R=${i};P=ff(${i});build();setView('h')">${esc(d.title)} · ${d.plans.filter(q=>!q.ok).length} of ${d.plans.length} plans failed</button>`).join(" ");
+ document.getElementById("plans").innerHTML=run.plans.map((q,i)=>`<span class="chip ${q.ok?"ok":"f"} ${i===P?"sel":""}" onclick="P=${i};build()">#${i} ${q.ok?"ok":"fail"}</span>`).join("");
+ document.getElementById("info").innerHTML=`<b>Plan #${P}: ${p.ok?"cuRobo found a path":"cuRobo refused"}</b> <span class="mut">${esc(p.message||"")}</span><br>cloud ${p.n_points.toLocaleString()} points · goal: ${hits||V.att?`<span style="color:var(--bad)"><b>${hits} cloud points inside ${V.hits.length} robot spheres${V.att?`, ${V.att} attached-bowl spheres touch the cloud`:''}</b></span>`:"no sphere touches a point at 1.5 cm clearance"}${MODE==='after'&&held(p)?` · ${p.after.removed.length} bowl points removed, ${p.after.attached_local.length} attached spheres`:''} · straight path: ${V.sh.some(x=>x)?`<span style="color:var(--bad)">first collision at step ${V.sh.findIndex(x=>x)} of 40, up to ${Math.max(...V.sh)} spheres</span>`:'no collision'}${pl?` · cuRobo path (the plan found before): ${Math.max(...V.ph)===0?'0 colliding spheres':Math.max(...V.ph)+' at worst'}`:''}`}
+function ff(i){const k=DATA[i].plans.findIndex(p=>!p.ok&&p.goal_hits.length>3);return k<0?0:k}
+document.querySelectorAll("button[data-l]").forEach(b=>b.onclick=()=>{L[b.dataset.l]^=1;b.classList.toggle("on");build()});
+mb.onclick=()=>{MODE="before";mb.classList.add("on");ma.classList.remove("on");build()};ma.onclick=()=>{MODE="after";ma.classList.add("on");mb.classList.remove("on");build()};vs.onclick=()=>setView("s");vt.onclick=()=>setView("t");vh.onclick=()=>setView("h");
+function size(){const w=cv.clientWidth,h=cv.clientHeight;renderer.setSize(w,h,false);cam.aspect=w/h;cam.updateProjectionMatrix()}
+addEventListener("resize",size);P=ff(0);size();build();setView("h");
+(function loop(){requestAnimationFrame(loop);ctl.update();renderer.render(scene,cam)})();
+</script></body></html>

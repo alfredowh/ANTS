@@ -24,6 +24,8 @@ packages = ["src/ants"]
 [tool.ruff]
 line-length = 100
 src = ["src", "tests"]
+# hurobo and ASPIRE are git submodules: separate repos with their own configs
+exclude = ["hurobo", "ASPIRE"]
 # generated robot programs are logged artifacts, kept byte-identical; they use the harness globals
 extend-exclude = ["examples/*/policy.py"]
 
@@ -32,3 +34,16 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff.lint.per-file-ignores]
+# Prompt text: hard-wrapping it would change what the model reads.
+"src/ants/synthesizer/generator.py" = ["E501"]
+"src/ants/evalkit/report.py" = ["E501"]
+"src/ants/evalkit/system2_view.py" = ["E501"]
+"src/ants/evalkit/scene_view.py" = ["E501"]
+"src/ants/evalkit/contacts.py" = ["E501"]
+"src/ants/orchestrator/scene_context_exp.py" = ["E501"]
+"src/ants/orchestrator/a3_perception.py" = ["E501"]
+"src/ants/orchestrator/a0_replay.py" = ["E501"]
+"tools/aspire_launch.py" = ["E501"]
+"dev/curobo/*.py" = ["E501"]
