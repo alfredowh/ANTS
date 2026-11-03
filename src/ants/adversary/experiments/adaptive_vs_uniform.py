@@ -165,11 +165,13 @@ def main(argv: list[str] | None = None) -> int:
     policy = Policy(
         args.policy.stem, 0, "put the bowl on the plate", args.policy.read_text(encoding="utf-8")
     )
+    root = {"root": args.aspire} if args.aspire else {}
+    on_gpu = args.backend == "cap_harness"  # rollouts go into this run's own folder
     base = AdversaryConfig(
         model=args.model,
         backend=args.backend,
         categories=tuple(args.categories),
-        aspire=AspireConfig(root=args.aspire) if args.aspire else None,
+        aspire=AspireConfig(**root, output_root=out / "aspire") if on_gpu else None,
     )
     runs = run(out, policy, args.attacks, args.seeds, base)
     print(summarize(runs, args.backend))

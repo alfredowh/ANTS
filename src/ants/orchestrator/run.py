@@ -88,7 +88,23 @@ def run_loop(
     meta["finished"] = time.strftime("%Y-%m-%dT%H:%M:%S")
     meta["tokens_spent"] = getattr(adv.model, "run_spent", 0)
     (out / "run.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
+    add_total_cost(out / "summary.json", meta["tokens_spent"], lcfg.usd_per_million_tokens)
     return res, build(out)
+
+
+def add_total_cost(summary_path: Path, adversary_tokens: int, usd_per_million: float) -> None:
+    """Add System 2's Muse Spark tokens to the loop's summary: total and per-cycle $."""
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    total = summary.get("rewrite_tokens", 0) + adversary_tokens
+    cycles = summary.get("cycles_run", 0)
+    summary.update(
+        adversary_tokens=adversary_tokens,
+        adversary_cost_usd=round(adversary_tokens * usd_per_million / 1e6, 4),
+        total_tokens=total,
+        total_cost_usd=round(total * usd_per_million / 1e6, 4),
+        cost_per_cycle_usd=round(total * usd_per_million / 1e6 / cycles, 4) if cycles else 0.0,
+    )
+    summary_path.write_text(json.dumps(summary, indent=1, default=str), encoding="utf-8")
 
 
 def muse_code_synthesizer(out: Path, token_budget: int) -> GenerateSynthesizer:
@@ -134,6 +150,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--severity-bound", type=float, default=0.8)
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument(
+        "--usd-per-million-tokens",
+        type=float,
+        default=13.5,
+        help="Muse price for the $ figures in summary.json (observed about $13.5 per million)",
+    )
+    ap.add_argument(
         "--eval-held-out",
         type=int,
         default=0,
@@ -159,7 +181,12 @@ def main(argv: list[str] | None = None) -> int:
         aspire=aspire,
     )
     policy = Policy("bowl_on_plate", 0, args.task, args.policy.read_text(encoding="utf-8"))
-    loop_cfg = LoopConfig(cycles=args.cycles, gate_mode=args.gate, stall_window=args.stall_window)
+    loop_cfg = LoopConfig(
+        cycles=args.cycles,
+        gate_mode=args.gate,
+        stall_window=args.stall_window,
+        usd_per_million_tokens=args.usd_per_million_tokens,
+    )
     synth = None
     if args.synthesizer == "muse-code":
         if args.synth_token_budget is None:
@@ -172,6 +199,9 @@ def main(argv: list[str] | None = None) -> int:
         sig = r.get("signature", "")
         print(f"{r['cycle']:3d} v{r['policy_version']} {r['category']:9s} {r['outcome']:7s} "
               f"{r.get('decision', ''):10s} {sig}")  # fmt: skip
+    cost = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    print(f"cost: {cost['total_tokens']} tokens, ${cost['total_cost_usd']:.2f} total, "
+          f"${cost['cost_per_cycle_usd']:.3f} per cycle")  # fmt: skip
     print(f"\nstopped: {res.stopped} ({res.stage}), final v{res.incumbent.version}, "
           f"accepted {res.accepted_versions}")  # fmt: skip
     if res.escalation:

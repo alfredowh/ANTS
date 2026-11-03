@@ -1,4 +1,4 @@
-"""workflow.md is what Muse Wonder reads about the loop; it must name what loop.py does."""
+"""phases.md is what the repair model reads about the loop; it must name what loop.py does."""
 
 import json
 
@@ -24,4 +24,12 @@ def test_the_run_log_records_which_workflow_it_followed(tmp_path):
     loop(("physics",), cycles=2, out=tmp_path).run(V0)
     start = json.loads((tmp_path / "loop.jsonl").read_text(encoding="utf-8").splitlines()[0])
     assert start["workflow"] == workflow_info()
-    assert start["workflow"]["version"] == "0.1" and len(start["workflow"]["sha256"]) == 12
+    assert start["workflow"]["version"] == "0.2" and len(start["workflow"]["sha256"]) == 12
+
+
+def test_the_workflow_is_the_file_muse_orchestrator_sends():
+    from ants.orchestrator.muse_orchestrator import PHASES_DOC
+    from ants.orchestrator.workflow import WORKFLOW_PATH
+
+    assert WORKFLOW_PATH.resolve() == PHASES_DOC.resolve()
+    assert "Phase A" in load_workflow() and "## How the loop judges your program" in load_workflow()

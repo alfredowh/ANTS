@@ -1,9 +1,10 @@
-"""The workflow file Muse Wonder reads: one markdown description of the whole development loop.
+"""The one workflow file the repair model reads: `docs/orchestrator/phases.md`.
 
-`workflow.md` (next to this module) is the plan; `loop.py` executes it. System 1 puts the text in
-Muse Wonder's context (system prompt) when it writes or rewrites a program, so the model knows the
-steps, how its rewrite is judged and which rules the code enforces. The loop logs the file's
-version and hash in its `start` line, so every run says which workflow it followed.
+It holds System 1's operating context (Phase A / Phase B, the program rules) and the loop's own
+rules (steps, gate, escalation, stop reasons). `MuseOrchestrator` sends it at the top of every
+rewrite prompt; `loop.py` executes the same steps, and `tests/orchestrator/test_workflow.py` fails
+if the file stops naming a stop reason, decision or log event the loop uses. The loop logs the
+file's version and hash in its `start` line, so every run says which workflow it followed.
 """
 
 from __future__ import annotations
@@ -12,11 +13,11 @@ import hashlib
 import re
 from pathlib import Path
 
-WORKFLOW_PATH = Path(__file__).with_name("workflow.md")
+WORKFLOW_PATH = Path(__file__).resolve().parents[3] / "docs" / "orchestrator" / "phases.md"
 
 
 def load_workflow(path: Path | None = None) -> str:
-    """The workflow text, to prepend to the generator's context."""
+    """The workflow text, to put at the top of the repair model's prompt."""
     return (path or WORKFLOW_PATH).read_text(encoding="utf-8")
 
 
