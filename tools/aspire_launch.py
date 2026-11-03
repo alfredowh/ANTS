@@ -518,9 +518,7 @@ def install_curobo_planning(cfg: dict) -> None:
             with out_path.with_suffix(".log").open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps({"n_spheres": len(spheres)}) + "\n")
 
-        def bowl_points(
-            api, observation, frame: str, diag: list | None = None
-        ) -> np.ndarray:
+        def bowl_points(api, observation, frame: str, diag: list | None = None) -> np.ndarray:
             """Base-frame points of the bowl: SAM mask (curobo-sam3/31) or simulator render."""
             clouds = []
             for camera in observation.cameras:
@@ -585,9 +583,7 @@ def install_curobo_planning(cfg: dict) -> None:
                 closed = gripper < 0.5
                 mask_diag: list = []
                 bowl = (
-                    bowl_points(self, observation, frame, mask_diag)
-                    if closed
-                    else np.zeros((0, 3))
+                    bowl_points(self, observation, frame, mask_diag) if closed else np.zeros((0, 3))
                 )
                 if mask_diag:
                     info["masks"] = mask_diag
@@ -645,7 +641,8 @@ def install_curobo_planning(cfg: dict) -> None:
                     held_state["local"] = spheres_to_local(world, t, rot)
                     info.update(centre=np.round(centre, 4).tolist(), z_bottom=round(z_bottom, 4))
                     print(
-                        f"[ants-attach] attached {len(world)} spheres, axis {np.round(centre, 3).tolist()}, bottom z {z_bottom:.3f}",
+                        f"[ants-attach] attached {len(world)} spheres,"
+                        f" axis {np.round(centre, 3).tolist()}, bottom z {z_bottom:.3f}",
                         file=sys.stderr,
                     )
                 local = held_state["local"]

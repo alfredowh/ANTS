@@ -125,6 +125,14 @@ cases = adv.discovered_failures()  # the gate's growing test set
 status = adv.status(policy)  # stop rule: .robust when every category is below τ
 ```
 
+## Experiment: adaptive vs uniform (H1a)
+
+`uv run python -m ants.adversary.experiments.adaptive_vs_uniform [--backend cap_harness --aspire ASPIRE]`
+attacks one fixed policy with the same budget and paired seeds in two arms that differ only in
+eta (0.2 Thompson vs 1.0 uniform). It logs failures, failures per attack, distinct failure
+signatures and crashes to `data/runs/adaptive_vs_uniform_<time>/results.json` and `summary.md`.
+On the mock world it checks the pipeline only; reported numbers come from the cap_harness backend.
+
 ## Defaults
 
 | Setting | Default | Meaning |

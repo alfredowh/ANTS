@@ -119,6 +119,9 @@ repo docs or results until a logged run here produces them** (decision D4).
 | D14 | 2026-11-01 | DemoSpecs come from hurobo markers and LIBERO demo files; SAM 3.1 tracking is a stretch goal. |
 | D15 | 2026-11-01 | Deliverable: a 3 to 5 minute visual demo video showing explainability and Meta's models. Combined Meta credits: $270, enough for the paper's Muse Spark roles in System 2 (4 proposer agents, diagnoser, explainer), all sharing one token ledger with System 1. |
 | D16 | 2026-11-01 | Follow the paper's plan with these deviations: ASPIRE primitives (paper text to be updated), SAM 3.1 as stretch, evaluation scaled to the simulator time available and stated as such. |
+| D17 | 2026-11-03 | Daniel owns `orchestrator/` (confirms D3): the closed loop, gate and human gate ported from System 1's `harden()` live in `orchestrator/loop.py`, `gate.py`, `human_gate.py`. System 1 plugs in behind `Synthesizer.rewrite()`. |
+| D18 | 2026-11-03 | Hackathon scope: no memory. Experience memory, the recovery-skill module and the deployment (fast) phase are concept slides, not code. |
+| D19 | 2026-11-03 | Storyline: problem, show once, break it adaptively, explain and fix (including a fix the gate rejects), escalate, report (logged numbers only), vision (deployment phase, recovery skills, sim2real assumption stated). Built on Alfredo's two-phase framework (slow development loop, fast deployment loop). |
 
 Still open (see `architecture.md`): project name (Alfredo proposes Agentic Task Synthesis
 everywhere, paper to align), and the source of the paper's prototype numbers.

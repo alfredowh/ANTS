@@ -2,8 +2,10 @@
 
     uv run python -m ants.studio.build data/runs/<name>
 
-Everything shown comes from the run's logs. Parts that need pieces not built yet (rewrites, the
-regression gate, video from the real simulator) are shown as not available, never filled in.
+Everything shown comes from the run's logs. A System 2 run (`ants.studio.run`) has no rewrites or
+gate verdicts; a closed-loop run (`ants.orchestrator.run`) also has `loop.jsonl` and `policies/`,
+which add the Versions view, per-attack gate verdicts and diffs. Parts that are missing from the
+logs are shown as not available, never filled in.
 """
 
 from __future__ import annotations
@@ -121,21 +123,108 @@ def _line(text: str) -> int | None:
     return int(m.group(1)) if m else None
 
 
+def _jsonl(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    lines = path.read_text(encoding="utf-8").splitlines()
+    return [json.loads(line) for line in lines if line.strip()]
+
+
+def collect_loop(run_dir: Path) -> dict[str, Any] | None:
+    """Versions, gate verdicts and escalations of a closed-loop run (None for a System 2 run)."""
+    rows = _jsonl(run_dir / "loop.jsonl")
+    if not rows:
+        return None
+    cycles = [r for r in rows if r.get("event") == "cycle"]
+    end = next((r for r in reversed(rows) if r.get("event") == "end"), {})
+    start = next((r for r in rows if r.get("event") == "start"), {})
+    versions = []
+    for meta_path in sorted((run_dir / "policies").glob("v*.json"), key=lambda q: int(q.stem[1:])):
+        pol = json.loads(meta_path.read_text(encoding="utf-8"))
+        v = pol["version"]
+        made = next(
+            (c for c in cycles if c.get("decision") == "accepted" and c["candidate_version"] == v),
+            None,
+        )
+        versions.append(
+            {
+                "version": v,
+                "parent": pol.get("parent_version"),
+                "code": meta_path.with_suffix(".py").read_text(encoding="utf-8"),
+                "accepted_at": made["attack_id"] if made else None,
+                "constraint": (made or {}).get("constraint"),
+                "diff": (made or {}).get("diff", ""),
+                "gate": (made or {}).get("gate"),
+            }
+        )
+    by_attack = {
+        c["attack_id"]: {
+            k: c.get(k)
+            for k in (
+                "policy_version",
+                "decision",
+                "candidate_version",
+                "gate",
+                "diff",
+                "stalls",
+                "constraints_active",
+            )
+        }
+        for c in cycles
+    }
+    events = [
+        r for r in rows if r.get("event") in ("escalate", "human_answer", "no_working_policy")
+    ]
+    return {
+        "config": start.get("loop", {}),
+        "stopped": end.get("stopped"),
+        "stage": end.get("stage"),
+        "final_version": end.get("final_version"),
+        "accepted_versions": end.get("accepted_versions", []),
+        "constraints": end.get("constraints", []),
+        "escalation": end.get("escalation"),
+        "events": events,
+        "versions": versions,
+        "by_attack": by_attack,
+        "decisions": [
+            {
+                "attack_id": c["attack_id"],
+                "cycle": c["cycle"],
+                "category": c["category"],
+                "signature": c.get("signature"),
+                "policy_version": c["policy_version"],
+                "candidate_version": c.get("candidate_version"),
+                "decision": c.get("decision"),
+                "reason": (c.get("gate") or {}).get("reason"),
+                "regressions": (c.get("gate") or {}).get("regressions", []),
+                "improvements": (c.get("gate") or {}).get("improvements", []),
+                "cases": (c.get("gate") or {}).get("cases"),
+                "stalls": c.get("stalls", {}),
+            }
+            for c in cycles
+            if c.get("decision") not in (None, "no_failure")
+        ],
+    }
+
+
 def collect(run_dir: Path) -> dict[str, Any]:
     meta = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
-    rows = [
-        json.loads(line)
-        for line in (run_dir / "attacks.jsonl").read_text(encoding="utf-8").splitlines()
-        if line.strip()
-    ]
+    rows = _jsonl(run_dir / "attacks.jsonl")
+    loop = collect_loop(run_dir)
     nominal_calls = [e for e in meta.get("nominal", {}).get("events", []) if e["kind"] == "call"]
     attacks = [_attack(r, i, nominal_calls) for i, r in enumerate(rows)]
+    for a in attacks:
+        a["version"] = meta["policy"]["version"]
+        if loop and a["id"] in loop["by_attack"]:
+            a["version"] = loop["by_attack"][a["id"]]["policy_version"]
+            a["loop"] = loop["by_attack"][a["id"]]
     tokens = sum(a["tokens"] for a in attacks)
     program = (run_dir / "policy.py").read_text(encoding="utf-8")
     return {
         "run": meta,
         "program": program,
         "attacks": attacks,
+        "loop": loop,
         "status": attacks[-1]["status"] if attacks else {},
         "usage": {
             "rollouts": len(attacks) + 1,

@@ -57,3 +57,40 @@ def test_rerunning_into_the_same_folder_starts_fresh(tmp_path):
     run(tmp_path / "r", attacks=3, policy_path=POLICY)
     ids = [a["id"] for a in collect(tmp_path / "r")["attacks"]]
     assert ids == ["atk-00000", "atk-00001", "atk-00002"]
+
+
+def _loop_run(tmp_path):
+    from ants.adversary import AdversaryConfig
+    from ants.adversary.perturbations import Bounds
+    from ants.contracts import Policy
+    from ants.orchestrator import LoopConfig
+    from ants.orchestrator.run import run_loop
+
+    adv = AdversaryConfig(categories=("physics", "camera"), min_severity=0.6, bounds=Bounds(0.8))
+    policy = Policy("bowl_on_plate", 0, "put the bowl on the plate", POLICY.read_text("utf-8"))
+    return run_loop(tmp_path / "loop", adv, LoopConfig(cycles=20), policy)
+
+
+def test_a_loop_run_has_versions_gate_verdicts_and_diffs(tmp_path):
+    res, page = _loop_run(tmp_path)
+    data = collect(tmp_path / "loop")
+    loop = data["loop"]
+    assert loop["accepted_versions"] == res.accepted_versions == [1]
+    assert [v["version"] for v in loop["versions"]] == [0, 1]
+    v1 = loop["versions"][1]
+    assert v1["accepted_at"] and "pinch_height = 0.4 * bowl_h" in v1["code"]
+    assert v1["constraint"]["failure_signature"].startswith("physics:")
+    assert {d["decision"] for d in loop["decisions"]} >= {"accepted", "rejected"}
+    assert loop["stopped"] == "escalate" and loop["escalation"]["signature"].startswith("camera:")
+    # every attack row is tagged with the version it attacked and, for failures, the gate verdict
+    assert len(data["attacks"]) == len(res.cycles)
+    assert {a["version"] for a in data["attacks"]} == {0, 1}
+    gated = [a for a in data["attacks"] if a.get("loop", {}).get("gate")]
+    assert gated and all(a["loop"]["decision"] in ("accepted", "rejected") for a in gated)
+    html = page.read_text(encoding="utf-8")
+    assert html.count("</script>") == 1 and '"versions"' in html
+
+
+def test_a_system2_run_has_no_loop_section(tmp_path):
+    run(tmp_path / "r", attacks=2, policy_path=POLICY)
+    assert collect(tmp_path / "r")["loop"] is None

@@ -23,7 +23,7 @@ model weights are updated anywhere.
 | `evalkit/` | Alfredo Wijaya | acceptance / held-out suites, metrics, run logs |
 | observability | Alfredo Wijaya | read-only run report and replay viewer (System 2 tab); System 2 supplies per-step traces and the nominal run |
 
-Package specs: [`docs/adversary/spec.md`](adversary/spec.md). Others get a `docs/<module>/spec.md`
+Package specs: [`docs/adversary/spec.md`](adversary/spec.md), [`docs/orchestrator/spec.md`](orchestrator/spec.md). Others get a `docs/<module>/spec.md`
 when work starts, imported from the root `CLAUDE.md`.
 
 ## The loop
@@ -163,8 +163,10 @@ writes `data/runs/<name>/studio.html`, one self-contained page: the attack strip
 certification board, usage and cost; per attack, why it was chosen (selector draws and every Muse
 Spark proposal with its target assumption), a call timeline with perturbation, divergence-from-
 nominal and failure flags, the diagnosis (mode, confidence, model or rules, rule agreement), the
-plain-language explanation, the root-cause line and the constraint. Only logged data is shown;
-rewrites, gate verdicts and video appear once they exist. It complements System 1's run viewer
+plain-language explanation, the root-cause line and the constraint. A closed-loop run
+(`uv run python -m ants.orchestrator.run`) adds a Versions view (version history, motivating
+constraint, diffs, every gate verdict with the cases it fixed and broke, escalations) and the
+rewrite and gate verdict per attack. Only logged data is shown; video appears once it exists. It complements System 1's run viewer
 (`evalkit/report.py` on `synthesizer`), which shows rollout videos and signals.
 
 ## Models
@@ -209,7 +211,7 @@ uniform, cost per cycle).
 | contracts | PR #3 with cap_harness signatures (#4) merged in; System 1 follow-up PRs agreed |
 | adversary | `feature/system2`: full cycle offline (`Adversary.attack/replay/discovered_failures/status`) on System 1's launcher mapping, planner interface and rule diagnoser, with history, sandboxed runner, a mock world that runs the PR #5 v0 policy, Muse Spark proposer/diagnoser/explainer, and a cap_harness backend (subprocess, seeded acceptance seeds 51–65) tested against a fake harness; first GPU run next |
 | synthesizer | branch `synthesizer`: Muse client with cache and token budget, prompt builder, develop-and-repair loop, DemoSpec converters, demo vs no-demo experiment with logged runs |
-| orchestrator | System 1's experiment loop and gate on `synthesizer`; the shared gate moves to `orchestrator/gate.py` |
+| orchestrator | `feature/orchestrator`: closed loop (`Loop`), outcome gate (`orchestrator/gate.py`), stall escalation and human gate, ported from System 1's `harden()`; runs offline with a patch fixture standing in for System 1 ([spec](orchestrator/spec.md)); Muse `synthesize()` plugs in next |
 | evalkit, observability | System 1: run logging, report viewer with a System 2 tab, on `synthesizer` |
 | LIBERO integration | runs on System 1's `cap_harness` checkout (RTX A5500), not in CI |
 
