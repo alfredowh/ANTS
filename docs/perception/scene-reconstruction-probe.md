@@ -47,6 +47,20 @@ wrist camera sits much closer to the surface than `agentview`), but it is genuin
 Run with `uv run python -m ants.evalkit.runbook cmd scene_recon.scan_arm`, then fuse with
 `fuse_mapper.py --frames-dir data/runs/mapper_probe/frames_arm --out-dir data/runs/mapper_probe/arm_scan`.
 
+## Fuller scan: pan x tilt grid (2026-11-03, `tools/mapper_probe/scan_arm.py`)
+
+Extended the arm scan from a 1-DOF pan sweep to a 2-DOF raster: 5 shoulder-pan offsets
+(-0.5 to +0.5 rad) x 3 shoulder-lift offsets (-0.15 to +0.15 rad), 15 waypoints, same
+closed-loop delta-joint drive. Old single-sweep defaults are superseded; new frames go to
+`data/runs/mapper_probe/frames_arm_full/` (the 6-frame run is preserved untouched).
+
+Logged run: 14/15 waypoints converged to <0.02 rad. One corner (pan=-0.5, lift=+0.15)
+stalled at 0.145 rad after 120 steps -- still saved with its true forward-kinematics pose,
+so fusion stays correct, just with one viewpoint slightly off its target.
+Fused mesh (`data/runs/mapper_probe/arm_scan_full/`): **10,320 vertices, 18,437 faces**,
+up from 5,948 with the 6-frame sweep. Renders stay coarse (close-range wrist views of
+mostly table surface at 1 cm voxels) but consistent with the earlier arm-scan look.
+
 ## Honest caveats
 
 - The original orbit scan (`scan_orbit.py`, `agentview`) is a **virtual camera teleport**, not

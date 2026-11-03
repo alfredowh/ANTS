@@ -39,13 +39,23 @@ def parse_args() -> argparse.Namespace:
         "--pan-offsets",
         type=float,
         nargs="+",
-        default=[-0.5, -0.3, -0.1, 0.1, 0.3, 0.5],
+        default=[-0.5, -0.25, 0.0, 0.25, 0.5],
         help="Radians added to the reset shoulder-pan joint (robot0_joint1) per waypoint.",
+    )
+    parser.add_argument(
+        "--lift-offsets",
+        type=float,
+        nargs="+",
+        default=[-0.15, 0.0, 0.15],
+        help=(
+            "Radians added to the reset shoulder-lift joint (robot0_joint2) per waypoint. "
+            "Waypoints are the pan x lift grid, rastered tilt-minor (pan outer, lift inner)."
+        ),
     )
     parser.add_argument(
         "--out-dir",
         type=Path,
-        default=REPO_ROOT / "data" / "runs" / "mapper_probe" / "frames_arm",
+        default=REPO_ROOT / "data" / "runs" / "mapper_probe" / "frames_arm_full",
     )
     return parser.parse_args()
 
@@ -85,10 +95,13 @@ def main() -> None:
         return float(np.clip(normalized * 2.0 - 1.0, -1.0, 1.0))
 
     gripper_native = current_gripper_native()
+    waypoints = [(pan, lift) for pan in args.pan_offsets for lift in args.lift_offsets]
+    print(f"[scan-arm] {len(waypoints)} waypoints (pan x lift grid)")
     manifest = []
-    for wp_i, offset in enumerate(args.pan_offsets):
+    for wp_i, (pan_offset, lift_offset) in enumerate(waypoints):
         target = home.copy()
-        target[0] = home[0] + offset
+        target[0] = home[0] + pan_offset
+        target[1] = home[1] + lift_offset
 
         for _ in range(MAX_STEPS_PER_WAYPOINT):
             current = np.array([sim.data.qpos[i] for i in idx], dtype=np.float64)
@@ -140,8 +153,8 @@ def main() -> None:
         )
         manifest.append(frame_path.name)
         print(
-            f"[scan-arm] waypoint {wp_i:02d}: pan_offset={offset:+.2f} joint_err={err:.4f} "
-            f"cam_pos={actual_pos.round(3)} "
+            f"[scan-arm] waypoint {wp_i:02d}: pan={pan_offset:+.2f} lift={lift_offset:+.2f} "
+            f"joint_err={err:.4f} cam_pos={actual_pos.round(3)} "
             f"depth[min,max]=({depth_m.min():.3f},{depth_m.max():.3f})"
         )
 
