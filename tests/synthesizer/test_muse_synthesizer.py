@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 from ants.contracts import (
     CaseSpec,
     Constraint,
@@ -14,6 +16,15 @@ from ants.contracts import (
 from ants.orchestrator.workflow import load_workflow
 from ants.synthesizer.llm import ChatClient
 from ants.synthesizer.muse_synthesizer import MuseSynthesizer, default_synthesizer
+
+ASPIRE_REF = Path(__file__).resolve().parents[2] / "ASPIRE" / "docs" / "api-reference.md"
+ASPIRE_EXAMPLE = (
+    Path(__file__).resolve().parents[2] / "ASPIRE" / "examples" / "libero" / "object_swap_seed1.py"
+)
+needs_aspire = pytest.mark.skipif(
+    not (ASPIRE_REF.exists() and ASPIRE_EXAMPLE.exists()),
+    reason="ASPIRE checkout not present",
+)
 
 INCUMBENT = Policy(policy_id="p", version=0, task="put the bowl on the plate", code="result = {}")
 CASE = Perturbation(category="physics", severity=0.5, params={})
@@ -85,17 +96,15 @@ def test_rewrite_prepends_the_workflow_to_the_system_prompt(tmp_path, monkeypatc
     assert system["content"].startswith(load_workflow())
 
 
+@needs_aspire
 def test_default_synthesizer_matches_demo_prompt_and_logs_to_run_dir(tmp_path, monkeypatch):
     run_dir = tmp_path / "run"
     synth = default_synthesizer(INCUMBENT.task, token_budget=1000, run_dir=run_dir)
 
-    aspire = Path(__file__).resolve().parents[2] / "ASPIRE"
     assert synth.task == INCUMBENT.task
     assert synth.example_task == "pick up the alphabet soup and place it in the basket"
-    assert synth.api_reference == (aspire / "docs" / "api-reference.md").read_text(encoding="utf-8")
-    assert synth.example_program == (
-        aspire / "examples" / "libero" / "object_swap_seed1.py"
-    ).read_text(encoding="utf-8")
+    assert synth.api_reference == ASPIRE_REF.read_text(encoding="utf-8")
+    assert synth.example_program == ASPIRE_EXAMPLE.read_text(encoding="utf-8")
     assert synth.client.model == "muse-wonder-1.0"
     assert synth.client.token_budget == 1000
 
@@ -108,6 +117,7 @@ def test_default_synthesizer_matches_demo_prompt_and_logs_to_run_dir(tmp_path, m
     assert any((run_dir / "llm_cache").glob("*.json"))
 
 
+@needs_aspire
 def test_default_synthesizer_hard_budget_returns_none_without_network(tmp_path, monkeypatch):
     run_dir = tmp_path / "run"
     synth = default_synthesizer(INCUMBENT.task, token_budget=0, run_dir=run_dir)
