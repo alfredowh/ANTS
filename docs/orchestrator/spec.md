@@ -34,8 +34,7 @@ orchestrator/
 │                   PatchSynthesizer test fixture, MOCK_WORLD_PATCHES
 ├── loop.py         Loop, LoopConfig, LoopResult: one attack per cycle, gate, stall, escalation
 ├── human_gate.py   a person's text answer to an escalation becomes a constraint (System 1's)
-├── workflow.md     the workflow Muse Wonder reads: steps, roles, how a rewrite is judged, enforced rules
-├── workflow.py     load_workflow(), workflow_info() (version + hash, logged in every run's start line)
+├── workflow.py     load_workflow(), workflow_info(): docs/orchestrator/phases.md, version + hash logged
 ├── preflight.py    GPU-run readiness: ASPIRE, launcher, services, GPU, disk, key, muse CLI; --smoke
 ├── heldout.py      held-out evaluation of v0 and final (Split.HELD_OUT cases, ASPIRE seeds 1-50)
 └── run.py          CLI + run_loop(): logs in the studio format and builds studio.html
@@ -60,10 +59,12 @@ certified (System 2's stop rule met). A draft that fails its nominal cases is ne
 
 ## Workflow file
 
-`workflow.md` is the plan in plain language, written for Muse Wonder: System 1 puts it in the
-generator's context (`load_workflow()`) when it writes v0 and every rewrite. `loop.py` executes the
-same steps; `test_workflow.py` fails if the file stops naming a stop reason, decision or log event
-the loop uses. The model reads the workflow but never runs it: the gate, the split, the severity
+`docs/orchestrator/phases.md` is the one workflow file, written for the repair model: System 1's
+operating context (Phase A / Phase B, program rules) plus the loop's own rules (steps, gate,
+escalation, stop reasons). `MuseOrchestrator` sends it at the top of every rewrite prompt
+(`load_workflow()` returns the same text). `loop.py` executes the same steps; `test_workflow.py`
+fails if the file stops naming a stop reason, decision or log event the loop uses, or if it is no
+longer the file `MuseOrchestrator` sends. The model reads the workflow but never runs it: the gate, the split, the severity
 bound and the budget stay in code. Change the workflow by editing the file and bumping its
 version; the version and hash are in every `loop.jsonl` start line.
 
@@ -77,12 +78,11 @@ version it hit and, for failures, the rewrite and its verdict. Read-only: it nev
 
 ## Next
 
-- System 1's repair step is `MuseOrchestrator` (Muse Code, branch `synthesizer`), whose prompt
-  context is `docs/orchestrator/phases.md`. `GenerateSynthesizer` adapts its `Generate` signature
-  to `Synthesizer`; `run.py --synthesizer muse-code --synth-token-budget N` uses it once
-  `synthesizer` merges (about 43k tokens per rewrite observed). Merge `phases.md` and
-  `workflow.md` into one file with System 1.
-- Grow `workflow.md` step by step (deployment loop with human approval, recovery skills) as each
+- System 1 has two plugs, both merged: `MuseOrchestrator` (Muse Code CLI, through
+  `GenerateSynthesizer`; `run.py --synthesizer muse-code --synth-token-budget N`; about 43k tokens
+  per rewrite observed) and `synthesizer/muse_synthesizer.py` (Meta API through System 1's prompt
+  builder, implements `Synthesizer` directly; it does not send `phases.md` yet).
+- Grow `phases.md` step by step (deployment loop with human approval, recovery skills) as each
   step gets code behind it.
 - Several rollouts per case for `Policy.deterministic=False`.
 - Skill admission after a gate pass (cut for the hackathon).

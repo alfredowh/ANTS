@@ -59,7 +59,7 @@ AskHuman = Callable[[Mapping[str, Any]], "GateAnswer | None"]
 #: called after every attack with the report and the policy it attacked (observability only)
 OnAttack = Callable[[AttackReport, Policy], None]
 
-#: the names `workflow.md` documents for Muse Wonder; a test keeps the two in sync
+#: the names `docs/orchestrator/phases.md` documents for the repair model; a test keeps them in sync
 STOP_REASONS = ("robust", "cycles", "budget", "escalate", "no_working_policy")
 DECISIONS = ("no_failure", "accepted", "rejected", "budget_stop")
 EVENTS = ("start", "cycle", "escalate", "human_answer", "no_working_policy", "end")
