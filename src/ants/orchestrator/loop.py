@@ -52,11 +52,17 @@ from ants.contracts import (
 from ants.orchestrator.gate import GateDecision, gate
 from ants.orchestrator.human_gate import GateAnswer, answer_to_constraint
 from ants.orchestrator.synthesis import Synthesizer
+from ants.orchestrator.workflow import workflow_info
 
 #: escalation request -> a person's answer, or None when nobody answered
 AskHuman = Callable[[Mapping[str, Any]], "GateAnswer | None"]
 #: called after every attack with the report and the policy it attacked (observability only)
 OnAttack = Callable[[AttackReport, Policy], None]
+
+#: the names `workflow.md` documents for Muse Wonder; a test keeps the two in sync
+STOP_REASONS = ("robust", "cycles", "budget", "escalate", "no_working_policy")
+DECISIONS = ("no_failure", "accepted", "rejected", "budget_stop")
+EVENTS = ("start", "cycle", "escalate", "human_answer", "no_working_policy", "end")
 
 
 @dataclass
@@ -151,6 +157,7 @@ class Loop:
                 k: v for k, v in vars(self.adv.config).items() if k not in ("aspire", "bounds")
             },
             "backend": self.adv.backend.name,
+            "workflow": workflow_info(),
         }
         self._log("loop.jsonl", start)
         incumbent, stage = policy, "draft"

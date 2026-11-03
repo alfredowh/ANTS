@@ -31,8 +31,10 @@ orchestrator/
 ├── synthesis.py    Synthesizer protocol; PatchSynthesizer test fixture, MOCK_WORLD_PATCHES
 ├── loop.py         Loop, LoopConfig, LoopResult: one attack per cycle, gate, stall, escalation
 ├── human_gate.py   a person's text answer to an escalation becomes a constraint (System 1's)
+├── workflow.md     the workflow Muse Wonder reads: steps, roles, how a rewrite is judged, enforced rules
+├── workflow.py     load_workflow(), workflow_info() (version + hash, logged in every run's start line)
 └── run.py          CLI + run_loop(): logs in the studio format and builds studio.html
-tests/orchestrator/ test_gate.py, test_loop.py
+tests/orchestrator/ test_gate.py, test_loop.py, test_workflow.py (md names match the loop's)
 ```
 
 ## One cycle
@@ -51,6 +53,15 @@ Policy stages: draft → attackable (passes its nominal cases) → incumbent (ac
 certified (System 2's stop rule met). A draft that fails its nominal cases is never attacked
 (`no_working_policy`, escalation).
 
+## Workflow file
+
+`workflow.md` is the plan in plain language, written for Muse Wonder: System 1 puts it in the
+generator's context (`load_workflow()`) when it writes v0 and every rewrite. `loop.py` executes the
+same steps; `test_workflow.py` fails if the file stops naming a stop reason, decision or log event
+the loop uses. The model reads the workflow but never runs it: the gate, the split, the severity
+bound and the budget stay in code. Change the workflow by editing the file and bumping its
+version; the version and hash are in every `loop.jsonl` start line.
+
 ## Observability
 
 `uv run python -m ants.orchestrator.run --cycles 30` writes `loop.jsonl`, `attacks.jsonl` (studio
@@ -61,6 +72,9 @@ version it hit and, for failures, the rewrite and its verdict. Read-only: it nev
 
 ## Next
 
-- Plug in System 1's Muse `synthesize()` behind `Synthesizer` once `synthesizer` merges.
+- Plug in System 1's Muse `synthesize()` behind `Synthesizer` once `synthesizer` merges, with
+  `load_workflow()` in its system prompt.
+- Grow `workflow.md` step by step (deployment loop with human approval, recovery skills) as each
+  step gets code behind it.
 - Several rollouts per case for `Policy.deterministic=False`.
 - Skill admission after a gate pass (cut for the hackathon).
