@@ -293,6 +293,22 @@
       "doc": "dev/curobo/README.md"
     },
     {
+      "id": "scene_recon",
+      "name": "scene reconstruction probe (cuRobo Mapper)",
+      "group": "dev",
+      "path": "tools/mapper_probe/",
+      "role": "Orbit-scans a LIBERO scene and fuses the frames into a cuRobo Mapper TSDF/ESDF, extracting a mesh. Offline probe, not wired into synthesizer/ or adversary/ yet.",
+      "in": [
+        "LIBERO scene (suite/task/seed)"
+      ],
+      "out": [
+        "data/runs/mapper_probe/frames/*.npz",
+        "data/runs/mapper_probe/reconstructed_scene.ply",
+        "data/runs/mapper_probe/reconstructed_view_*.png"
+      ],
+      "doc": "docs/perception/scene-reconstruction-probe.md"
+    },
+    {
       "id": "muse",
       "name": "Meta API (Muse)",
       "group": "external",
@@ -855,6 +871,32 @@
         "data/runs/curobo/exp09|exp10|exp11/"
       ],
       "result": "Not run yet."
+    },
+    {
+      "id": "scene_recon",
+      "title": "Scene reconstruction probe: cuRobo Mapper TSDF/ESDF on the LIBERO scene",
+      "status": "probe working, logged once",
+      "kind": "experiment",
+      "question": "Can ANTS fuse a multi-view camera scan of the LIBERO scene into a persistent 3D reconstruction (cuRobo's Mapper: TSDF to ESDF to mesh), as a step toward a policy planning against a reconstructed scene instead of a single-frame point cloud?",
+      "doc": "docs/perception/scene-reconstruction-probe.md",
+      "run_dir": "data/runs/mapper_probe",
+      "modules": [
+        "scene_recon",
+        "aspire"
+      ],
+      "commands": [
+        "scene_recon.scan",
+        "scene_recon.fuse"
+      ],
+      "inputs": [
+        "LIBERO scene: libero_goal_swap task 8 seed 51"
+      ],
+      "outputs": [
+        "data/runs/mapper_probe/frames/*.npz",
+        "data/runs/mapper_probe/reconstructed_scene.ply",
+        "data/runs/mapper_probe/reconstructed_view_*.png"
+      ],
+      "result": "Logged run, 2026-11-03: 16 orbit frames fused into a mesh (23,441 vertices, 44,253 faces); rendered views match the real scene layout. Virtual orbiting camera, not yet the real arm; not wired into any owned package. See the doc for caveats and next steps."
     }
   ],
   "commands": [
@@ -3039,6 +3081,127 @@
       "cost": "free",
       "minutes": 2,
       "doc": "dev/curobo/make_viewer.py"
+    },
+    {
+      "id": "scene_recon.scan",
+      "title": "Orbit-scan a LIBERO scene (RGB-D + camera pose per frame)",
+      "group": "scene-recon",
+      "runner": "libero",
+      "base": "../tools/mapper_probe/scan_orbit.py",
+      "args": [
+        {
+          "flag": "--suite",
+          "value": "libero_goal_swap",
+          "kind": "value",
+          "on": false,
+          "desc": "LIBERO suite name."
+        },
+        {
+          "flag": "--task-id",
+          "value": "8",
+          "kind": "value",
+          "on": false,
+          "desc": "Task index within the suite (8 = put-the-bowl-on-the-plate)."
+        },
+        {
+          "flag": "--seed",
+          "value": "51",
+          "kind": "value",
+          "on": false,
+          "desc": "LIBERO seed (acceptance seeds 51-65; never a held-out seed 1-50 for anything other than reporting)."
+        },
+        {
+          "flag": "--n-frames",
+          "value": "16",
+          "kind": "value",
+          "on": false,
+          "desc": "Number of orbit waypoints."
+        },
+        {
+          "flag": "--camera",
+          "value": "robot0_eye_in_hand",
+          "kind": "value",
+          "on": false,
+          "desc": "Default is the fixed 'agentview' camera (teleported each frame). 'robot0_eye_in_hand' needs real arm motion first -- it is parented to the moving gripper, not world, so teleporting it directly is not yet implemented."
+        },
+        {
+          "flag": "--out-dir",
+          "value": "../data/runs/mapper_probe/frames",
+          "kind": "value",
+          "on": false,
+          "desc": "Where per-frame .npz files and manifest.txt are written."
+        }
+      ],
+      "description": "Teleports a LIBERO camera through N orbit waypoints around the scene and saves RGB-D + world-frame camera pose per frame, in the same convention cap_harness's LiberoAdapter uses for its own camera reads.",
+      "examples": [
+        {
+          "title": "Default bowl-on-plate orbit scan (what produced the 2026-11-03 result)",
+          "cmd": "cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py"
+        }
+      ],
+      "modules": [
+        "scene_recon",
+        "aspire"
+      ],
+      "in": [],
+      "out": [
+        "data/runs/mapper_probe/frames/*.npz",
+        "data/runs/mapper_probe/frames/manifest.txt"
+      ],
+      "cost": "free",
+      "minutes": 1,
+      "doc": "docs/perception/scene-reconstruction-probe.md"
+    },
+    {
+      "id": "scene_recon.fuse",
+      "title": "Fuse orbit-scan frames into a cuRobo Mapper mesh",
+      "group": "scene-recon",
+      "runner": "curobo",
+      "base": "../tools/mapper_probe/fuse_mapper.py",
+      "args": [
+        {
+          "flag": "--frames-dir",
+          "value": "../data/runs/mapper_probe/frames",
+          "kind": "value",
+          "on": false,
+          "desc": "Output of scene_recon.scan."
+        },
+        {
+          "flag": "--voxel-size",
+          "value": "0.01",
+          "kind": "value",
+          "on": false,
+          "desc": "TSDF voxel size in meters; smaller is sharper and slower."
+        },
+        {
+          "flag": "--n-render-views",
+          "value": "3",
+          "kind": "value",
+          "on": false,
+          "desc": "How many shaded PNG renders to save from scan camera poses."
+        }
+      ],
+      "description": "Integrates every saved frame into curobo.perception.Mapper (Warp backend), computes the ESDF, extracts a surface mesh, and saves it plus a few shaded renders.",
+      "examples": [
+        {
+          "title": "Default fuse on the orbit scan above",
+          "cmd": "cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py"
+        }
+      ],
+      "modules": [
+        "scene_recon",
+        "aspire"
+      ],
+      "in": [
+        "data/runs/mapper_probe/frames/*.npz"
+      ],
+      "out": [
+        "data/runs/mapper_probe/reconstructed_scene.ply",
+        "data/runs/mapper_probe/reconstructed_view_*.png"
+      ],
+      "cost": "free",
+      "minutes": 2,
+      "doc": "docs/perception/scene-reconstruction-probe.md"
     }
   ]
 }

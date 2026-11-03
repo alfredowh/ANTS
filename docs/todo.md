@@ -235,6 +235,16 @@ uv run python -m ants.orchestrator.exp_curobo \
     --token-budget 250000
 ```
 
+**Scene reconstruction probe: cuRobo Mapper TSDF/ESDF on the LIBERO scene** (probe working, logged once)
+
+```bash
+LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py
+```
+
+```bash
+.venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py
+```
+
 <!-- runbook:end -->
 | 25 | Choose the memory bundle (Minimal / Standard / Full) and the store location (`evalkit/` or a new `ants/memory/`) | [memory-integration-plan.md](synthesizer/memory-integration-plan.md) §2.5 and §8 | open |
 | 26 | Approve the E0 determinism canary (about 10 rollouts) and a token budget for E6 (about 0.7M tokens) | Confirm the Muse price first (item 19) | open |
