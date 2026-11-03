@@ -412,7 +412,9 @@ def install_curobo_planning(cfg: dict) -> None:
 
     renderers: dict = {}
 
-    def sim_pixels(camera_name, depth, prefix: str | None = None) -> np.ndarray:
+    def sim_pixels(
+        camera_name, depth, prefix: str | None = None, diag: list | None = None
+    ) -> np.ndarray:
         model, data = LIVE["env"].sim.model._model, LIVE["env"].sim.data._data
         h, w = depth.shape
         if (h, w) not in renderers:
@@ -441,6 +443,36 @@ def install_curobo_planning(cfg: dict) -> None:
         )
         is_geom = seg[..., 1] == int(mujoco.mjtObj.mjOBJ_GEOM)
         mask = is_geom & robot[np.clip(seg[..., 0], 0, len(robot) - 1)]
+        # NOTE: never binary_dilation(..., iterations=0): scipy dilates until
+        # stable then, i.e. the whole frame. The prefixed (object) mask is exact.
+        if prefix:
+            if diag is not None:
+                diag.append(
+                    {
+                        "camera": camera_name,
+                        "prefix": prefix,
+                        "mask": int(mask.sum()),
+                        "pixels": int(mask.size),
+                        "body_hits": int(robot.sum()),
+                        "n_bodies": len(robot),
+                        "seg_ids": sorted(int(v) for v in np.unique(seg[..., 0]))[:12],
+                        "seg_ch1": sorted(int(v) for v in np.unique(seg[..., 1]))[:12],
+                    }
+                )
+            return mask
+        if diag is not None:
+            diag.append(
+                {
+                    "camera": camera_name,
+                    "prefix": prefix,
+                    "mask": int(mask.sum()),
+                    "pixels": int(mask.size),
+                    "body_hits": int(robot.sum()),
+                    "n_bodies": len(robot),
+                    "seg_ids": sorted(int(v) for v in np.unique(seg[..., 0]))[:12],
+                    "seg_ch1": sorted(int(v) for v in np.unique(seg[..., 1]))[:12],
+                }
+            )
         return binary_dilation(mask, iterations=2 if not prefix else 0)
 
     def masked(self, mask, *, camera_name, target_frame, observation):
@@ -486,7 +518,9 @@ def install_curobo_planning(cfg: dict) -> None:
             with out_path.with_suffix(".log").open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps({"n_spheres": len(spheres)}) + "\n")
 
-        def bowl_points(api, observation, frame: str) -> np.ndarray:
+        def bowl_points(
+            api, observation, frame: str, diag: list | None = None
+        ) -> np.ndarray:
             """Base-frame points of the bowl: SAM mask (curobo-sam3/31) or simulator render."""
             clouds = []
             for camera in observation.cameras:
@@ -509,7 +543,7 @@ def install_curobo_planning(cfg: dict) -> None:
                         )
                         masks = []
                 else:
-                    masks = [sim_pixels(camera, depth, attach["body"])]
+                    masks = [sim_pixels(camera, depth, attach["body"], diag)]
                 for mask in masks:
                     if mask.any():
                         pts = original(
@@ -519,6 +553,8 @@ def install_curobo_planning(cfg: dict) -> None:
                             target_frame=frame,
                             observation=observation,
                         ).points
+                        if diag is not None:
+                            diag.append({"camera": camera, "projected": int(len(pts))})
                         if len(pts):
                             clouds.append(pts)
             return np.concatenate(clouds) if clouds else np.zeros((0, 3))
@@ -547,7 +583,14 @@ def install_curobo_planning(cfg: dict) -> None:
                 ])  # fmt: skip
                 gripper = float(state.gripper_positions["primary"])
                 closed = gripper < 0.5
-                bowl = bowl_points(self, observation, frame) if closed else np.zeros((0, 3))
+                mask_diag: list = []
+                bowl = (
+                    bowl_points(self, observation, frame, mask_diag)
+                    if closed
+                    else np.zeros((0, 3))
+                )
+                if mask_diag:
+                    info["masks"] = mask_diag
                 dist = float(np.linalg.norm(bowl.mean(axis=0) - t)) if len(bowl) else -1.0
                 near = len(bowl) >= 30 and dist < attach.get("hold_dist_m", 0.16)
                 profile = [tuple(r) for r in attach["profile"]]
@@ -577,8 +620,27 @@ def install_curobo_planning(cfg: dict) -> None:
                         z_bottom = float(bowl[:, 2].max()) - max(h for h, _ in profile)
                     else:
                         env = LIVE["env"]
+                        model = env.sim.model._model
+                        data = env.sim.data._data
                         lo, hi = body_aabb(env, env.sim.model.body_name2id(attach["body_main"]))
-                        centre, z_bottom = (lo[:2] + hi[:2]) / 2, float(lo[2])
+                        # body_aabb is in sim-world frame, but the hand pose
+                        # below is in robot_base frame: move the box by the
+                        # base body's world pose (verified translation-only
+                        # on the exp11 bowl to <1 mm).
+                        base = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "robot0_base")
+                        bp = np.asarray(data.xpos[base], dtype=float)
+                        bm = np.asarray(data.xmat[base], dtype=float).reshape(3, 3)
+                        corners = np.array(
+                            [
+                                [x, y, z]
+                                for x in (lo[0], hi[0])
+                                for y in (lo[1], hi[1])
+                                for z in (lo[2], hi[2])
+                            ]
+                        )
+                        box = (corners - bp) @ bm
+                        blo, bhi = box.min(axis=0), box.max(axis=0)
+                        centre, z_bottom = (blo[:2] + bhi[:2]) / 2, float(blo[2])
                     world = bowl_spheres(profile, centre, z_bottom, sphere_r)
                     held_state["local"] = spheres_to_local(world, t, rot)
                     info.update(centre=np.round(centre, 4).tolist(), z_bottom=round(z_bottom, 4))
