@@ -3,8 +3,9 @@
     uv run python -m ants.orchestrator.run --cycles 30                      # mock world, free
     uv run python -m ants.orchestrator.run --cycles 10 --backend cap_harness --aspire ../ASPIRE
 
-Writes `<out>/loop.jsonl`, `<out>/attacks.jsonl` (System 2's history), `<out>/policies/v<N>.py`
-and `<out>/summary.json`.
+Writes `<out>/loop.jsonl` (every loop decision), `<out>/attacks.jsonl` (one studio row per
+attack), `<out>/history.jsonl` (System 2's history), `<out>/policies/v<N>.py`, `<out>/summary.json`
+and `<out>/studio.html` (Harden, Replay and Versions views).
 
 System 1 is the patch fixture (`--synthesizer patch`) until System 1's Muse generator is merged:
 it applies hand-written patches that the MOCK world rewards, so a run with it shows that the loop,
@@ -14,6 +15,7 @@ gate and escalation work, never that a policy got more robust. Mock-world number
 from __future__ import annotations
 
 import argparse
+import json
 import time
 from pathlib import Path
 
@@ -21,10 +23,69 @@ from ants.adversary import Adversary, AdversaryConfig
 from ants.adversary.perturbations import CATEGORIES, Bounds
 from ants.adversary.rollout import AspireConfig
 from ants.contracts import Policy
-from ants.orchestrator.loop import Loop, LoopConfig
-from ants.orchestrator.synthesis import PatchSynthesizer
+from ants.orchestrator.loop import Loop, LoopConfig, LoopResult
+from ants.orchestrator.synthesis import PatchSynthesizer, Synthesizer
+from ants.studio.build import build
+from ants.studio.run import append_row, attack_row, nominal_events
 
 DEFAULT_POLICY = Path("examples/bowl_on_plate/policy.py")
+
+
+def run_loop(
+    out: Path,
+    adv_config: AdversaryConfig,
+    loop_config: LoopConfig,
+    policy: Policy,
+    synthesizer: Synthesizer | None = None,
+    severity_bound: float | None = None,
+) -> tuple[LoopResult, Path]:
+    """Run the loop with studio logging; returns the result and the studio page."""
+    out.mkdir(parents=True, exist_ok=True)
+    for stale in ("loop.jsonl", "attacks.jsonl", "history.jsonl", "summary.json"):
+        (out / stale).unlink(missing_ok=True)  # a run always starts from empty logs
+    adv = Adversary.from_config(
+        AdversaryConfig(**{**vars(adv_config), "history_path": out / "history.jsonl"})
+    )
+    cfg = adv.config
+    (out / "policy.py").write_text(policy.code, encoding="utf-8")
+    meta = {
+        "name": out.name,
+        "kind": "loop",
+        "started": time.strftime("%Y-%m-%dT%H:%M:%S"),
+        "task": policy.task,
+        "policy": {"id": policy.policy_id, "version": policy.version, "path": "policy.py"},
+        "backend": cfg.backend,
+        "model": cfg.model,
+        "attacks_planned": loop_config.cycles,
+        "config": {
+            "categories": list(cfg.categories),
+            "eta": cfg.eta,
+            "severity_bound": severity_bound if severity_bound is not None else cfg.bounds.default,
+            "rho": 0.8,
+            "n_agents": cfg.n_agents if adv.model else 0,
+            "stop_mode": cfg.stop_mode,
+            "min_tests": cfg.min_tests,
+            "tau": cfg.tau,
+            "seed": cfg.seed,
+            "token_budget": getattr(adv.model, "token_budget", None),
+            "rollout_timeout_s": cfg.rollout_timeout_s,
+            "gate_mode": loop_config.gate_mode,
+            "stall_window": loop_config.stall_window,
+            "synthesizer": "patch fixture" if synthesizer is None else type(synthesizer).__name__,
+        },
+        "nominal": nominal_events(adv, policy, cfg.seed),
+    }
+    (out / "run.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
+
+    def on_attack(report, attacked):
+        append_row(out / "attacks.jsonl", attack_row(adv, report, attacked))
+
+    lcfg = LoopConfig(**{**vars(loop_config), "out": out})
+    res = Loop(adv, synthesizer or PatchSynthesizer(), lcfg, on_attack=on_attack).run(policy)
+    meta["finished"] = time.strftime("%Y-%m-%dT%H:%M:%S")
+    meta["tokens_spent"] = getattr(adv.model, "run_spent", 0)
+    (out / "run.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
+    return res, build(out)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -46,29 +107,22 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     out = args.out or Path("data/runs") / f"loop_{time.strftime('%Y%m%d_%H%M%S')}"
-    out.mkdir(parents=True, exist_ok=True)
-    (out / "attacks.jsonl").unlink(missing_ok=True)
     aspire = None
     if args.backend == "cap_harness":
         root = {"root": args.aspire} if args.aspire else {}
         aspire = AspireConfig(**root, output_root=out / "aspire")
-    adv = Adversary.from_config(
-        AdversaryConfig(
-            model=args.model,
-            backend=args.backend,
-            categories=tuple(c.strip() for c in args.categories.split(",") if c.strip()),
-            min_severity=args.min_severity,
-            bounds=Bounds(default=args.severity_bound),
-            seed=args.seed,
-            history_path=out / "attacks.jsonl",
-            aspire=aspire,
-        )
+    adv_cfg = AdversaryConfig(
+        model=args.model,
+        backend=args.backend,
+        categories=tuple(c.strip() for c in args.categories.split(",") if c.strip()),
+        min_severity=args.min_severity,
+        bounds=Bounds(default=args.severity_bound),
+        seed=args.seed,
+        aspire=aspire,
     )
     policy = Policy("bowl_on_plate", 0, args.task, args.policy.read_text(encoding="utf-8"))
-    cfg = LoopConfig(
-        cycles=args.cycles, gate_mode=args.gate, stall_window=args.stall_window, out=out
-    )
-    res = Loop(adv, PatchSynthesizer(), cfg).run(policy)
+    loop_cfg = LoopConfig(cycles=args.cycles, gate_mode=args.gate, stall_window=args.stall_window)
+    res, page = run_loop(out, adv_cfg, loop_cfg, policy, severity_bound=args.severity_bound)
     for r in res.cycles:
         sig = r.get("signature", "")
         print(f"{r['cycle']:3d} v{r['policy_version']} {r['category']:9s} {r['outcome']:7s} "
@@ -77,7 +131,7 @@ def main(argv: list[str] | None = None) -> int:
           f"accepted {res.accepted_versions}")  # fmt: skip
     if res.escalation:
         print(f"escalation: {res.escalation['request']}")
-    print(f"log: {out.resolve()}")
+    print(f"studio: {page.resolve()}")
     return 0
 
 

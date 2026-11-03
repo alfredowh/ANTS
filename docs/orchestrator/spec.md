@@ -31,7 +31,7 @@ orchestrator/
 ├── synthesis.py    Synthesizer protocol; PatchSynthesizer test fixture, MOCK_WORLD_PATCHES
 ├── loop.py         Loop, LoopConfig, LoopResult: one attack per cycle, gate, stall, escalation
 ├── human_gate.py   a person's text answer to an escalation becomes a constraint (System 1's)
-└── run.py          CLI: uv run python -m ants.orchestrator.run --cycles 30
+└── run.py          CLI + run_loop(): logs in the studio format and builds studio.html
 tests/orchestrator/ test_gate.py, test_loop.py
 ```
 
@@ -51,9 +51,16 @@ Policy stages: draft → attackable (passes its nominal cases) → incumbent (ac
 certified (System 2's stop rule met). A draft that fails its nominal cases is never attacked
 (`no_working_policy`, escalation).
 
+## Observability
+
+`uv run python -m ants.orchestrator.run --cycles 30` writes `loop.jsonl`, `attacks.jsonl` (studio
+rows), `history.jsonl`, `policies/`, `summary.json` and `studio.html`. The studio's Versions tab
+shows the version history (motivating constraint, gate verdict, diff per accepted version), every
+gate decision with the cases it fixed and broke, and escalations; each attack in Replay shows the
+version it hit and, for failures, the rewrite and its verdict. Read-only: it never feeds back.
+
 ## Next
 
 - Plug in System 1's Muse `synthesize()` behind `Synthesizer` once `synthesizer` merges.
 - Several rollouts per case for `Policy.deterministic=False`.
-- Show `loop.jsonl` in the studio: version history, diffs, gate verdicts.
 - Skill admission after a gate pass (cut for the hackathon).

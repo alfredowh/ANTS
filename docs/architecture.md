@@ -163,8 +163,10 @@ writes `data/runs/<name>/studio.html`, one self-contained page: the attack strip
 certification board, usage and cost; per attack, why it was chosen (selector draws and every Muse
 Spark proposal with its target assumption), a call timeline with perturbation, divergence-from-
 nominal and failure flags, the diagnosis (mode, confidence, model or rules, rule agreement), the
-plain-language explanation, the root-cause line and the constraint. Only logged data is shown;
-rewrites, gate verdicts and video appear once they exist. It complements System 1's run viewer
+plain-language explanation, the root-cause line and the constraint. A closed-loop run
+(`uv run python -m ants.orchestrator.run`) adds a Versions view (version history, motivating
+constraint, diffs, every gate verdict with the cases it fixed and broke, escalations) and the
+rewrite and gate verdict per attack. Only logged data is shown; video appears once it exists. It complements System 1's run viewer
 (`evalkit/report.py` on `synthesizer`), which shows rollout videos and signals.
 
 ## Models

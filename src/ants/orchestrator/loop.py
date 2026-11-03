@@ -38,6 +38,7 @@ from typing import Any
 
 from ants.adversary import Adversary
 from ants.contracts import (
+    AttackReport,
     CaseSpec,
     Constraint,
     Feedback,
@@ -54,6 +55,8 @@ from ants.orchestrator.synthesis import Synthesizer
 
 #: escalation request -> a person's answer, or None when nobody answered
 AskHuman = Callable[[Mapping[str, Any]], "GateAnswer | None"]
+#: called after every attack with the report and the policy it attacked (observability only)
+OnAttack = Callable[[AttackReport, Policy], None]
 
 
 @dataclass
@@ -86,8 +89,10 @@ class Loop:
         synthesizer: Synthesizer,
         config: LoopConfig | None = None,
         ask_human: AskHuman | None = None,
+        on_attack: OnAttack | None = None,
     ) -> None:
         self.adv = adversary
+        self.on_attack = on_attack
         self.synth = synthesizer
         self.cfg = config or LoopConfig()
         self.ask_human = ask_human
@@ -168,6 +173,8 @@ class Loop:
         stopped, escalation, asks = "cycles", None, 0
         for cycle in range(cfg.cycles):
             report = self.adv.attack(incumbent)
+            if self.on_attack is not None:
+                self.on_attack(report, incumbent)
             p = report.perturbation
             row: dict[str, Any] = {
                 "event": "cycle",

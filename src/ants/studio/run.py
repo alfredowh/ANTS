@@ -22,10 +22,36 @@ from pathlib import Path
 from ants.adversary import Adversary, AdversaryConfig
 from ants.adversary.perturbations import Bounds
 from ants.adversary.rollout import AspireConfig
-from ants.contracts import Policy
+from ants.contracts import AttackReport, Policy
 from ants.studio.build import build
 
 DEFAULT_POLICY = Path("examples/bowl_on_plate/policy.py")
+
+
+def attack_row(adv: Adversary, report: AttackReport, policy: Policy) -> dict:
+    """One `attacks.jsonl` line: report, why it was chosen, explanation, status after it."""
+    text, source = adv.explain(report, policy) if report.failure else ("", "none")
+    return {
+        "report": report.to_dict(),
+        "notes": adv.history.records[-1].notes,
+        "explanation": text,
+        "explanation_source": source,
+        "status_after": adv.status(policy).to_dict(),
+    }
+
+
+def nominal_events(adv: Adversary, policy: Policy, seed: int) -> dict:
+    """The nominal run the Replay view compares every attack against."""
+    nominal = adv.replay(policy, [None], seed=seed)[0]
+    return {
+        "outcome": nominal.outcome.value,
+        "events": [{"kind": e.kind, **dict(e.detail)} for e in nominal.events],
+    }
+
+
+def append_row(path: Path, row: dict) -> None:
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(row, default=str) + "\n")
 
 
 def run(
@@ -85,26 +111,12 @@ def run(
             "rollout_timeout_s": cfg.rollout_timeout_s,
         },
     }
-    nominal = adv.replay(policy, [None], seed=seed)[0]
-    meta["nominal"] = {
-        "outcome": nominal.outcome.value,
-        "events": [{"kind": e.kind, **dict(e.detail)} for e in nominal.events],
-    }
+    meta["nominal"] = nominal_events(adv, policy, seed)
     (out / "run.json").write_text(json.dumps(meta, indent=1), encoding="utf-8")
     log = out / "attacks.jsonl"
     for i in range(attacks):
         report = adv.attack(policy)
-        notes = adv.history.records[-1].notes
-        text, source = adv.explain(report, policy) if report.failure else ("", "none")
-        row = {
-            "report": report.to_dict(),
-            "notes": notes,
-            "explanation": text,
-            "explanation_source": source,
-            "status_after": adv.status(policy).to_dict(),
-        }
-        with log.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(row, default=str) + "\n")
+        append_row(log, attack_row(adv, report, policy))
         outcome = report.result.outcome.value
         sig = report.constraint.failure_signature if report.constraint else ""
         print(
