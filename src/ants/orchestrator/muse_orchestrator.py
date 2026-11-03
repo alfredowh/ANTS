@@ -59,6 +59,9 @@ class MuseOrchestrator:
         cycle_dir.mkdir(parents=True, exist_ok=True)
         candidate = cycle_dir / "program.py"
         candidate.write_text(extract_code(result.text), encoding="utf-8")
+        (cycle_dir / "incumbent.py").write_text(
+            incumbent.read_text(encoding="utf-8"), encoding="utf-8"
+        )
         (cycle_dir / "reply.md").write_text(result.text, encoding="utf-8")
         (cycle_dir / "trace.jsonl").write_text(
             "\n".join(json.dumps(e) for e in result.events), encoding="utf-8"

@@ -1,8 +1,40 @@
 # Plan: a Muse-Code-driven orchestrator, a two-phase architecture, and the agentic dashboard tab
 
-Status: planning, not yet built. Written 2026-11-03, one day before submission. This is the working
-plan for four items the user asked for; scope was narrowed mid-planning (see "What changed" below).
-Read `AGENTS.md`, `docs/concept.md`, `docs/architecture.md` and `docs/adversary/spec.md` first.
+Status: **all four items built**, 2026-11-03. Read `AGENTS.md`, `docs/concept.md`,
+`docs/architecture.md` and `docs/adversary/spec.md` first.
+
+## Implementation log
+
+1. **No-demo gets only a flat task description**: already true before this plan existed
+   (`demo_vs_nodemo.py:80-81`, `args.task` defaults to `"put the bowl on the plate"`, no scene
+   context unless a flag is passed). No change needed.
+2. **Offline prompt-generator**: built. `src/ants/synthesizer/prompt_generator.py` +
+   `src/ants/synthesizer/prompts/generate_task_template.md`. Verified live against clip 233832:
+   reproduces the hand-coded `demo_section()` paragraph almost exactly (14,925 prompt / 2,317
+   completion tokens, ~$0.23) -- the honest caveat is that this clip is also the worked example
+   embedded in the md, so it confirms the guarantee but not yet generalization to a new task; that
+   needs a second demo clip, not available yet.
+3. **Muse-Code orchestrator**: built (see below, unchanged from the original plan). Verified live
+   with one real cycle (42,947 tokens, ~$0.58): given a constraint in plain English, correctly
+   diagnosed a hard-coded grasp offset and derived a ratio-based fix independently close to the
+   real demo's own numbers.
+4. **Dashboard**: built as one local page, `src/ants/studio/dashboard.py` +
+   `dashboard_template.html`, three tabs:
+   - **Architecture**: reads `docs/orchestrator/architecture_manifest.json` (hand-maintained, not
+     generated from a run -- that generator does not exist yet) and renders it as a status grid,
+     not the originally-scoped animated/highlighted flow; time did not allow more.
+   - **Perception**: a link/instructions panel for ASPIRE's own Viser+MCP page
+     (`http://127.0.0.1:8080`, started by `ASPIRE/scripts/start_system2.sh`) -- confirmed this is
+     ASPIRE's existing real-YAM/LIBERO monitoring stack (SAM3 masks, cuRobo trajectories, collision
+     spheres), not rebuilt. Likely the source of the two reference screenshots given earlier in
+     this session.
+   - **Agentic**: fully real. Renders whatever `MuseOrchestrator` already writes to disk for one
+     cycle: token usage tiles, the WHY note, the Muse Code task-lifecycle trace, and the
+     incumbent-to-candidate diff.
+
+What did not get built, honestly: a generator that produces the architecture manifest from a real
+run (so the "current block" cannot actually be highlighted yet), the recovery-skill module, and the
+deployment monitor -- all still exactly as scoped below, all still open.
 
 ## What changed from the first pass
 

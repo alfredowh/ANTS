@@ -32,6 +32,7 @@ def test_generate_writes_candidate_and_trace(tmp_path, monkeypatch):
     cycle_dir = tmp_path / "runs" / "cycle1"
     assert (cycle_dir / "reply.md").exists()
     assert (cycle_dir / "trace.jsonl").exists()
+    assert (cycle_dir / "incumbent.py").read_text(encoding="utf-8").strip() == "result = {}"
     usage = json.loads((cycle_dir / "usage.json").read_text(encoding="utf-8"))
     assert usage["spent_total"] == 15
     assert orch.spent() == 15
