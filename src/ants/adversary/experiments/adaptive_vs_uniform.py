@@ -12,7 +12,7 @@ in both arms.
 Reported per arm: task failures found, failures per attack, distinct failure signatures (coverage:
 adaptive testing can find more failures of fewer kinds) and crashes (ERROR, never counted as
 failures). Writes `results.json` (config, one row per arm and seed with the cumulative failure
-curve) and `summary.md` to the run directory.
+curve), `summary.md` and the figure (`figure.svg`, `figure.html`) to the run directory.
 
 Mock-world numbers check the experiment pipeline only; they are not results. Reported numbers
 come from the cap_harness backend.
@@ -32,6 +32,7 @@ from typing import Any
 
 from ants.adversary.adversary import Adversary
 from ants.adversary.config import AdversaryConfig
+from ants.adversary.experiments.figure import write as write_figure
 from ants.adversary.perturbations import CATEGORIES
 from ants.adversary.rollout import AspireConfig
 from ants.contracts import Outcome, Policy
@@ -145,6 +146,7 @@ def run(
     }
     (out / "results.json").write_text(json.dumps(results, indent=1, default=str), encoding="utf-8")
     (out / "summary.md").write_text(summarize(runs, base.backend), encoding="utf-8")
+    write_figure(out)
     return runs
 
 

@@ -37,3 +37,12 @@ def test_the_same_seed_reproduces_the_same_run(tmp_path):
 def test_cli(tmp_path, capsys):
     assert main(["--attacks", "4", "--seeds", "0", "--out", str(tmp_path)]) == 0
     assert "Failures / attack" in capsys.readouterr().out
+
+
+def test_the_run_writes_a_labelled_figure(tmp_path):
+    run(tmp_path, V0, attacks=5, seeds=[0, 1], base=AdversaryConfig())
+    svg = (tmp_path / "figure.svg").read_text(encoding="utf-8")
+    assert "Adaptive (η 0.2)" in svg and "Uniform (η 1.0)" in svg
+    assert "MOCK WORLD, not a result" in svg
+    page = (tmp_path / "figure.html").read_text(encoding="utf-8")
+    assert "Table view" in page and 'data-theme="dark"' in page
