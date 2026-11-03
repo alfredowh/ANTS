@@ -30,7 +30,8 @@ Owner: Daniel. System 1 (`synthesizer/`) is owned by Alfredo. Only `contracts/` 
    scope, wall-clock timeout). A crash is `Outcome.ERROR`, never counted as a task failure. A
    deterministic line budget catches loops (`FAILURE`, reason `timeout`); the wall clock is a
    machine-dependent safety net (`ERROR`, reason `wall_clock_timeout`). The whitelist is not a
-   security boundary; on the real simulator ASPIRE's process isolation is.
+   security boundary, and neither is ASPIRE's sandbox (also an in-process `exec`). On the real
+   simulator the program runs in ASPIRE's subprocess, so a crash or hang cannot take the loop down.
 5. **Severity is enforced in code, not in prompts.** Every perturbation passes through
    `PerturbationSpace.validate()` (clamp to bounds, severity ≤ ρ) whatever the model returned.
 6. **The loop never crashes on the model.** Model errors, timeouts or invalid JSON fall back to
