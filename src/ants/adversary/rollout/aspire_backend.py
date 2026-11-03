@@ -48,6 +48,7 @@ HELD_OUT_SEEDS = tuple(range(1, 51))
 SEEDS_BY_SPLIT = {Split.ACCEPTANCE: ACCEPTANCE_SEEDS, Split.HELD_OUT: HELD_OUT_SEEDS}
 
 REPO_ROOT = Path(__file__).resolve().parents[4]
+DEFAULT_ASPIRE_ROOT = REPO_ROOT / "ASPIRE"  # git submodule since System 1's da9adec
 MAX_KEYFRAMES = 8
 
 
@@ -56,7 +57,7 @@ class AspireConfig:
     """Where the ASPIRE checkout is and how to run it. Every field is logged with each rollout."""
 
     root: Path = field(
-        default_factory=lambda: Path(os.environ.get("ANTS_ASPIRE_ROOT", "../ASPIRE"))
+        default_factory=lambda: Path(os.environ.get("ANTS_ASPIRE_ROOT", DEFAULT_ASPIRE_ROOT))
     )
     launcher: Path = REPO_ROOT / "tools" / "aspire_launch.py"  # System 1's perturbation launcher
     output_root: Path = Path("data/runs/aspire")
