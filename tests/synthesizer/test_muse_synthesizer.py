@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from ants.contracts import (
     CaseSpec,
     Constraint,
@@ -11,7 +13,7 @@ from ants.contracts import (
 )
 from ants.orchestrator.workflow import load_workflow
 from ants.synthesizer.llm import ChatClient
-from ants.synthesizer.muse_synthesizer import MuseSynthesizer
+from ants.synthesizer.muse_synthesizer import MuseSynthesizer, default_synthesizer
 
 INCUMBENT = Policy(policy_id="p", version=0, task="put the bowl on the plate", code="result = {}")
 CASE = Perturbation(category="physics", severity=0.5, params={})
@@ -81,6 +83,42 @@ def test_rewrite_prepends_the_workflow_to_the_system_prompt(tmp_path, monkeypatc
     system = seen["messages"][0]
     assert system["role"] == "system"
     assert system["content"].startswith(load_workflow())
+
+
+def test_default_synthesizer_matches_demo_prompt_and_logs_to_run_dir(tmp_path, monkeypatch):
+    run_dir = tmp_path / "run"
+    synth = default_synthesizer(INCUMBENT.task, token_budget=1000, run_dir=run_dir)
+
+    aspire = Path(__file__).resolve().parents[2] / "ASPIRE"
+    assert synth.task == INCUMBENT.task
+    assert synth.example_task == "pick up the alphabet soup and place it in the basket"
+    assert synth.api_reference == (aspire / "docs" / "api-reference.md").read_text(encoding="utf-8")
+    assert synth.example_program == (
+        aspire / "examples" / "libero" / "object_swap_seed1.py"
+    ).read_text(encoding="utf-8")
+    assert synth.client.model == "muse-wonder-1.0"
+    assert synth.client.token_budget == 1000
+
+    def fake_post(messages, temperature):
+        return _fake_reply("```python\nresult = {'ok': True}\n```"), 0.1
+
+    monkeypatch.setattr(synth.client, "_post", fake_post)
+    assert synth.rewrite(INCUMBENT, [FEEDBACK], [CONSTRAINT]) is not None
+    assert len((run_dir / "llm_ledger.jsonl").read_text(encoding="utf-8").splitlines()) == 1
+    assert any((run_dir / "llm_cache").glob("*.json"))
+
+
+def test_default_synthesizer_hard_budget_returns_none_without_network(tmp_path, monkeypatch):
+    run_dir = tmp_path / "run"
+    synth = default_synthesizer(INCUMBENT.task, token_budget=0, run_dir=run_dir)
+    monkeypatch.setattr(
+        synth.client,
+        "_post",
+        lambda m, t: (_ for _ in ()).throw(AssertionError("no network")),
+    )
+
+    assert synth.rewrite(INCUMBENT, [FEEDBACK], [CONSTRAINT]) is None
+    assert not (run_dir / "llm_ledger.jsonl").exists()
 
 
 def test_rewrite_returns_none_when_budget_is_spent(tmp_path, monkeypatch):

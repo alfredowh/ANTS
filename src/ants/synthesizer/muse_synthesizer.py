@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
+from pathlib import Path
 
 from ants.contracts import Constraint, Feedback, Policy
 from ants.synthesizer.generator import build_messages, extract_code
@@ -93,3 +94,25 @@ class MuseSynthesizer:
                 "tokens": reply.prompt_tokens + reply.completion_tokens,
             },
         )
+
+
+def default_synthesizer(task: str, *, token_budget: int, run_dir: Path) -> MuseSynthesizer:
+    """MuseSynthesizer with the same ChatClient settings, API reference, example program
+    and example task as the logged demo_vs_nodemo runs, so loop rewrites use the same prompt."""
+    # Imported here: System 1 must not pull in the orchestrator package at import time.
+    from ants.orchestrator.demo_vs_nodemo import EXAMPLE, EXAMPLE_TASK
+
+    aspire = Path(__file__).resolve().parents[3] / "ASPIRE"
+    client = ChatClient(
+        "muse-wonder-1.0",  # demo_vs_nodemo.py --model default
+        run_dir / "llm_cache",
+        run_dir / "llm_ledger.jsonl",
+        token_budget,
+    )
+    return MuseSynthesizer(
+        client,
+        (aspire / "docs" / "api-reference.md").read_text(encoding="utf-8"),
+        (aspire / EXAMPLE).read_text(encoding="utf-8"),
+        EXAMPLE_TASK,
+        task,
+    )
