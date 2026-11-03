@@ -2,6 +2,41 @@
 
 Give this file to a new session as context. It is the single place that says where the project stands, how to run what exists, what was found, and what to do next. Read `AGENTS.md` (repo rules) and `docs/concept.md` (idea) next. Branch `synthesizer`.
 
+## 2026-11-03 session addendum: scene-reconstruction probe
+
+New work this session, on top of everything below (which is still accurate as of 2026-10-31):
+
+- **What was built.** A standalone probe, `tools/mapper_probe/`, answering: can ANTS fuse a
+  multi-view camera scan of the LIBERO scene into a persistent 3D reconstruction (cuRobo's
+  `Mapper`: TSDF -> ESDF -> mesh), as a step toward a policy planning against a reconstructed scene
+  instead of the single-frame point cloud cuRobo's planner uses today? Full writeup, caveats and
+  exact commands: **`docs/perception/scene-reconstruction-probe.md`**.
+- **Two scan modes, both logged and working:**
+  - `scan_orbit.py` — teleports the `agentview` camera through 16 orbit waypoints (virtual scan,
+    not robot motion). Fused mesh: 23,441 vertices, 44,253 faces, matches the real scene layout.
+  - `scan_arm.py` — **real robot motion**: closed-loop drives the Franka's shoulder-pan joint
+    through 6 waypoints using `LiberoActionCodec`'s own delta-joint formula, so
+    `robot0_eye_in_hand` moves via true forward kinematics. Fused mesh: 5,948 vertices (sparser,
+    close-range).
+  - `fuse_mapper.py` — fuses either scan's frames with `curobo.perception.Mapper` and extracts a
+    mesh + shaded renders.
+- **Run them:** `uv run python -m ants.evalkit.runbook cmd scene_recon.scan` /
+  `scene_recon.scan_arm` / `scene_recon.fuse` (registered in `docs/runbook/commands.json`,
+  experiment id `scene_recon`). No LLM/Muse tokens involved — pure GPU/simulator time.
+- **Registered in the dev architecture manifest** (`docs/orchestrator/architecture_manifest.json`),
+  node `scene_recon`, next to `prompt_gen`, `status: partial`.
+- **Interactive 3D viewer** of the orbit-scan mesh (Three.js, self-contained, embeddable):
+  https://claude.ai/artifact/1YhU9TBJAhwBdmUBhVLpzS
+- **Committed and pushed to `synthesizer`:** `fd5950c` (orbit scan + fuse + docs/runbook) and
+  `5ba5738` (real arm-driven scan). Lint and full test suite green at both commits.
+- **Not done yet, next step:** wire `mapper.compute_esdf()` into cuRobo's `plan_motion`/`ss_cur`
+  collision check as the obstacle representation, replacing today's single-frame point cloud (see
+  `dev/curobo/` for the known weak spot this would address, the wine-rack case). **This touches
+  System 2's package (`src/ants/adversary/`), owned by Daniel per `AGENTS.md` — flag it with him
+  before landing it there.** The probe doc has the full detail.
+- **Also still open from `scan_arm.py`:** only one joint (shoulder pan) is swept so far; a fuller
+  scan (more joints, a real look-at trajectory via IK) is not built.
+
 ## 1. One-paragraph state
 
 - **What ANTS is.** One video demonstration → a frozen code model (Meta Muse) writes a robot program → an adversary perturbs the scene → failures become constraints → a gate accepts only rewrites that never regress. The claim was narrowed against RAPID, ASPIRE and CaP-X: the novelty is the loop (adversary-chosen tests, never-regress gate, targeted-demo escalation), not demo-to-program.
