@@ -3203,6 +3203,29 @@
       "doc": "docs/perception/scene-reconstruction-probe.md"
     },
     {
+      "id": "scene_recon.viewer",
+      "title": "Build the single-file HTML viewer for the fused meshes",
+      "group": "scene-recon",
+      "runner": "shell",
+      "base": "uv run python tools/mapper_probe/make_viewer.py",
+      "args": [],
+      "description": "Embeds the orbit and full arm-scan PLYs as base64 in one portable HTML page (three.js orbit controls, mesh toggle). Open data/runs/mapper_probe/viewer.html straight from disk.",
+      "examples": [],
+      "modules": [
+        "scene_recon"
+      ],
+      "in": [
+        "data/runs/mapper_probe/reconstructed_scene.ply",
+        "data/runs/mapper_probe/arm_scan_full/reconstructed_scene.ply"
+      ],
+      "out": [
+        "data/runs/mapper_probe/viewer.html"
+      ],
+      "cost": "free",
+      "minutes": 1,
+      "doc": "docs/perception/scene-reconstruction-probe.md"
+    },
+    {
       "id": "scene_recon.fuse",
       "title": "Fuse orbit-scan frames into a cuRobo Mapper mesh",
       "group": "scene-recon",

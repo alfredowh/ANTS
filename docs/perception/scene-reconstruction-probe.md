@@ -61,6 +61,15 @@ Fused mesh (`data/runs/mapper_probe/arm_scan_full/`): **10,320 vertices, 18,437 
 up from 5,948 with the 6-frame sweep. Renders stay coarse (close-range wrist views of
 mostly table surface at 1 cm voxels) but consistent with the earlier arm-scan look.
 
+## HTML viewer (2026-11-03, `tools/mapper_probe/make_viewer.py`)
+
+Single-file portable viewer, `data/runs/mapper_probe/viewer.html` (regenerate with
+`uv run python -m ants.evalkit.runbook cmd scene_recon.viewer`): embeds the orbit and
+full arm-scan meshes as base64, three.js r160 orbit/zoom/pan controls, a mesh toggle
+with live vertex/face counts, and a slow-spin switch. Verified headless in system
+Chrome at desktop and phone sizes with zero console errors; one real defect found and
+fixed along the way (z-up PLY rendered standing vertical until a -90° X rotation).
+
 ## Honest caveats
 
 - The original orbit scan (`scan_orbit.py`, `agentview`) is a **virtual camera teleport**, not
