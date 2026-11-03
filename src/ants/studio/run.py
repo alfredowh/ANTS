@@ -2,7 +2,7 @@
 
     uv run python -m ants.studio.run --attacks 20                     # rules, mock world, free
     uv run python -m ants.studio.run --attacks 10 --model muse-spark  # Muse Spark, costs tokens
-    uv run python -m ants.studio.run --attacks 6 --backend cap_harness --aspire ../ASPIRE  # LIBERO
+    uv run python -m ants.studio.run --attacks 6 --backend cap_harness  # LIBERO, ASPIRE/ submodule
 
 Writes `<out>/run.json`, `<out>/policy.py`, `<out>/attacks.jsonl` (one line per attack: the report,
 why it was chosen, the diagnosis source and a plain-language explanation) and `<out>/studio.html`.

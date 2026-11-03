@@ -29,7 +29,7 @@ class AdversaryConfig:
     rollout_timeout_s: float = DEFAULT_TIMEOUT_S  # wall-clock safety net: hitting it is an ERROR
     history_path: Path | None = None
     aspire: AspireConfig | None = (
-        None  # cap_harness only; defaults to $ANTS_ASPIRE_ROOT or ../ASPIRE
+        None  # cap_harness only; defaults to $ANTS_ASPIRE_ROOT or the ASPIRE/ submodule
     )
 
     def __post_init__(self) -> None:

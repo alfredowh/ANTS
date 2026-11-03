@@ -88,7 +88,7 @@ Where the program meets the perturbed world. Two layers:
   - always `--init-mode seeded`; the attack seed maps onto ASPIRE's dev seeds 51–65 (the acceptance set), so an acceptance backend can never run a held-out seed (1–50). Held-out evaluation builds its own backend with `split=held_out`;
   - outcome: `task_success` is a success, `program_ok` false is an error, anything else a failure; no run directory, a harness crash or the wall clock is an error;
   - every primitive call becomes an event with tool and status, so the rule diagnoser and the studio work unchanged; the run directory, video, keyframes, final gripper pose, stdout tail, seed, split and scene are kept with the result.
-  - Run it: `uv run python -m ants.studio.run --attacks 6 --backend cap_harness --aspire ../ASPIRE` on the machine with ASPIRE and its services (SAM 3, PyRoki) running.
+  - Run it: `uv run python -m ants.studio.run --attacks 6 --backend cap_harness` on the machine (ASPIRE is the `ASPIRE/` submodule; `--aspire` or `$ANTS_ASPIRE_ROOT` point elsewhere) with ASPIRE and its services (SAM 3, PyRoki) running.
 
 ### 6. Success branch
 

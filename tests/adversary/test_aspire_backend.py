@@ -156,3 +156,12 @@ def test_adversary_attacks_through_cap_harness(backend, monkeypatch):
     assert report.result.outcome is Outcome.FAILURE
     assert report.constraint.failure_signature.endswith(":move_to_pose:timeout")
     assert adv.replay(Policy("p", 0, "t", "x"), [None])[0].details["scene"] == {}
+
+
+def test_default_root_is_the_submodule_and_the_env_overrides_it(monkeypatch):
+    from ants.adversary.rollout.aspire_backend import DEFAULT_ASPIRE_ROOT, REPO_ROOT
+
+    monkeypatch.delenv("ANTS_ASPIRE_ROOT", raising=False)
+    assert AspireConfig().root == DEFAULT_ASPIRE_ROOT == REPO_ROOT / "ASPIRE"
+    monkeypatch.setenv("ANTS_ASPIRE_ROOT", "/opt/aspire")
+    assert AspireConfig().root == Path("/opt/aspire")
