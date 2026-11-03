@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import stat
+import sys
 import textwrap
 from pathlib import Path
 
@@ -26,8 +27,14 @@ USAGE_EVENT = {
 
 
 def _fake_muse(tmp_path: Path, script: str) -> str:
+    """A fake `muse` executable. Windows cannot run a shebang script directly, so there it is a
+    `.cmd` wrapper that runs the same script with this interpreter."""
     path = tmp_path / "fake_muse.py"
     path.write_text(f"#!/usr/bin/env python3\n{script}\n", encoding="utf-8")
+    if sys.platform == "win32":
+        shim = tmp_path / "fake_muse.cmd"
+        shim.write_text(f'@"{sys.executable}" "{path}" %*\r\n', encoding="utf-8")
+        return str(shim)
     path.chmod(path.stat().st_mode | stat.S_IEXEC)
     return str(path)
 
