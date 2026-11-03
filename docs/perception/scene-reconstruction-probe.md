@@ -70,6 +70,27 @@ with live vertex/face counts, and a slow-spin switch. Verified headless in syste
 Chrome at desktop and phone sizes with zero console errors; one real defect found and
 fixed along the way (z-up PLY rendered standing vertical until a -90° X rotation).
 
+## IK look-at scan (2026-11-03, `tools/mapper_probe/scan_lookat.py`)
+
+Third scan mode: waypoints are world-frame camera poses on an arc around the bowl,
+each oriented to fixate it, converted to end-effector poses via the camera-in-hand
+transform measured at reset, solved with the PyRoki IK service (needs
+`scripts/supervise_services.sh --providers pyroki`), seeded with current joints, and
+driven with the same closed-loop delta-joint formula. Run with
+`uv run python -m ants.evalkit.runbook cmd scene_recon.scan_lookat`, fuse with
+`fuse_mapper.py --frames-dir data/runs/mapper_probe/frames_lookat
+--out-dir data/runs/mapper_probe/lookat_scan`.
+
+Logged runs: the mechanism is validated — projecting the bowl body into the one
+converged frame puts it 0.4° off image center, and its RGB shows the bowl/plate/bottle
+fixated. But the reachable set is narrow: 5/8 waypoints fail PyRoki's residual limits
+(2 cm / 0.15 rad) and solved-but-distant waypoints stall the straight-line joint drive
+(errors 0.09–0.50 rad after 150 steps), plausibly the elbow swinging through the table
+on the direct joint path. Only the az=-20° column converges reliably. Fused the 3 saved
+frames anyway: **14,995 vertices, 27,256 faces** (`data/runs/mapper_probe/lookat_scan/`,
+dense around the fixated bowl area). Fixing the stall needs collision-aware joint
+interpolation — which is exactly what the ESDF-as-obstacle step below would provide.
+
 ## Honest caveats
 
 - The original orbit scan (`scan_orbit.py`, `agentview`) is a **virtual camera teleport**, not

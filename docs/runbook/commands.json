@@ -3203,6 +3203,52 @@
       "doc": "docs/perception/scene-reconstruction-probe.md"
     },
     {
+      "id": "scene_recon.scan_lookat",
+      "title": "IK look-at scan: fixate the bowl from arc viewpoints via PyRoki",
+      "group": "scene-recon",
+      "runner": "libero",
+      "base": "../tools/mapper_probe/scan_lookat.py",
+      "args": [
+        {
+          "flag": "--azimuths-deg",
+          "value": "-60 -20 20 60",
+          "kind": "value",
+          "on": false,
+          "desc": "Azimuths around the look-at target, 0 = behind the robot."
+        },
+        {
+          "flag": "--heights-m",
+          "value": "0.35 0.55",
+          "kind": "value",
+          "on": false,
+          "desc": "Camera heights above the target per azimuth."
+        },
+        {
+          "flag": "--out-dir",
+          "value": "../data/runs/mapper_probe/frames_lookat",
+          "kind": "value",
+          "on": false,
+          "desc": "Where per-frame .npz files and manifest.txt are written."
+        }
+      ],
+      "description": "Solves fixated camera poses with the PyRoki IK service (start it with supervise_services.sh --providers pyroki) and closed-loop drives the Franka there. Narrow reachable set: expect IK skips outside the az=-20 column.",
+      "examples": [],
+      "modules": [
+        "scene_recon",
+        "aspire"
+      ],
+      "in": [
+        "PyRoki IK service on 127.0.0.1:8116"
+      ],
+      "out": [
+        "data/runs/mapper_probe/frames_lookat/*.npz",
+        "data/runs/mapper_probe/frames_lookat/manifest.txt"
+      ],
+      "cost": "free",
+      "minutes": 3,
+      "doc": "docs/perception/scene-reconstruction-probe.md"
+    },
+    {
       "id": "scene_recon.viewer",
       "title": "Build the single-file HTML viewer for the fused meshes",
       "group": "scene-recon",
