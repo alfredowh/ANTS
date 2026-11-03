@@ -64,6 +64,24 @@ def test_rewrite_builds_candidate_with_constraints_and_failures(tmp_path, monkey
     assert "grasp_slip" in joined
 
 
+def test_rewrite_prepends_the_workflow_to_the_system_prompt(tmp_path, monkeypatch):
+    client = ChatClient("m", tmp_path / "cache", tmp_path / "ledger.jsonl", token_budget=10_000)
+    seen = {}
+
+    def fake_post(messages, temperature):
+        seen["messages"] = messages
+        return _fake_reply("```python\nresult = {'ok': True}\n```"), 0.1
+
+    monkeypatch.setattr(client, "_post", fake_post)
+    synth = MuseSynthesizer(client, "API", "EX", "other task", INCUMBENT.task)
+
+    assert synth.rewrite(INCUMBENT, [FEEDBACK], [CONSTRAINT]) is not None
+
+    system = seen["messages"][0]
+    assert system["role"] == "system"
+    assert system["content"].startswith("# ANTS workflow")
+
+
 def test_rewrite_returns_none_when_budget_is_spent(tmp_path, monkeypatch):
     client = ChatClient("m", tmp_path / "cache", tmp_path / "ledger.jsonl", token_budget=0)
     monkeypatch.setattr(

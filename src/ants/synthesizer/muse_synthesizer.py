@@ -45,6 +45,9 @@ class MuseSynthesizer:
     def rewrite(
         self, incumbent: Policy, feedback: Sequence[Feedback], constraints: Sequence[Constraint]
     ) -> Policy | None:
+        # Lazy import: System 1 must not pull in the orchestrator package at import time.
+        from ants.orchestrator.workflow import load_workflow
+
         messages = build_messages(
             self.api_reference,
             self.example_program,
@@ -54,6 +57,10 @@ class MuseSynthesizer:
             constraints=[c.rule for c in constraints],
             scene_context=self.scene_context,
         )
+        messages[0] = {
+            "role": "system",
+            "content": load_workflow() + "\n\n" + messages[0]["content"],
+        }
         messages.append({"role": "assistant", "content": incumbent.code})
         ask = (
             "Reply with only the full corrected program."
