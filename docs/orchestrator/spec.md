@@ -71,7 +71,9 @@ version; the version and hash are in every `loop.jsonl` start line.
 ## Observability
 
 `uv run python -m ants.orchestrator.run --cycles 30` writes `loop.jsonl`, `attacks.jsonl` (studio
-rows), `history.jsonl`, `policies/`, `summary.json` and `studio.html`. The studio's Versions tab
+rows), `history.jsonl`, `policies/`, `summary.json` and `studio.html`. `summary.json` also has the cost: rewrite
+tokens and $ (per rewrite and total, from System 1's counts), System 2's Muse Spark tokens, the
+total and the $ per cycle, at `--usd-per-million-tokens` (default 13.5, the observed Muse price). The studio's Versions tab
 shows the version history (motivating constraint, gate verdict, diff per accepted version), every
 gate decision with the cases it fixed and broke, and escalations; each attack in Replay shows the
 version it hit and, for failures, the rewrite and its verdict. Read-only: it never feeds back.
