@@ -9,6 +9,7 @@ from ants.contracts import (
     RolloutResult,
     Split,
 )
+from ants.orchestrator.workflow import load_workflow
 from ants.synthesizer.llm import ChatClient
 from ants.synthesizer.muse_synthesizer import MuseSynthesizer
 
@@ -79,7 +80,7 @@ def test_rewrite_prepends_the_workflow_to_the_system_prompt(tmp_path, monkeypatc
 
     system = seen["messages"][0]
     assert system["role"] == "system"
-    assert system["content"].startswith("# ANTS workflow")
+    assert system["content"].startswith(load_workflow())
 
 
 def test_rewrite_returns_none_when_budget_is_spent(tmp_path, monkeypatch):
