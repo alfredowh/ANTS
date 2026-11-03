@@ -17,7 +17,9 @@ moved onto the `Adversary` facade and the shared contracts.
    regression; an incumbent crash is not a pass; a missing result never passes). The mode
    (`strict` or `off`) is in every decision.
 3. **Only acceptance cases reach System 1.** Every case the loop builds is `Split.ACCEPTANCE`, and
-   `Feedback` refuses a held-out case. Held-out evaluation lives in `evalkit/`.
+   `Feedback` refuses a held-out case. Held-out evaluation (`heldout.py`, to move to `evalkit/` if System 1 prefers) builds its own
+   `Split.HELD_OUT` cases and a backend that can only run held-out seeds; its results never reach
+   System 1.
 4. **Everything is logged.** One JSONL line per cycle with every input of every decision (attack,
    signature, constraint, diff, gate outcomes per case, stalls), each accepted version on disk.
 5. **No result from fixtures.** `PatchSynthesizer` and the mock world prove the loop logic; numbers
@@ -34,6 +36,7 @@ orchestrator/
 ├── human_gate.py   a person's text answer to an escalation becomes a constraint (System 1's)
 ├── workflow.md     the workflow Muse Wonder reads: steps, roles, how a rewrite is judged, enforced rules
 ├── workflow.py     load_workflow(), workflow_info() (version + hash, logged in every run's start line)
+├── heldout.py      held-out evaluation of v0 and final (Split.HELD_OUT cases, ASPIRE seeds 1-50)
 └── run.py          CLI + run_loop(): logs in the studio format and builds studio.html
 tests/orchestrator/ test_gate.py, test_loop.py, test_workflow.py (md names match the loop's)
 ```

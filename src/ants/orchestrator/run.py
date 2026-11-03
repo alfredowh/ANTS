@@ -25,6 +25,7 @@ from ants.adversary import Adversary, AdversaryConfig
 from ants.adversary.perturbations import CATEGORIES, Bounds
 from ants.adversary.rollout import AspireConfig
 from ants.contracts import Policy
+from ants.orchestrator.heldout import report, run_held_out
 from ants.orchestrator.loop import Loop, LoopConfig, LoopResult
 from ants.orchestrator.synthesis import GenerateSynthesizer, PatchSynthesizer, Synthesizer
 from ants.studio.build import build
@@ -132,7 +133,16 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--min-severity", type=float, default=0.3)
     ap.add_argument("--severity-bound", type=float, default=0.8)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument(
+        "--eval-held-out",
+        type=int,
+        default=0,
+        metavar="N",
+        help="after the loop, evaluate v0 and the final policy on N held-out cases (max 50)",
+    )
     args = ap.parse_args(argv)
+    if args.backend == "cap_harness" and args.eval_held_out > 50:
+        ap.error("ASPIRE has 50 held-out seeds; use --eval-held-out 50 or fewer")
 
     out = args.out or Path("data/runs") / f"loop_{time.strftime('%Y%m%d_%H%M%S')}"
     aspire = None
@@ -166,6 +176,12 @@ def main(argv: list[str] | None = None) -> int:
           f"accepted {res.accepted_versions}")  # fmt: skip
     if res.escalation:
         print(f"escalation: {res.escalation['request']}")
+    if args.eval_held_out:
+        held = run_held_out(
+            out, adv_cfg, [policy, res.incumbent] if res.incumbent.version else [policy],
+            args.eval_held_out, args.seed,
+        )  # fmt: skip
+        print("\n" + report(held, args.backend))
     print(f"studio: {page.resolve()}")
     return 0
 
