@@ -266,7 +266,7 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
         <span>frame <b id="perc-player-pos">0</b> / <span id="perc-player-total">0</span></span>
         <span><b id="perc-player-call"></b> <span style="color:var(--dim)" id="perc-player-index"></span></span>
       </div>
-      <div class="player-controls">
+      <div class="player-controls" id="perc-controls">
         <button class="btn sm" id="perc-player-play">play</button>
         <button class="btn sm" id="perc-player-prev">&larr;</button>
         <input type="range" id="perc-player-slider" min="0" max="0" value="0">
@@ -283,7 +283,7 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
       <div class="perc-head"><span class="h">cuRobo trajectory &amp; collision</span><span class="src-badge" id="perc-curobo-badge"></span></div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
         <button class="btn sm on" id="curobo-tgl-collision" type="button" title="Show/hide the collision bodies (start + goal spheres) inside the 3D viewer">Collision bodies</button>
-        <button class="btn sm on" id="curobo-tgl-scan" type="button" title="Show/hide the 3D scan (point cloud) inside the 3D viewer">3D scan</button>
+        <button class="btn sm" id="curobo-tgl-scan" type="button" title="Show/hide the 3D scan (point cloud) inside the 3D viewer — off by default to keep the view simple">3D scan</button>
         <button class="btn sm on" id="curobo-tgl-paths" type="button" title="Show/hide straight + cuRobo planned paths inside the 3D viewer">Paths</button>
       </div>
       <iframe class="perc-curobo-frame" id="perc-curobo-frame" title="cuRobo trajectory and collision-sphere plan viewer"></iframe>
@@ -552,6 +552,9 @@ let percArchivedFrames = [], percArchivedSam3 = [];
 function percShowLive() { return percMode === "live" || (percMode === "auto" && percRolloutActive); }
 function percApplySource() {
   const live = percShowLive() && percLiveFrames.length;
+  // Live is a stream, not a replay: hide slider/play controls while live frames arrive.
+  // They come back automatically when the rollout ends (percRolloutEnded -> auto replay).
+  document.getElementById("perc-controls").style.display = live ? "none" : "";
   percAgentviewFrames = live ? percLiveFrames : percArchivedFrames;
   percSam3Frames = live ? percLiveSam3 : percArchivedSam3;
   percAgentviewIdx = Math.min(percAgentviewIdx, Math.max(0, percAgentviewFrames.length - 1));
@@ -594,7 +597,10 @@ function percGoLive(runId) {
   document.getElementById("perc-player-play").textContent = "play";
   if (percShowLive()) {
     renderSrcBadge("perc-agentview-badge", true, true, "");
-    document.getElementById("perc-agentview-note").textContent = "Streaming run " + runId + ".";
+    document.getElementById("perc-agentview-note").textContent =
+      "LIVE — policy rollout running (run " + runId + "). Expect one new frame each time the robot " +
+      "finishes a primitive call, every few seconds — this is a rollout, not video. The frame slider " +
+      "is hidden while live and returns when the rollout ends.";
     renderSrcBadge("perc-sam3-badge", true, true, "");
     document.getElementById("perc-sam3-note").textContent = "Live detections for run " + runId + ".";
   }
@@ -1025,6 +1031,11 @@ function openStream() {
     else if (data.kind === "loop_event") handleLoopEvent(data.row);
     else if (data.kind === "attack_event") handleAttackEvent(data);
     else if (data.kind === "run_started") {
+      if (data.backend === "mock") {
+        document.getElementById("perc-agentview-note").textContent =
+          "This run uses the mock backend — there is no robot and no camera, so no live frames will " +
+          "arrive. For the live robot view, restart the console with --backend cap_harness.";
+      }
       document.getElementById("run-folder").textContent = "saving to " + data.run_dir;
       addTurn("task", `<div class="tk">run started</div><div class="main">saving this run to <b>${esc(data.run_dir)}</b> (backend: ${esc(data.backend)})</div>`);
     }
