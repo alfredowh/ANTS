@@ -326,15 +326,7 @@ def deploy_latest(session_dir: Path | None, incumbent: Path, deploy_dir: Path) -
                     best = key
     src = best[2] if best else incumbent
     version = best[0] if best else 0
-    deploy_dir.mkdir(parents=True, exist_ok=True)
-    stamp = time.strftime("%Y%m%dT%H%M%S")
-    code = src.read_text(encoding="utf-8")
-    target = deploy_dir / f"{stamp}-v{version}.py"
-    target.write_text(code, encoding="utf-8")
-    (deploy_dir / "latest.py").write_text(code, encoding="utf-8")
-    info = {"deployed": stamp, "version": version, "source": str(src), "file": target.name}
-    (deploy_dir / "latest.json").write_text(json.dumps(info, indent=2), encoding="utf-8")
-    return info
+    return policy_dev.save_deployed(src, version, deploy_dir)
 
 
 class Session:
@@ -650,6 +642,68 @@ class LoopRunConfig:
     out_dir: Path = field(default_factory=lambda: REPO_ROOT / "data" / "console_runs")
 
 
+def _adversary_from(cfg: LoopRunConfig, run_dir: Path):
+    from ants.adversary import Adversary, AdversaryConfig
+    from ants.adversary.perturbations import Bounds
+
+    kwargs: dict = {
+        "model": cfg.adversary_model,
+        "backend": cfg.backend,
+        "eta": cfg.eta,
+        "bounds": Bounds(default=cfg.rho),
+        "min_severity": cfg.min_severity,
+        "n_agents": cfg.n_agents,
+        "stop_mode": cfg.stop_mode,
+        "min_tests": cfg.min_tests,
+        "tau": cfg.tau,
+        "history_path": run_dir / "history.jsonl",
+    }
+    if cfg.categories:
+        kwargs["categories"] = cfg.categories
+    return Adversary.from_config(AdversaryConfig(**kwargs))
+
+
+def run_attacks_only(state: RunState, program: Path, cfg: LoopRunConfig, run_dir: Path, task: str):
+    """Synthesizer off: attack a given script and report. No rewrites, no gate, no Muse tokens."""
+    from ants.contracts import Policy
+    from ants.studio.run import append_row, attack_row
+
+    state.broadcast({"kind": "run_started", "run_dir": str(run_dir), "backend": cfg.backend})
+    adv = policy_dev.ObservedAdversary(_adversary_from(cfg, run_dir), state.broadcast)
+    policy = Policy("main_script", 0, task, program.read_text(encoding="utf-8"))
+    failures = 0
+    stopped = "attacks_done"
+    for _ in range(cfg.cycles):
+        if state.stop_requested.is_set():
+            stopped = "user_stop"
+            break
+        report = adv.attack(policy)
+        append_row(run_dir / "attacks.jsonl", attack_row(adv, report, policy))
+        failures += report.failure is not None
+        state.broadcast(
+            {
+                "kind": "attack_event",
+                "attack_id": report.attack_id,
+                "category": report.perturbation.category,
+                "severity": report.perturbation.severity,
+                "outcome": report.result.outcome.value,
+                "policy_version": policy.version,
+            }
+        )
+    if state.stop_requested.is_set():
+        stopped = "user_stop"
+    state.broadcast(
+        {
+            "kind": "done",
+            "stopped": stopped,
+            "stage": f"{failures} failure(s) found, not repaired",
+            "final_version": 0,
+            "accepted_versions": [],
+            "escalation": None,
+        }
+    )
+
+
 def run_live_loop(
     state: RunState,
     incumbent: Path,
@@ -659,8 +713,6 @@ def run_live_loop(
     task: str = "put the bowl on the plate",
 ) -> None:
     """Drive one real `Loop.run()` call, tailing `loop.jsonl` live and broadcasting each row."""
-    from ants.adversary import Adversary, AdversaryConfig
-    from ants.adversary.perturbations import Bounds
     from ants.contracts import Policy
     from ants.orchestrator.loop import Loop, LoopConfig
     from ants.orchestrator.synthesis import GenerateSynthesizer
@@ -677,21 +729,7 @@ def run_live_loop(
     state.broadcast({"kind": "run_started", "run_dir": str(run_dir), "backend": cfg.backend})
     policy = Policy("bowl_on_plate", 0, task, incumbent.read_text(encoding="utf-8"))
 
-    adv_kwargs: dict = {
-        "model": cfg.adversary_model,
-        "backend": cfg.backend,
-        "eta": cfg.eta,
-        "bounds": Bounds(default=cfg.rho),
-        "min_severity": cfg.min_severity,
-        "n_agents": cfg.n_agents,
-        "stop_mode": cfg.stop_mode,
-        "min_tests": cfg.min_tests,
-        "tau": cfg.tau,
-        "history_path": run_dir / "history.jsonl",
-    }
-    if cfg.categories:
-        adv_kwargs["categories"] = cfg.categories
-    adv = Adversary.from_config(AdversaryConfig(**adv_kwargs))
+    adv = _adversary_from(cfg, run_dir)
 
     muse_orch = MuseOrchestrator(
         out_dir=run_dir / "muse",
@@ -699,7 +737,12 @@ def run_live_loop(
         reasoning_effort=cfg.reasoning_effort,
         max_model_steps=cfg.max_model_steps,
     )
-    synth = GenerateSynthesizer(generate=muse_orch, workdir=run_dir / "work")
+    observed_adv = policy_dev.ObservedAdversary(adv, state.broadcast)
+    synth = policy_dev.ObservedSynthesizer(
+        GenerateSynthesizer(generate=muse_orch, workdir=run_dir / "work"),
+        state.broadcast,
+        observed_adv,
+    )
 
     loop_cfg = LoopConfig(
         cycles=cfg.cycles,
@@ -748,7 +791,7 @@ def run_live_loop(
             raise StopRequested
         return GateAnswer(channel="text", text=text)
 
-    loop = Loop(adv, synth, loop_cfg, on_attack=on_attack, ask_human=ask_human)
+    loop = Loop(observed_adv, synth, loop_cfg, on_attack=on_attack, ask_human=ask_human)
 
     log_path = run_dir / "loop.jsonl"
     stop_tail = threading.Event()
@@ -788,6 +831,9 @@ def run_live_loop(
                                 pass
                             if detail:
                                 row["rewrite_detail"] = detail
+                        verdict = policy_dev.gate_verdict_event(row)
+                        if verdict:
+                            state.broadcast(verdict)
                         if state.stop_requested.is_set():
                             # Stop killed the rewrite, which Loop reads as a spent budget.
                             if row.get("decision") == "budget_stop":
@@ -945,26 +991,36 @@ def make_handler(
             state.running = on
             return True
 
-    def _pipeline_run_loop(program: Path, task: str, run_dir: Path, budget: int) -> None:
-        adv = policy_dev.load_skill()["adversary"]
-        cfg = dataclasses.replace(
-            loop_cfg or LoopRunConfig(),
-            backend="cap_harness",
-            adversary_model=adv["model"],
-            eta=adv["eta"],
-            cycles=adv["cycles"],
-            stall_window=adv["stall_window"],
-            synth_token_budget=budget,
-        )
-        run_live_loop(state, program, cfg, run_dir=run_dir, task=task)
-
     skill = policy_dev.load_skill()
     if loop_cfg and loop_cfg.pipeline_token_budget:
-        skill["budget"]["total_tokens"] = loop_cfg.pipeline_token_budget
+        skill["settings"]["token_cap"]["default"] = loop_cfg.pipeline_token_budget
+
+    def _pipeline_cfg(settings: dict, budget: int = 0) -> LoopRunConfig:
+        return dataclasses.replace(
+            loop_cfg or LoopRunConfig(),
+            backend="cap_harness",
+            adversary_model=skill["loop"]["proposer_model"],
+            eta=settings["eta"],
+            cycles=settings["attacks"],
+            stall_window=skill["loop"]["stall_window"],
+            nominal_seeds=policy_dev.nominal_seeds(settings, skill),
+            synth_token_budget=budget,
+        )
+
+    def _pipeline_run_loop(
+        program: Path, task: str, run_dir: Path, budget: int, settings: dict
+    ) -> None:
+        cfg = _pipeline_cfg(settings, budget)
+        run_live_loop(state, program, cfg, run_dir=run_dir, task=task)
+
+    def _pipeline_run_attacks(program: Path, task: str, run_dir: Path, settings: dict) -> None:
+        run_attacks_only(state, program, _pipeline_cfg(settings), run_dir, task)
+
     pipeline = policy_dev.Manager(
         state.broadcast,
         set_running=_set_running,
         run_loop=_pipeline_run_loop,
+        run_attacks=_pipeline_run_attacks,
         stop_requested=state.stop_requested.is_set,
         clear_stop=state.stop_requested.clear,
         runs_dir=lambda: state.session.runs_dir if state.session else LEGACY_RUNS_DIR,
@@ -1116,7 +1172,14 @@ def make_handler(
                 self.wfile.write(body)
                 return
             if path == "/policy-dev":
-                self._send_json({"running": state.running, "current": pipeline.current})
+                self._send_json(
+                    {
+                        "running": state.running,
+                        "current": pipeline.current,
+                        "settings": skill["settings"],
+                        "budget": skill["budget"],
+                    }
+                )
                 return
             if path == "/events":
                 self.send_response(200)
@@ -1156,7 +1219,17 @@ def make_handler(
                 folder = (loop_cfg.video_dir if loop_cfg else None) or (
                     REPO_ROOT / skill["video"]["folder"]
                 )
-                self._send_json(policy_dev.pick_video(folder, skill["video"]["extensions"]))
+                self._send_json(policy_dev.pick_file(folder, skill["video"]["extensions"]))
+                return
+            if path == "/pick-script":
+                self._send_json(
+                    policy_dev.pick_file(
+                        REPO_ROOT / "examples",
+                        skill["settings"]["main_script"]["extensions"],
+                        title="Choose the main robot script",
+                        filter_name="Python",
+                    )
+                )
                 return
             if path == "/upload":
                 self._handle_upload()
@@ -1306,7 +1379,11 @@ def make_handler(
             length = int(self.headers.get("Content-Length", "0"))
             body = json.loads(self.rfile.read(length) or b"{}")
             self._send_json(
-                pipeline.start(str(body.get("task") or "").strip(), body.get("video") or None)
+                pipeline.start(
+                    str(body.get("task") or "").strip(),
+                    body.get("video") or None,
+                    body.get("settings"),
+                )
             )
 
         def _handle_upload(self) -> None:

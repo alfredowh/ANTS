@@ -1,6 +1,6 @@
 /* Chat commands: /policy-dev <task> (with an optional demo video) and /deploy. The pipeline itself
    is in policy_dev.py; this file only starts it and renders its pipeline_* events. It reuses
-   console.js globals (addTurn, esc, setChatStatus, setStatus, setSys, handleError). */
+   console.js globals (addTurn, esc, openModal, closeModal, setChatStatus, setStatus, setSys). */
 (function () {
   const input = document.getElementById("chat-input");
   const attach = document.getElementById("chat-attach");
@@ -36,7 +36,7 @@
     b.addEventListener("click", onClick);
     row.appendChild(b);
   }
-  chipButton("/policy-dev", "Run the whole pipeline: attach a demo video with +, type the task, press Enter", () => {
+  chipButton("/policy-dev", "Run the whole pipeline: attach a demo video with +, type the task, press Enter, then choose the settings", () => {
     input.value = "/policy-dev ";
     input.focus();
     syncAttach();
@@ -132,50 +132,112 @@
     }
     if (low === "/policy-dev" || low.startsWith("/policy-dev ")) {
       const task = text.slice("/policy-dev".length).trim();
-      userBubble(text + (video ? "\n[video: " + video.name + "]" : ""));
-      post("/policy-dev", {task, video: video ? video.path : null}).then((r) => {
-        if (!r.ok) { agentTurn("cannot start", r.error, "needs"); return; }
-        video = null;
-        renderChosen();
-      }).catch(() => agentTurn("cannot start", "The server did not answer.", "needs"));
+      if (!task) {
+        agentTurn("policy-dev", "Type the task after /policy-dev, for example: /policy-dev put the bowl on the plate", "needs");
+        input.value = "/policy-dev ";
+        return true;
+      }
+      openSettings(task);
       return true;
     }
     return false;
   };
   function syncAttachSoon() { setTimeout(syncAttach, 0); }
 
+  /* ---------- the settings dialog; its fields and defaults come from the skill file ---------- */
+  function fieldHtml(key, f) {
+    const help = f.help ? `<div class="set-help">${esc(f.help)}</div>` : "";
+    let control;
+    if (f.type === "bool") control = `<input type="checkbox" id="set-${key}"${f.default ? " checked" : ""}>`;
+    else if (f.type === "int") control = `<input type="number" id="set-${key}" value="${f.default}" min="${f.min}" max="${f.max}">`;
+    else if (f.type === "choice") control = `<select id="set-${key}">` + f.choices.map((c) => `<option value="${esc(c.value)}"${c.value === f.default ? " selected" : ""}>${esc(c.label)}</option>`).join("") + "</select>";
+    else control = `<input type="text" id="set-${key}" value="${esc(f.default || "")}" placeholder="path to a .py file"> <button class="btn sm" id="set-browse" type="button">Browse</button>`;
+    return `<div class="set-row" id="row-${key}"><label for="set-${key}">${esc(f.label)}</label><div>${control}${help}</div></div>`;
+  }
+  function openSettings(task) {
+    fetch("/policy-dev").then((r) => r.json()).then((info) => {
+      const spec = info.settings, budget = info.budget;
+      openModal(`<h3>Policy development run</h3>
+        <div class="sub">${esc(task)}<br>Video: ${esc(video ? video.name : "none (no-demo run)")}</div>
+        ${Object.keys(spec).map((k) => fieldHtml(k, spec[k])).join("")}
+        <div class="set-note" id="set-note"></div>
+        <div class="set-error" id="set-error"></div>
+        <div class="set-actions"><button class="btn" id="set-run" type="button">Run</button></div>`);
+      const el = (k) => document.getElementById("set-" + k);
+      function refresh() {
+        const synth = el("synthesizer").checked, adv = el("adversary").checked;
+        document.getElementById("row-main_script").style.display = synth ? "none" : "";
+        document.getElementById("row-max_retries").style.display = synth ? "" : "none";
+        document.getElementById("row-token_cap").style.display = synth ? "" : "none";
+        for (const k of ["strategy", "attacks", "seeds"]) document.getElementById("row-" + k).style.display = adv ? "" : "none";
+        const cap = +el("token_cap").value || 0;
+        const usd = (cap / 1e6 * budget.usd_per_million_tokens).toFixed(2);
+        const calls = (+el("max_retries").value || 0) + 1 + (adv ? (+el("attacks").value || 0) : 0);
+        const need = calls * budget.tokens_per_call_estimate;
+        let note = synth
+          ? `Worst case about $${usd} at the cap (${cap.toLocaleString()} tokens). Up to ${calls} calls, about ${need.toLocaleString()} tokens.`
+          : "No Muse tokens: the script is attacked and reported on, nothing is rewritten.";
+        const over = synth && need > cap - budget.one_call_headroom_tokens;
+        if (over) note += " That can pass the cap; the run then ends as a budget stop.";
+        const n = document.getElementById("set-note");
+        n.textContent = note;
+        n.classList.toggle("warn", over);
+        const both = !synth && !adv;
+        document.getElementById("set-error").textContent = both ? "Both modules are off, so there is nothing to run." : "";
+        document.getElementById("set-run").disabled = both;
+      }
+      for (const k of Object.keys(spec)) el(k).addEventListener("input", refresh);
+      refresh();
+      document.getElementById("set-browse").addEventListener("click", () => {
+        post("/pick-script", {}).then((r) => {
+          if (r.ok) el("main_script").value = r.path;
+          else if (!r.cancelled) document.getElementById("set-error").textContent = (r.reason || r.error) + " Type the path instead.";
+        });
+      });
+      document.getElementById("set-run").addEventListener("click", () => {
+        const settings = {};
+        for (const k of Object.keys(spec)) settings[k] = spec[k].type === "bool" ? el(k).checked : el(k).value;
+        post("/policy-dev", {task, video: video ? video.path : null, settings}).then((r) => {
+          if (!r.ok) { document.getElementById("set-error").textContent = r.error; return; }
+          closeModal();
+          userBubble("/policy-dev " + task + (video ? "\n[video: " + video.name + "]" : ""));
+          video = null;
+          renderChosen();
+        }).catch(() => { document.getElementById("set-error").textContent = "The server did not answer."; });
+      });
+    }).catch(() => agentTurn("cannot start", "The server did not answer.", "needs"));
+  }
+
   /* ---------- pipeline events, via the console's shared SSE connection ---------- */
   const BADGE = {
-    preflight: ["orch", "preflight"],
-    extraction: ["sys1", "reading the video"],
-    demospec: ["sys1", "building DemoSpec"],
-    prompt: ["sys1", "building the prompt"],
-    generation: ["sys1", "writing the program (Muse)"],
-    nominal: ["sys1", "nominal check"],
-    adversary: ["sys2", "attacking"],
+    video: "sys1", extract: "sys1", demospec: "sys1", prompt: "sys1", generate: "sys1", nominal: "sys1",
+    attack: "sys2", diagnose: "sys2", rewrite: "sys1", gate: "orch", deploy: "orch",
   };
-  const TITLE = {
-    start: "policy-dev", preflight: "1 preflight", extraction: "2 extraction", demospec: "3 DemoSpec",
-    prompt: "4 prompt", generation: "5 Synthesizer", nominal: "5 nominal check", adversary: "6 Adversary", finished: "finished",
-  };
+  // the loop's own events already draw turns for these
+  const LOOP_STAGES = ["attack", "diagnose", "rewrite", "gate"];
   function onStage(d) {
-    const b = BADGE[d.stage];
-    if (b && d.status === "running") {
+    if (d.status === "started") {
       for (const id of ["sys1", "sys2", "orch"]) setSys(id, false, "idle");
-      setSys(b[0], true, b[1]);
+      setSys(BADGE[d.stage], true, d.stage);
+      outEl = null;
     }
-    if (d.status === "command") return; // the exact command is in pipeline.jsonl
-    if (d.status === "running" && d.stage !== "start") outEl = null;
-    const bad = ["failed", "rejected"].includes(d.status) || (d.stage === "finished" && !["user_stop"].includes(d.status) && d.detail);
+    if (LOOP_STAGES.includes(d.stage)) return;
     let text = d.detail || d.status;
     if (d.path) text += "\n" + d.path;
-    agentTurn(TITLE[d.stage] || d.stage, text, bad ? "needs" : "");
+    agentTurn(d.stage + " " + d.status, text, d.status === "failed" ? "needs" : "");
+  }
+  function onNote(d) {
+    if (d.status === "ok" && d.note === "preflight") return;
+    const bad = d.note === "finished" && d.status !== "user_stop" && d.status !== "deployed";
+    let text = d.detail || d.status;
+    if (d.path) text += "\n" + d.path;
+    agentTurn(d.note, text, bad ? "needs" : "");
   }
   function onOutput(d) {
     if (!outEl || outStage !== d.stage) {
       outLines = [];
       outStage = d.stage;
-      addTurn("chat-turn wizard-turn", `<div class="tk">${esc(TITLE[d.stage] || d.stage)} output</div><div class="main pipeline-out"></div>`);
+      addTurn("chat-turn wizard-turn", `<div class="tk">${esc(d.stage)} output</div><div class="main pipeline-out"></div>`);
       const all = document.querySelectorAll(".pipeline-out");
       outEl = all[all.length - 1];
     }
@@ -188,6 +250,7 @@
       const rb = document.getElementById("run-btn");
       if (rb) rb.disabled = true;
     } else if (d.kind === "pipeline_stage") onStage(d);
+    else if (d.kind === "pipeline_note") onNote(d);
     else if (d.kind === "pipeline_output") onOutput(d);
   };
 

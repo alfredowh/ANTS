@@ -977,7 +977,7 @@
           "value": "300000",
           "kind": "value",
           "on": false,
-          "desc": "/policy-dev: total Muse token cap across generation and rewrites."
+          "desc": "Default of the dialog's Muse token cap for /policy-dev."
         }
       ],
       "description": "Serves the Studio page (agent console, Perception, Synthesizer, Adversary tabs) and drives a real Loop live. Every server start creates a session folder under data/console_sessions/ holding the chat log, every broadcast event and the per-run folders. Each rewrite spends Muse tokens (about $0.5 observed) and the loop stops at --synth-token-budget.",
@@ -1048,10 +1048,10 @@
           "value": "300000",
           "kind": "value",
           "on": true,
-          "desc": "/policy-dev: total Muse token cap across generation and rewrites."
+          "desc": "Default of the dialog's Muse token cap for /policy-dev."
         }
       ],
-      "description": "Start the server, click the /policy-dev chip, choose a marker clip with +, type the task, press Enter. Runs preflight, hurobo extraction (5.75 cm marker), DemoSpec, prompt, one demo-arm Muse generation on seed 51 in the stock scene, then the Adversary loop on real cap_harness rollouts with the mock proposer and Thompson selector. Bowl-on-plate only. No video means a no-demo run. Defaults are in docs/studio/skills/policy-dev.json. Spends Muse tokens: up to --pipeline-token-budget (default 300000, about $4). Stops itself and spends nothing if preflight fails or another simulator is running.",
+      "description": "Start the server, click the /policy-dev chip, choose a marker clip with +, type the task, press Enter; a settings dialog opens; Run starts it. Stages: preflight, hurobo extraction (5.75 cm marker; 7 of 26 clips pass, listed in docs/studio/live-console-handoff.md), DemoSpec, prompt, one Muse generation on seed 51 in the stock scene, then the Adversary loop on real cap_harness rollouts with the mock proposer. Dialog defaults (docs/studio/skills/policy-dev.json): Synthesizer on, 5 retries, Adversary on, Thompson, 2 attacks, 1 seed, 300000 token cap. Synthesizer off attacks a given .py and reports, with no tokens. Adversary off saves the program to data/deploy/. Bowl-on-plate only. Spends Muse tokens up to the cap (about $4 at 300000). Stops and spends nothing if preflight fails or another simulator is running.",
       "examples": [
         {
           "title": "Start the server, then use the chip",

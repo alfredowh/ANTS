@@ -111,8 +111,8 @@ def main() -> None:
         "--pipeline-token-budget",
         type=int,
         default=None,
-        help="/policy-dev: total Muse token cap across generation and rewrites (default: the "
-        "skill file's, 300000)",
+        help="/policy-dev: default of the dialog's Muse token cap (default: the skill file's, "
+        "300000)",
     )
     args = parser.parse_args()
 

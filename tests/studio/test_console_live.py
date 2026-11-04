@@ -294,3 +294,26 @@ def test_deploy_latest_picks_highest_accepted_version(tmp_path):
     info = deploy_latest(tmp_path / "sess", inc, out)
     assert info["version"] == 2
     assert (out / "latest.py").read_text(encoding="utf-8") == "two"
+
+
+def test_attacks_only_runs_real_mock_attacks_and_ends_with_a_report(tmp_path):
+    from ants.studio.console_server import LoopRunConfig, RunState, run_attacks_only
+
+    state = RunState()
+    events = state.subscribe()
+    program = tmp_path / "main_script.py"
+    program.write_text(
+        (REPO_ROOT_FOR_TEST / "examples" / "bowl_on_plate" / "policy.py").read_text("utf-8"),
+        encoding="utf-8",
+    )
+    run_attacks_only(state, program, LoopRunConfig(cycles=2), tmp_path, "put the bowl on the plate")
+    rows = []
+    while not events.empty():
+        rows.append(events.get())
+    assert rows[-1]["kind"] == "done"
+    assert rows[-1]["stopped"] == "attacks_done"
+    assert sum(r["kind"] == "attack_event" for r in rows) == 2
+    assert len((tmp_path / "attacks.jsonl").read_text("utf-8").splitlines()) == 2
+
+
+REPO_ROOT_FOR_TEST = Path(__file__).resolve().parents[2]

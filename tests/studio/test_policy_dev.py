@@ -64,9 +64,10 @@ class FakeWorld:
         (sample / "record.json").write_text(json.dumps({"attempts": attempts}), encoding="utf-8")
         with (out / "events.jsonl").open("w", encoding="utf-8") as fh:
             for n in range(self.attempts):
-                fh.write(
-                    json.dumps({"kind": "program", "tokens": 40000, "from_cache": n == 0}) + "\n"
-                )
+                row = {"kind": "program", "attempt": n, "tokens": 40000, "from_cache": n == 0}
+                fh.write(json.dumps(row) + "\n")
+                ok = n in self.passing
+                fh.write(json.dumps({"kind": "rollout", "attempt": n, "success": ok}) + "\n")
         return FakeProc(lines, 0)
 
 
@@ -74,17 +75,27 @@ def _preview(task, summary, out, root):
     return {"path": str(out / "prompt_messages.json"), "chars": 10, "has_demo": summary is not None}
 
 
-def _run(tmp_path, world, video=True, stop=lambda: False, jobs=()):
-    events, loops = [], []
+def _settings(**over):
+    settings, error = pd.parse_settings(over, SKILL)
+    assert error is None
+    return settings
+
+
+def _run(tmp_path, world, video=True, stop=lambda: False, jobs=(), **over):
+    events, loops, attacks = [], [], []
     clip = tmp_path / "clip.mp4"
     clip.write_bytes(b"v")
-    req = pd.Request("put the bowl on the plate", clip if video else None, tmp_path / "run")
+    (tmp_path / "run").mkdir(exist_ok=True)
+    req = pd.Request(
+        "put the bowl on the plate", clip if video else None, tmp_path / "run", _settings(**over)
+    )
     pd.Pipeline(
         req, SKILL, events.append,
-        run_loop=lambda *a: loops.append(a), stop_requested=stop, popen=world, root=tmp_path,
+        run_loop=lambda *a: loops.append(a), run_attacks=lambda *a: attacks.append(a),
+        stop_requested=stop, popen=world, root=tmp_path,
         simulator_jobs=lambda: list(jobs), prompt_preview=_preview,
     ).run()  # fmt: skip
-    return events, loops, req
+    return events, loops, req, attacks
 
 
 def _stages(events):
@@ -96,26 +107,49 @@ def _done(events):
 
 
 def test_full_chain_order_and_program_reaches_the_loop(tmp_path):
-    events, loops, req = _run(tmp_path, FakeWorld())
-    order = [s for s, st in _stages(events) if st in ("ok", "finished")]
-    assert order == ["preflight", "extraction", "demospec", "prompt", "nominal", "adversary"]
-    program, task, run_dir, budget = loops[0]
+    events, loops, req, _ = _run(tmp_path, FakeWorld())
+    stages = _stages(events)
+    order = [s for s, st in stages if st == "done"]
+    assert order[:4] == ["video", "extract", "demospec", "prompt"]
+    assert ("generate", "started") in stages
+    assert ("nominal", "failed") in stages and ("nominal", "done") in stages
+    program, task, run_dir, budget, settings = loops[0]
     assert program.name == "program_attempt1.py"
     assert (task, run_dir) == (req.task, req.run_dir)
-    # one uncached attempt of 40k: 300k total - 40k - 50k headroom
+    # one uncached attempt of 40k: 300k cap - 40k - 50k headroom
     assert budget == 210_000
+    assert settings["attacks"] == 2
     assert (req.run_dir / "pipeline.jsonl").is_file()
     assert (req.run_dir / "generation.log").is_file()
 
 
+def test_every_stage_event_follows_the_contract(tmp_path):
+    events, *_ = _run(tmp_path, FakeWorld())
+    rows = [e for e in events if e["kind"] == "pipeline_stage"]
+    assert rows
+    for e in rows:
+        assert e["stage"] in pd.STAGES
+        assert e["status"] in ("started", "done", "failed", "skipped")
+        assert "detail" in e and "cycle" in e
+
+
+def test_settings_are_logged_in_the_run_folder(tmp_path):
+    _, _, req, _ = _run(tmp_path, FakeWorld(), max_retries=3, strategy="uniform")
+    logged = json.loads((req.run_dir / "settings.json").read_text(encoding="utf-8"))
+    assert logged["max_retries"] == 3
+    assert logged["eta"] == 1.0
+    assert logged["task"] == req.task
+
+
 def test_generation_command_is_demo_arm_stock_scene_acceptance_seed(tmp_path):
     world = FakeWorld()
-    _run(tmp_path, world)
+    _run(tmp_path, world, max_retries=5)
     cmd = next(c for c in world.calls if "ants.orchestrator.demo_vs_nodemo" in c)
     get = lambda f: cmd[cmd.index(f) + 1]  # noqa: E731
     assert get("--arms") == "demo"
     assert get("--temperatures") == "0.2"
-    assert get("--token-budget") == "150000"
+    assert get("--repairs") == "5"
+    assert get("--token-budget") == "250000"  # the cap minus one call of headroom
     assert get("--debug-seed") == "51"
     assert get("--eval-seeds") == ""
     assert (get("--suite"), get("--task-id")) == ("libero_goal_swap", "8")
@@ -133,29 +167,46 @@ def test_extraction_uses_the_measured_marker_and_the_logged_setup(tmp_path):
 
 def test_rejected_clip_stops_before_any_generation_and_says_why(tmp_path):
     world = FakeWorld(usable=False)
-    events, loops, _ = _run(tmp_path, world)
+    events, loops, *_ = _run(tmp_path, world)
     assert not loops
     assert not any("demo_vs_nodemo" in " ".join(c) for c in world.calls)
     assert _done(events)[0]["stopped"] == "extraction_rejected"
+    assert ("extract", "failed") in _stages(events)
     assert any("no grasp detected" in e.get("detail", "") for e in events)
     assert any("no video" in e.get("detail", "") for e in events)
 
 
 def test_last_attempt_failing_uses_the_attempt_that_passed(tmp_path):
     world = FakeWorld(passing=(0,), attempts=3)
-    _, loops, _ = _run(tmp_path, world)
+    _, loops, *_ = _run(tmp_path, world)
     assert loops[0][0].name == "program_attempt0.py"
 
 
 def test_no_passing_attempt_is_never_attacked(tmp_path):
-    events, loops, _ = _run(tmp_path, FakeWorld(passing=()))
+    events, loops, *_ = _run(tmp_path, FakeWorld(passing=()))
     assert not loops
     assert _done(events)[0]["stopped"] == "no_working_policy"
 
 
+def test_budget_stop_during_generation_is_named_as_such(tmp_path):
+    class Spent(FakeWorld):
+        def _generate(self, cmd):
+            proc = super()._generate(cmd)
+            out = Path(cmd[cmd.index("--out") + 1])
+            rec = out / cmd[cmd.index("--arms") + 1] / "sample0" / "record.json"
+            data = json.loads(rec.read_text(encoding="utf-8"))
+            rec.write_text(json.dumps({**data, "stopped": "budget"}), encoding="utf-8")
+            return proc
+
+    events, loops, *_ = _run(tmp_path, Spent(passing=()))
+    assert not loops
+    assert _done(events)[0]["stopped"] == "budget"
+
+
 def test_no_video_is_a_visible_no_demo_run(tmp_path):
     world = FakeWorld()
-    events, loops, _ = _run(tmp_path, world, video=False)
+    events, loops, *_ = _run(tmp_path, world, video=False)
+    assert ("video", "skipped") in _stages(events)
     assert ("demospec", "skipped") in _stages(events)
     assert not any("02_extract_demos" in " ".join(c) for c in world.calls)
     cmd = next(c for c in world.calls if "ants.orchestrator.demo_vs_nodemo" in c)
@@ -163,14 +214,75 @@ def test_no_video_is_a_visible_no_demo_run(tmp_path):
     assert loops
 
 
+def test_adversary_off_saves_to_deploy_and_never_attacks(tmp_path):
+    events, loops, _, attacks = _run(tmp_path, FakeWorld(), adversary=False)
+    assert not loops and not attacks
+    assert ("deploy", "done") in _stages(events)
+    assert _done(events)[0]["stopped"] == "deployed"
+    assert (tmp_path / "data" / "deploy" / "latest.py").read_text(encoding="utf-8") == "# 1"
+    assert json.loads((tmp_path / "data" / "deploy" / "latest.json").read_text("utf-8"))
+
+
+def test_synthesizer_off_attacks_the_given_script_with_no_generation(tmp_path):
+    script = tmp_path / "main.py"
+    script.write_text("result = 1", encoding="utf-8")
+    world = FakeWorld()
+    events, loops, req, attacks = _run(tmp_path, world, synthesizer=False, main_script=str(script))
+    assert not loops and attacks
+    assert attacks[0][0].read_text(encoding="utf-8") == "result = 1"
+    assert ("generate", "skipped") in _stages(events)
+    assert not any("demo_vs_nodemo" in " ".join(c) for c in world.calls)
+    assert not any("--muse-code" in c for c in world.calls)
+
+
+def test_settings_validation(tmp_path):
+    assert (
+        "nothing to run" in pd.parse_settings({"synthesizer": False, "adversary": False}, SKILL)[1]
+    )
+    assert "main robot script" in pd.parse_settings({"synthesizer": False}, SKILL)[1]
+    bad = tmp_path / "a.txt"
+    bad.write_text("x", encoding="utf-8")
+    assert ".py" in pd.parse_settings({"synthesizer": False, "main_script": str(bad)}, SKILL)[1]
+    assert (
+        "not found"
+        in pd.parse_settings(
+            {"synthesizer": False, "main_script": str(tmp_path / "gone.py")}, SKILL
+        )[1]
+    )
+    assert "Attacks" in pd.parse_settings({"attacks": 0}, SKILL)[1]
+    assert "whole number" in pd.parse_settings({"attacks": "x"}, SKILL)[1]
+    assert "not an option" in pd.parse_settings({"strategy": "x"}, SKILL)[1]
+    assert "Acceptance seeds" in pd.parse_settings({"seeds": 16}, SKILL)[1]
+
+
+def test_settings_defaults_and_seeds_stay_in_the_acceptance_range():
+    s = _settings()
+    assert (s["max_retries"], s["attacks"], s["seeds"], s["token_cap"]) == (5, 2, 1, 300_000)
+    assert (s["synthesizer"], s["adversary"], s["strategy"], s["eta"]) == (
+        True,
+        True,
+        "thompson",
+        0.2,
+    )
+    assert pd.nominal_seeds(s, SKILL) == (51,)
+    assert pd.nominal_seeds(_settings(seeds=15), SKILL) == tuple(range(51, 66))
+    assert _settings(strategy="uniform")["eta"] == 1.0
+
+
+def test_worst_case_note_is_honest_about_the_cap():
+    note = pd.worst_case_note(_settings(), SKILL)
+    assert "$4.05" in note and "budget stop" in note  # 8 calls x 46k > 250k
+    assert "budget stop" not in pd.worst_case_note(_settings(max_retries=1, adversary=False), SKILL)
+
+
 def test_preflight_failure_and_other_simulator_spend_nothing(tmp_path):
     world = FakeWorld(preflight=1)
-    events, _, _ = _run(tmp_path, world)
+    events, *_ = _run(tmp_path, world)
     assert _done(events)[0]["stopped"] == "preflight_failed"
     assert len(world.calls) == 1
     world = FakeWorld()
     (tmp_path / "b").mkdir()
-    events, _, _ = _run(tmp_path / "b", world, jobs=["pid 1: aspire_launch.py"])
+    events, *_ = _run(tmp_path / "b", world, jobs=["pid 1: aspire_launch.py"])
     assert _done(events)[0]["stopped"] == "preflight_failed"
     assert len(world.calls) == 1
 
@@ -182,9 +294,57 @@ def test_stop_during_generation_is_user_stop_not_budget(tmp_path):
         if "demo_vs_nodemo" in " ".join(cmd):
             flag["on"] = True
 
-    events, loops, _ = _run(tmp_path, FakeWorld(on_call=on_call), stop=lambda: flag["on"])
+    events, loops, *_ = _run(tmp_path, FakeWorld(on_call=on_call), stop=lambda: flag["on"])
     assert not loops
     assert _done(events)[0]["stopped"] == "user_stop"
+
+
+def test_observed_adversary_reports_around_the_real_mock_attack(tmp_path):
+    from ants.adversary import Adversary, AdversaryConfig
+    from ants.contracts import Policy
+
+    code = Path("examples/bowl_on_plate/policy.py").read_text(encoding="utf-8")
+    events = []
+    adv = pd.ObservedAdversary(
+        Adversary.from_config(AdversaryConfig(history_path=tmp_path / "h.jsonl")), events.append
+    )
+    report = adv.attack(Policy("p", 0, "put the bowl on the plate", code))
+    seq = [(e["stage"], e["status"]) for e in events]
+    assert seq[:2] == [("attack", "started"), ("attack", "done")]
+    assert (("diagnose", "done") in seq) == (report.failure is not None)
+    assert all(e["cycle"] == 0 for e in events)
+    assert adv.discovered_failures is not None  # everything else passes through
+
+
+def test_observed_synthesizer_and_gate_verdict():
+    class Adv:
+        cycle = 4
+
+    class Synth:
+        result = None
+
+        def rewrite(self, inc, fb, cons):
+            return self.result
+
+    class P:
+        version = 1
+
+    events = []
+    synth = Synth()
+    obs = pd.ObservedSynthesizer(synth, events.append, Adv())
+    assert obs.rewrite(P, [], []) is None
+    assert [(e["stage"], e["status"]) for e in events] == [
+        ("rewrite", "started"),
+        ("rewrite", "failed"),
+    ]
+    events.clear()
+    synth.result = P
+    assert obs.rewrite(P, [], []) is P
+    assert ("gate", "started") in [(e["stage"], e["status"]) for e in events]
+    assert all(e["cycle"] == 4 for e in events)
+    v = pd.gate_verdict_event({"event": "cycle", "cycle": 4, "decision": "rejected"})
+    assert (v["stage"], v["status"], v["detail"], v["cycle"]) == ("gate", "done", "rejected", 4)
+    assert pd.gate_verdict_event({"event": "cycle", "decision": "no_failure"}) is None
 
 
 def test_budget_helpers():
@@ -214,7 +374,7 @@ class Done:
         self.returncode, self.stdout, self.stderr = code, out, err
 
 
-def test_pick_video_dialog_paths(tmp_path):
+def test_pick_file_dialog_paths(tmp_path):
     ext = SKILL["video"]["extensions"]
     env = {"DISPLAY": ":0"}
     yes = lambda _: "/usr/bin/zenity"  # noqa: E731
@@ -224,16 +384,16 @@ def test_pick_video_dialog_paths(tmp_path):
         seen["cmd"] = cmd
         return Done(out="/v/clip.mp4\n")
 
-    r = pd.pick_video(tmp_path, ext, run=run, which=yes, env=env)
+    r = pd.pick_file(tmp_path, ext, run=run, which=yes, env=env)
     assert r == {"ok": True, "path": "/v/clip.mp4", "name": "clip.mp4"}
     assert any(a.startswith(f"--filename={tmp_path}") for a in seen["cmd"])
-    assert pd.pick_video(tmp_path, ext, run=lambda *a, **k: Done(1), which=yes, env=env) == {
+    assert pd.pick_file(tmp_path, ext, run=lambda *a, **k: Done(1), which=yes, env=env) == {
         "ok": False,
         "cancelled": True,
     }
-    assert pd.pick_video(tmp_path, ext, which=lambda _: None, env=env)["fallback"]
-    assert pd.pick_video(tmp_path, ext, which=yes, env={})["fallback"]
-    r = pd.pick_video(tmp_path, ext, run=lambda *a, **k: Done(out="/v/a.exe"), which=yes, env=env)
+    assert pd.pick_file(tmp_path, ext, which=lambda _: None, env=env)["fallback"]
+    assert pd.pick_file(tmp_path, ext, which=yes, env={})["fallback"]
+    r = pd.pick_file(tmp_path, ext, run=lambda *a, **k: Done(out="/v/a.exe"), which=yes, env=env)
     assert not r["ok"] and "allowed" in r["error"]
 
 
@@ -256,11 +416,18 @@ def test_manager_refuses_second_run_and_bad_input_without_starting(tmp_path):
         return True
 
     m = pd.Manager(
-        lambda e: None, set_running=set_running, run_loop=lambda *a: None,
+        lambda e: None, set_running=set_running,
+        run_loop=lambda *a: None, run_attacks=lambda *a: None,
         stop_requested=lambda: False, clear_stop=lambda: None, runs_dir=lambda: tmp_path,
         skill=SKILL, pipeline=Fake,
     )  # fmt: skip
     assert not m.start("open the drawer", None)["ok"]
+    assert (
+        "nothing to run"
+        in m.start("put the bowl on the plate", None, {"synthesizer": False, "adversary": False})[
+            "error"
+        ]
+    )
     assert not running["on"]
     running["on"] = True
     assert "in progress" in m.start("put the bowl on the plate", None)["error"]

@@ -251,3 +251,11 @@ body[data-tab="console"] .console-only{display:inline-flex}
 .video-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .video-chip button{border:0;background:none;color:var(--muted);cursor:pointer;padding:0 4px;font-size:15px;line-height:1}
 .pipeline-out{white-space:pre-wrap;font-family:var(--mono);font-size:13px;color:var(--dim)}
+.set-row{display:grid;grid-template-columns:190px 1fr;gap:10px;align-items:start;padding:7px 0;font-size:15px}
+.set-row input[type=number],.set-row select,.set-row input[type=text]{background:var(--raise);border:1px solid var(--line);color:var(--fg);padding:4px 8px;font:inherit}
+.set-row input[type=text]{width:70%}
+.set-help{font-size:13px;color:var(--dim);margin-top:2px}
+.set-note{margin-top:12px;font-size:14px;color:var(--muted)}
+.set-note.warn{color:#c77700}
+.set-error{min-height:18px;margin-top:6px;font-size:14px;color:#d9534f}
+.set-actions{margin-top:10px;text-align:right}
