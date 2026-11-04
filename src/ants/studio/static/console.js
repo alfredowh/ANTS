@@ -486,6 +486,12 @@ let rewriteTokenTotal = 0;
 let cycleDetails = [];
 let currentRunName = null;
 
+/* centered-when-empty chat layout, like claude.ai/new -- docks to the bottom once there's content */
+function updateCenterLayout() {
+  document.getElementById("col-center").classList.toggle("idle", turnCount === 0);
+}
+updateCenterLayout();
+
 function openCycleDetailModal(idx) {
   const row = cycleDetails[idx];
   if (!row) return;
@@ -534,6 +540,7 @@ document.getElementById("expand-all").addEventListener("click", () => {
 function addTurn(cls, html) {
   if (turnCount === 0) turnsEl.innerHTML = "";
   turnCount++;
+  updateCenterLayout();
   const div = document.createElement("div");
   div.className = "turn " + cls;
   div.innerHTML = html;
@@ -716,6 +723,7 @@ function restoreUiState() {
   if (!snap || !snap.turnCount) return;
   turnsEl.innerHTML = snap.turnsHTML;
   turnCount = snap.turnCount;
+  updateCenterLayout();
   rewriteTokenTotal = snap.rewriteTokenTotal || 0;
   const wasRunning = (snap.statusClass || "").includes("running");
   setStatus(wasRunning ? "idle" : snap.statusClass.replace("status-pill", "").trim(), wasRunning ? "idle (reload)" : snap.statusText);
@@ -797,6 +805,7 @@ runBtn.addEventListener("click", () => {
   runBtn.disabled = true;
   turnCount = 0;
   turnsEl.innerHTML = "";
+  document.getElementById("col-center").classList.remove("idle"); // leaving the empty/centered state the moment a run starts, not waiting for the first turn
   hideBanner();
   setSys("sys1", DATA.mode === "single", "active (muse exec)");
   setSys("escalate", false, "none");
