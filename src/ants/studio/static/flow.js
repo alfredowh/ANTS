@@ -20,9 +20,9 @@
   let S = fresh();
   let path = []; // drill-down: ids from the overview inward
   let sel = null; // clicked block, shown in the detail strip
-  let collapsed = false;
+  let collapsed = true; // collapsed by default; an explicit choice persists
   let nextAttack = null; // pending inference after a cycle row
-  try { collapsed = localStorage.getItem(COLLAPSE) === "1"; } catch (e) {}
+  try { collapsed = localStorage.getItem(COLLAPSE) !== "0"; } catch (e) {}
 
   function fresh() { return { b: {}, looping: false, active: false, pipeline: false, attackSeen: false, attacks: 0, msg: "" }; }
   function get(id) { return S.b[id] || { st: "idle" }; }
@@ -90,7 +90,10 @@
   }
   function onEvent(d) {
     const k = d.kind;
-    if (k === "session_reset") { clearTimer(); S = fresh(); path = []; sel = null; }
+    if (k === "session_reset") {
+      clearTimer(); S = fresh(); path = []; sel = null;
+      try { if (d.session) localStorage.setItem("ants-flow-session", d.session); } catch (e) {}
+    }
     else if (k === "pipeline_start") { clearTimer(); S = fresh(); S.pipeline = true; S.active = true; }
     else if (k === "pipeline_stage") {
       if (byId[d.stage] === undefined && G) return;
@@ -275,6 +278,13 @@
     } catch (e) {}
     render();
     return fetch("/session").then((r) => r.json()).then((d) => {
+      // the saved state belongs to one server session; a new session starts clean
+      let same = false;
+      try {
+        same = localStorage.getItem("ants-flow-session") === d.id;
+        localStorage.setItem("ants-flow-session", d.id);
+      } catch (e) {}
+      if (!same) { clearTimer(); S = fresh(); path = []; sel = null; save(); render(); }
       if (!d.running && S.active) { settle("idle", ""); S.msg = "state from before the reload"; save(); render(); }
     });
   }).catch(() => { root.innerHTML = `<div class="flow-head"><span class="flow-now">Process flow unavailable</span></div>`; });

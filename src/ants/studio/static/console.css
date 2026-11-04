@@ -191,7 +191,9 @@ main.show-left #col-left>*,main.show-right #col-right>*{visibility:visible}
 .turn .main{line-height:1.5;max-height:7.5em;overflow:hidden}
 .turn > .delta{max-height:7.5em;overflow:hidden}
 .turn.expanded .main,.turn.expanded > .delta{max-height:none}
-.turn-more{background:none;border:0;padding:2px 0;margin-top:2px;font-size:13.7px;color:var(--accent);cursor:pointer}
+.turn.clamped:not(.expanded) > .main,.turn.clamped:not(.expanded) > .delta{-webkit-mask-image:linear-gradient(to bottom,#000 60%,transparent);mask-image:linear-gradient(to bottom,#000 60%,transparent)}
+.turn.clamped:not(.expanded) > .main.pipeline-out{-webkit-mask-image:linear-gradient(to top,#000 60%,transparent);mask-image:linear-gradient(to top,#000 60%,transparent)}
+.turn-more{background:none;border:0;padding:2px 0;margin-top:2px;font-size:13.7px;font-weight:500;color:var(--accent);cursor:pointer}
 .turn-more:hover{text-decoration:underline}
 .navsess{display:flex;flex-direction:column;gap:6px;align-items:flex-start;padding:0 4px 10px}
 .navsess .navnote{padding:0}
@@ -238,3 +240,5 @@ body[data-view="adversary"] #adversary-view{display:block}
 .set-note.warn{color:#c77700}
 .set-error{min-height:18px;margin-top:6px;font-size:14px;color:#d9534f}
 .set-actions{margin-top:10px;text-align:right}
+.scene2d.no-scene .scene2d-head,.scene2d.no-scene .scene2d-layers,.scene2d.no-scene .scene2d-canvas{display:none}
+.scene2d.no-scene .scene2d-note{font-size:13.7px;cursor:default;margin-top:0}

@@ -67,20 +67,13 @@ function renderRunSettings() {
   const tpl = document.getElementById("run-settings-template");
   openModal(tpl.innerHTML);
   renderToolList(document.getElementById("tools-right"), DATA.tools_right);
-  if (DATA.mode === "loop" && DATA.loop_config) {
-    const c = DATA.loop_config;
-    const friendly = (v) => v === "mock" ? "offline (built-in)" : v === "cap_harness" ? "real simulator" : v;
-    document.getElementById("config-tiles").innerHTML = [
-      ["Backend", friendly(c.backend)], ["Max cycles", c.cycles], ["Severity (rho)", c.rho], ["Eta", c.eta],
-      ["Stall window (W)", c.stall_window], ["Nominal seeds", c.nominal_seeds.join(", ")],
-      ["Min tests to stop", c.min_tests], ["Adversary model", friendly(c.adversary_model)],
-      ["Reasoning effort", c.reasoning_effort], ["Max model steps", c.max_model_steps],
-      ["Synth token budget", c.synth_token_budget],
-    ].map(([l, v]) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("");
-  } else {
-    document.getElementById("config-tiles").innerHTML = `<div class="empty">n/a (single-step mode)</div>`;
-  }
+  const c = DATA.loop_config || {};
+  document.getElementById("config-tiles").innerHTML = [
+    ["Severity (rho)", c.rho], ["Min tests to stop", c.min_tests],
+    ["Reasoning effort", c.reasoning_effort], ["Max model steps", c.max_model_steps],
+  ].map(([l, v]) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("");
 }
+
 document.getElementById("run-settings-btn").addEventListener("click", renderRunSettings);
 
 /* ---------- resizable columns ---------- */
@@ -136,13 +129,14 @@ function renderScene2D(kind) {
   if (!scene) {
     svg.innerHTML = "";
     asofEl.textContent = "";
-    noteEl.textContent = "no scene data";
-    noteEl.title = "Pass --scene / --scene-repair to the console.";
+    noteEl.textContent = "This run's prompt has no scene text. /policy-dev debugs in the stock scene (libero_goal_swap task 8) and the program finds objects at run time.";
+    noteEl.title = "Start the server with --scene <contacts_scene.json> to show a scene file here.";
+    document.querySelector(".scene2d").classList.add("no-scene");
     return;
   }
   asofEl.textContent = "as of " + scene.as_of;
-  noteEl.textContent = "Scene given to Synthesizer";
-  noteEl.title = "S4-style scene text: oracle geometry, no robot trajectory.";
+  noteEl.textContent = "Scene file: " + (s2d.source || "unknown") + " (shown for reference; /policy-dev does not send it to the Synthesizer)";
+  noteEl.title = "From --scene: oracle geometry, no robot trajectory.";
 
   const pad = 14;
   let xs = [], ys = [];
@@ -312,8 +306,10 @@ function refreshRunList() {
 refreshRunList();
 
 /* ---------- session: one folder per session on the server (chat, events, runs); "New session" resets ---------- */
+let currentSessionId = null;
 function refreshSession() {
   fetch("/session").then((r) => r.json()).then((d) => {
+    currentSessionId = d.id || null;
     const el = document.getElementById("session-id");
     el.textContent = d.id || "no session";
     if (d.dir) el.title = "Stored in " + d.dir + "/ (session.json, chat.jsonl, events.jsonl, runs/)";
@@ -402,6 +398,7 @@ turnsEl.addEventListener("click", (e) => {
   const tk = e.target.closest(".tk");
   if (tk && !e.target.closest("a,button")) {
     tk.closest(".turn").classList.toggle("collapsed");
+    refreshClamp(tk.closest(".turn"));
     return;
   }
   const link = e.target.closest(".details-link");
@@ -416,22 +413,35 @@ function setStatus(kind, text) {
   if (sb) { sb.hidden = kind !== "running"; sb.disabled = false; sb.textContent = "Stop"; }
 }
 
-/* a turn shows at most 5 lines; longer ones get a Show more button. Call again when a turn's text
-   changes (streamed replies). Clicks are delegated, so restored turns keep working. */
+/* a turn shows at most 5 lines; longer ones fade out and get a Show more button. The observer below
+   re-checks whenever a turn's text changes, so streamed turns get the button as soon as they overflow.
+   Clicks are delegated, so restored turns keep working. */
 function refreshClamp(div) {
-  const body = div && div.querySelector(":scope > .main, :scope > .delta");
-  if (!body) return;
+  if (!div || div.classList.contains("collapsed")) return;
+  const bodies = div.querySelectorAll(":scope > .main, :scope > .delta");
+  if (!bodies.length) return;
   requestAnimationFrame(() => {
-    if (div.classList.contains("expanded") || body.scrollHeight <= body.clientHeight + 2) return;
-    if (div.querySelector(":scope > .turn-more")) return;
-    div.classList.add("clamped");
+    if (div.classList.contains("expanded")) return;
+    const over = [...bodies].some((b) => b.scrollHeight > b.clientHeight + 2);
+    const btn = div.querySelector(":scope > .turn-more");
+    div.classList.toggle("clamped", over);
+    if (!over) { if (btn) btn.remove(); return; }
+    if (btn) return;
     const b = document.createElement("button");
     b.type = "button";
     b.className = "turn-more";
     b.textContent = "Show more";
-    body.insertAdjacentElement("afterend", b);
+    bodies[bodies.length - 1].insertAdjacentElement("afterend", b);
   });
 }
+function refreshAllClamps() { turnsEl.querySelectorAll(":scope > .turn").forEach(refreshClamp); }
+let clampQueued = false;
+new MutationObserver(() => {
+  if (clampQueued) return;
+  clampQueued = true;
+  requestAnimationFrame(() => { clampQueued = false; refreshAllClamps(); });
+}).observe(turnsEl, {childList: true, subtree: true, characterData: true});
+window.addEventListener("resize", refreshAllClamps);
 
 function addTurn(cls, html) {
   if (turnCount === 0) turnsEl.innerHTML = "";
@@ -467,22 +477,6 @@ function showBanner(html) {
 }
 function hideBanner() {
   document.getElementById("banner").classList.remove("on");
-}
-
-function handleMuseEvent(event) {
-  const pt = event.payload_type || "";
-  if (pt.startsWith("task.lifecycle.")) {
-    const payload = event.payload || {};
-    const inner = payload.event || {};
-    const kind = inner.kind || payload.kind || "?";
-    const taskKind = inner.task_kind || "task";
-    addTurn("task " + esc(kind), `<div class="tk">${esc(taskKind)}</div><div class="main">${esc(kind)}</div>`);
-  } else if (pt === "run.output.delta") {
-    const text = (event.payload || {}).text || "";
-    addTurn("delta", `<div class="tk">output</div><div class="delta">${esc(text)}</div>`);
-  } else {
-    addTurn("other", `<div class="tk">${esc(pt || "event")}</div>`);
-  }
 }
 
 function handleLoopEvent(row) {
@@ -570,22 +564,12 @@ function handleDone(payload) {
   const rf = document.getElementById("run-folder");
   rf.textContent = rf.textContent.replace(/^saving to/, "saved in");
   resetSys();
-  if (DATA.mode === "loop") {
-    const blocked = ["budget", "escalate", "no_working_policy"].includes(payload.stopped);
-    if (blocked && !document.getElementById("banner").classList.contains("on")) {
-      showBanner(`<b>Stopped: ${esc(payload.stopped)} &mdash; needs human intervention.</b> The loop cannot make further progress on its own.`);
-    }
-    addTurn("done", `<div class="tk">run complete</div><div class="main">stopped: <b>${esc(payload.stopped)}</b>, stage: ${esc(payload.stage)}, accepted versions: ${JSON.stringify(payload.accepted_versions)}</div>`);
-    document.getElementById("reply-box").textContent = JSON.stringify(payload, null, 1);
-    return;
+  const blocked = ["budget", "escalate", "no_working_policy"].includes(payload.stopped);
+  if (blocked && !document.getElementById("banner").classList.contains("on")) {
+    showBanner(`<b>Stopped: ${esc(payload.stopped)} &mdash; needs human intervention.</b> The loop cannot make further progress on its own.`);
   }
-  addTurn("done", `<div class="tk">run complete</div><div class="main">final reply received</div>`);
-  const u = payload.usage || {};
-  document.getElementById("usage-tiles").innerHTML = [
-    ["Input tokens", u.input_tokens], ["Output tokens", u.output_tokens],
-    ["Reasoning tokens", u.reasoning_tokens], ["Cached tokens", u.cached_tokens],
-  ].map(([l, v]) => `<div class="tile"><div class="l">${l}</div><div class="v">${v ?? 0}</div></div>`).join("");
-  document.getElementById("reply-box").textContent = payload.text || "(empty reply)";
+  addTurn("done", `<div class="tk">run complete</div><div class="main">stopped: <b>${esc(payload.stopped)}</b>, stage: ${esc(payload.stage)}, accepted versions: ${JSON.stringify(payload.accepted_versions)}</div>`);
+  document.getElementById("reply-box").textContent = JSON.stringify(payload, null, 1);
 }
 
 function handleError(payload) {
@@ -598,8 +582,10 @@ function handleError(payload) {
 /* ---------- persist the last UI state locally, so a reload shows it, not a blank page ---------- */
 const UI_STATE_KEY = "ants-console-last-state";
 function saveUiState() {
+  if (!currentSessionId) return; // the snapshot belongs to one session
   try {
     localStorage.setItem(UI_STATE_KEY, JSON.stringify({
+      session: currentSessionId,
       ts: new Date().toISOString(),
       turnsHTML: turnsEl.innerHTML,
       turnCount, rewriteTokenTotal,
@@ -616,10 +602,20 @@ function saveUiState() {
     }));
   } catch (e) {}
 }
+// Only a reload within the same server session restores the feed; a new session starts clean.
 function restoreUiState() {
   let snap;
   try { snap = JSON.parse(localStorage.getItem(UI_STATE_KEY) || "null"); } catch (e) { snap = null; }
-  if (!snap || !snap.turnCount) return;
+  if (!snap) return;
+  fetch("/session").then((r) => r.json()).then((d) => {
+    if (snap.session !== d.id) {
+      try { localStorage.removeItem(UI_STATE_KEY); } catch (e) {}
+      return;
+    }
+    if (snap.turnCount && !turnCount) applySnapshot(snap);
+  }).catch(() => {});
+}
+function applySnapshot(snap) {
   turnsEl.innerHTML = snap.turnsHTML;
   turnCount = snap.turnCount;
   updateCenterLayout();
@@ -640,8 +636,9 @@ function restoreUiState() {
   const note = document.createElement("div");
   note.id = "restored-note";
   note.style.cssText = "font-size:13.2px;color:var(--dim);margin-bottom:8px";
-  note.textContent = "restored from this browser's last session (" + new Date(snap.ts).toLocaleString() + ")";
+  note.textContent = "restored from this browser (" + new Date(snap.ts).toLocaleString() + ")";
   turnsEl.parentElement.insertBefore(note, turnsEl);
+  refreshAllClamps();
 }
 
 const BACKEND_NAME = { mock: "offline test world, no simulator", cap_harness: "real simulator" };
@@ -651,13 +648,25 @@ function openStream() {
   // run's "done" -- see console_server.py's /events handler). Reconnects on its own via
   // EventSource's built-in retry if the server restarts; no manual close/reopen needed here.
   const es = new EventSource("/events");
+  let opened = false;
+  es.onopen = () => { // a reconnect: if the server restarted, this page's feed belongs to an old session
+    if (opened) {
+      fetch("/session").then((r) => r.json()).then((d) => {
+        if (!currentSessionId || d.id === currentSessionId) return;
+        currentSessionId = d.id;
+        const reset = {kind: "session_reset", session: d.id};
+        for (const f of [window.studioEvent, window.flowEvent, window.wizardEvent]) if (f) f(reset);
+        resetSessionUi();
+      }).catch(() => {});
+    }
+    opened = true;
+  };
   es.onmessage = (ev) => {
     const data = JSON.parse(ev.data);
     if (window.studioEvent) window.studioEvent(data); // Adversary view refresh
     if (window.flowEvent) window.flowEvent(data); // live process-flow panel
     if (window.wizardEvent) window.wizardEvent(data); // one shared connection (browsers allow only ~6 per site)
-    if (data.kind === "muse_event") handleMuseEvent(data.event);
-    else if (data.kind === "loop_event") handleLoopEvent(data.row);
+    if (data.kind === "loop_event") handleLoopEvent(data.row);
     else if (data.kind === "attack_event") handleAttackEvent(data);
     else if (data.kind === "run_started") {
       setStatus("running", "running");
@@ -672,7 +681,7 @@ function openStream() {
       currentRunName = data.run_dir.split("/").pop();
       refreshRunList();
     }
-    else if (data.kind === "session_reset") { resetSessionUi(); return; }
+    else if (data.kind === "session_reset") { currentSessionId = data.session || null; resetSessionUi(); return; }
     else if (data.kind === "done") { handleDone(data); refreshRunList(); }
     else if (data.kind === "error") handleError(data);
     else if (data.kind === "awaiting_answer") handleAwaitingAnswer(data);

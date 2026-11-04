@@ -917,27 +917,6 @@
           "desc": "Port to serve on."
         },
         {
-          "flag": "--mode",
-          "value": "loop",
-          "kind": "value",
-          "on": false,
-          "desc": "loop = the real closed loop (default); single = one Phase A repair step only."
-        },
-        {
-          "flag": "--backend",
-          "value": "mock",
-          "kind": "value",
-          "on": false,
-          "desc": "Adversary rollout backend: mock (free, default) or cap_harness (real ASPIRE/LIBERO rollouts; needs the sam3/pyroki/curobo services and the GPU)."
-        },
-        {
-          "flag": "--cycles",
-          "value": "3",
-          "kind": "value",
-          "on": false,
-          "desc": "Max attacks in the loop."
-        },
-        {
           "flag": "--max-model-steps",
           "value": "6",
           "kind": "value",
@@ -950,13 +929,6 @@
           "kind": "value",
           "on": true,
           "desc": "Muse Code reasoning effort."
-        },
-        {
-          "flag": "--synth-token-budget",
-          "value": "200000",
-          "kind": "value",
-          "on": false,
-          "desc": "Hard cap on total Muse tokens across every rewrite in the loop."
         },
         {
           "flag": "--session",
@@ -987,10 +959,10 @@
           "desc": "Default of the dialog's Muse token cap for /policy-dev."
         }
       ],
-      "description": "Serves ANTS Studio: an Adversary | Synthesizer switch over Daniel's Harden/Replay/Versions page and the agent console, and drives a real Loop live. Every server start creates a session folder under data/console_sessions/ holding the chat log, every broadcast event and the per-run folders. Each rewrite spends Muse tokens (about $0.5 observed) and the loop stops at --synth-token-budget.",
+      "description": "Serves ANTS Studio: an Adversary | Synthesizer switch over Daniel's Harden/Replay/Versions page and the agent console. Runs start from /policy-dev in the chat (see studio.policy-dev); backend, attacks, seeds, strategy and budgets are chosen in its dialog. Every server start creates a session folder under data/console_sessions/ holding the chat log, every broadcast event and the per-run folders.",
       "examples": [
         {
-          "title": "Default demo (mock Adversary, real Muse repairs)",
+          "title": "Start the server",
           "cmd": "uv run python -m ants.studio.console --port 8765 --max-model-steps 6 --reasoning-effort medium"
         },
         {

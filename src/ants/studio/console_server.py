@@ -2,19 +2,11 @@
 
 Static viewers in this repo (`dashboard.py`, `ants.studio.run`) all read a saved JSONL trace after
 a run finished. This module is the live counterpart: `/policy-dev` in the chat starts the pipeline
-(POST /run the loop alone), and the loop's turns -- attacks, rewrites, gate verdicts --
-stream into the browser as they happen.
-
-Two modes, picked by `--mode`:
-- "loop" (default): drives the real closed loop, `ants.orchestrator.loop.Loop`, against the mock
-  Adversary backend (free, offline, already tested) with Synthesizer's repair step real (`muse exec`
-  via `MuseOrchestrator`). Only consumes `orchestrator`'s and `adversary`'s public APIs (`Loop`,
-  `LoopConfig`, `Adversary`, `AdversaryConfig`, `GenerateSynthesizer`, `MuseOrchestrator`) the same
-  way `orchestrator/run.py` and the tests do -- nothing here edits those packages.
-- "single": the original v1 scope, one Phase A repair step with no Adversary call at all. Kept for
-  a cheaper/faster demo path. This mode shells out to `muse exec --json` directly instead of going
-  through `muse_cli.py`, reading its stdout line by line instead of waiting for the whole subprocess
-  to finish, so it has no dependency on `orchestrator/` at all.
+(`policy_dev.py`), and its stages, attacks, rewrites and gate verdicts stream into the browser as
+they happen. It only consumes `orchestrator`'s and `adversary`'s public APIs (`Loop`, `LoopConfig`,
+`Adversary`, `AdversaryConfig`, `GenerateSynthesizer`, `MuseOrchestrator`) the same way
+`orchestrator/run.py` and the tests do -- nothing here edits those packages. A free-form chat
+message is a one-shot `muse exec --json` call, read line by line (`stream_muse_exec`).
 """
 
 from __future__ import annotations
@@ -36,7 +28,6 @@ from urllib.parse import unquote, urlparse
 from ants.studio import adversary_view, policy_dev
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-PHASES_DOC = REPO_ROOT / "docs" / "orchestrator" / "phases.md"
 STUDIO_DIR = Path(__file__).parent
 VIEWS_DIR = STUDIO_DIR / "views"
 STATIC_DIR = STUDIO_DIR / "static"
@@ -361,18 +352,6 @@ def run_chat_oneshot(
             break
 
 
-def build_prompt(incumbent: Path) -> str:
-    return (
-        PHASES_DOC.read_text(encoding="utf-8")
-        + "\n\n## Incumbent program\n```python\n"
-        + incumbent.read_text(encoding="utf-8")
-        + "```\n\nNo constraints or feedback yet: this is the first repair step shown in the live"
-        " console. Read the program, say in your WHY what single assumption it hard-codes that a"
-        " harder scenario would break, and return the same program improved against that one"
-        " assumption.\n"
-    )
-
-
 def stream_muse_exec(
     prompt: str,
     *,
@@ -460,7 +439,7 @@ def stream_muse_exec(
 
 @dataclass
 class LoopRunConfig:
-    """What POST /run drives in "loop" mode: the real closed loop, mock Adversary backend.
+    """What `run_live_loop` drives: the real closed loop (`/policy-dev` overrides the run fields).
 
     Defaults kept deliberately small (3 cycles, 1 nominal seed, W=2) so a click-through demo stays
     cheap and fast; pass the CLI flags for a fuller run.
@@ -745,19 +724,16 @@ def make_handler(
     state: RunState,
     incumbent: Path,
     *,
-    mode: str = "loop",
     reasoning_effort: str = "high",
     max_model_steps: int = 20,
     loop_cfg: LoopRunConfig | None = None,
     scene_generation_path: Path | None = None,
     adversary_run: Path | None = None,
-    scene_repair_path: Path | None = None,
     sessions_dir: Path | None = None,
     session_id: str | None = None,
 ):
     def session_meta() -> dict:
         return {
-            "mode": mode,
             "incumbent": str(incumbent),
             "config": asdict(loop_cfg) if loop_cfg else None,
             "reasoning_effort": reasoning_effort,
@@ -772,19 +748,14 @@ def make_handler(
             return state.session.runs_dir
         return loop_cfg.out_dir if loop_cfg else None
 
-    tools_right = (
-        TOOLS_RIGHT if mode == "loop" else [t for t in TOOLS_RIGHT if t["role"] != "Adversary"]
-    )
     data = {
         "incumbent_name": incumbent.name,
         "incumbent_code": incumbent.read_text(encoding="utf-8"),
         "tools_left": TOOLS_LEFT,
-        "tools_right": tools_right,
-        "mode": mode,
+        "tools_right": TOOLS_RIGHT,
         "scene2d": {
             "generation": _scene2d_or_none(scene_generation_path),
-            "repair": _scene2d_or_none(scene_repair_path or scene_generation_path),
-            "same_source": scene_repair_path is None,
+            "source": str(scene_generation_path) if scene_generation_path else None,
         },
         "loop_config": (
             {
@@ -806,12 +777,34 @@ def make_handler(
     }
     page = _assemble_shell().replace("/*__DATA__*/null", json.dumps(data))
 
+    def _fire_queued_chat() -> None:
+        """Case 3 of the chat flow: a message queued during a run, sent once the run ended."""
+        with state.lock:
+            msg, state.queued_chat = state.queued_chat, None
+            if not msg or state.running:
+                state.queued_chat = msg
+                return
+            state.running = True
+        try:
+            run_chat_oneshot(
+                state,
+                incumbent,
+                msg,
+                reasoning_effort=reasoning_effort,
+                max_model_steps=max_model_steps,
+            )
+        finally:
+            with state.lock:
+                state.running = False
+
     def _set_running(on: bool) -> bool:
         with state.lock:
             if on and state.running:
                 return False
             state.running = on
-            return True
+        if not on:
+            threading.Thread(target=_fire_queued_chat, daemon=True).start()
+        return True
 
     skill = policy_dev.load_skill()
     if loop_cfg and loop_cfg.pipeline_token_budget:
@@ -1035,68 +1028,8 @@ def make_handler(
                 info["dir"] = "data/deploy"
                 self._send_json({"ok": True, **info})
                 return
-            if path != "/run":
-                self.send_response(404)
-                self.end_headers()
-                return
-            length = int(self.headers.get("Content-Length", "0"))
-            body = json.loads(self.rfile.read(length) or b"{}")
-            if not body.get("confirmed"):
-                self._send_json(
-                    {
-                        "ok": False,
-                        "error": "gate not confirmed: ready to run the policy development phase?",
-                    },
-                    status=400,
-                )
-                return
-            with state.lock:
-                if state.running:
-                    self._send_json(
-                        {"ok": False, "error": "a run is already in progress"}, status=409
-                    )
-                    return
-                state.running = True
-
-            def fire_queued_chat() -> None:
-                with state.lock:
-                    msg, state.queued_chat = state.queued_chat, None
-                if msg:
-                    run_chat_oneshot(
-                        state,
-                        incumbent,
-                        msg,
-                        reasoning_effort=reasoning_effort,
-                        max_model_steps=max_model_steps,
-                    )
-
-            def drive_single() -> None:
-                prompt = build_prompt(incumbent)
-                src = stream_muse_exec(
-                    prompt, reasoning_effort=reasoning_effort, max_model_steps=max_model_steps
-                )
-                while True:
-                    item = src.get()
-                    state.broadcast(item)
-                    if item.get("kind") in ("done", "error"):
-                        break
-                with state.lock:
-                    state.running = False
-                fire_queued_chat()
-
-            state.stop_requested.clear()
-
-            def drive_loop() -> None:
-                try:
-                    run_live_loop(state, incumbent, loop_cfg)
-                finally:
-                    with state.lock:
-                        state.running = False
-                    fire_queued_chat()
-
-            target = drive_loop if (mode == "loop" and loop_cfg is not None) else drive_single
-            threading.Thread(target=target, daemon=True).start()
-            self._send_json({"ok": True})
+            self.send_response(404)
+            self.end_headers()
 
         # ---- Adversary view ----
         def _serve_adversary(self, rest: str) -> None:
@@ -1266,17 +1199,11 @@ def serve(
     incumbent: Path = REPO_ROOT / "examples" / "bowl_on_plate" / "policy.py",
     host: str = "127.0.0.1",
     port: int = 8765,
-    mode: str = "loop",
     reasoning_effort: str = "high",
     max_model_steps: int = 20,
     loop_cfg: LoopRunConfig | None = None,
-    scene_generation_path: Path | None = REPO_ROOT
-    / "data"
-    / "scenes"
-    / "L1"
-    / "contacts_scene.json",
+    scene_generation_path: Path | None = None,
     adversary_run: Path | None = None,
-    scene_repair_path: Path | None = None,
     session_id: str | None = None,
     sessions_dir: Path | None = SESSIONS_DIR,
 ) -> None:
@@ -1286,18 +1213,16 @@ def serve(
     handler = make_handler(
         state,
         incumbent,
-        mode=mode,
         reasoning_effort=reasoning_effort,
         max_model_steps=max_model_steps,
-        loop_cfg=loop_cfg if mode == "loop" else None,
+        loop_cfg=loop_cfg,
         scene_generation_path=scene_generation_path,
-        scene_repair_path=scene_repair_path,
         adversary_run=adversary_run,
         sessions_dir=sessions_dir,
         session_id=session_id,
     )
     httpd = ThreadingHTTPServer((host, port), handler)
-    print(f"ANTS live console ({mode}): http://{host}:{port}  (incumbent: {incumbent})")
+    print(f"ANTS Studio: http://{host}:{port}  (incumbent: {incumbent})")
     if state.session:
         print(f"session: {state.session.dir}")
     try:

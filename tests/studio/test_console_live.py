@@ -200,3 +200,68 @@ def test_served_adversary_page_uses_ui_names_standalone_does_not():
     served = adversary_view.inject(page)
     assert "System" not in served.split("<script>")[0].split("</style>")[-1]
     assert "an Adversary run" in served and "Synthesizer rewrites" in served
+
+
+def test_old_run_route_and_single_mode_are_gone(tmp_path):
+    from ants.studio import console
+
+    httpd, _state, _cfg, base = _serve(tmp_path)
+    try:
+        import urllib.error
+        import urllib.request
+
+        req = urllib.request.Request(base + "/run", data=b"{}", method="POST")
+        try:
+            urllib.request.urlopen(req, timeout=5)
+            code = 200
+        except urllib.error.HTTPError as e:
+            code = e.code
+        assert code == 404
+    finally:
+        httpd.shutdown()
+    assert "--mode" not in Path(console.__file__).read_text(encoding="utf-8")
+    assert not hasattr(console_server, "build_prompt")
+    js = console_server.STATIC_FILES["console.js"].read_text(encoding="utf-8")
+    assert "DATA.mode" not in js and "run-btn" not in console_server._assemble_shell()
+
+
+def test_queued_chat_fires_when_a_pipeline_run_ends(tmp_path, monkeypatch):
+    from ants.studio import policy_dev
+
+    fired = threading.Event()
+    monkeypatch.setattr(console_server, "run_chat_oneshot", lambda *a, **k: fired.set())
+    captured = {}
+    real = policy_dev.Manager
+
+    def spy(emit, **kw):
+        captured["set_running"] = kw["set_running"]
+        return real(emit, **kw)
+
+    monkeypatch.setattr(policy_dev, "Manager", spy)
+    state = console_server.RunState()
+    httpd, _state, _cfg, _base = _serve(tmp_path, state)
+    try:
+        assert captured["set_running"](True)
+        state.queued_chat = "after the run"
+        captured["set_running"](False)
+        assert fired.wait(5)
+        assert state.queued_chat is None
+    finally:
+        httpd.shutdown()
+
+
+def test_snapshot_and_flow_state_are_tied_to_the_session():
+    js = console_server.STATIC_FILES["console.js"].read_text(encoding="utf-8")
+    assert "session: currentSessionId" in js and "snap.session !== d.id" in js
+    flow = console_server.STATIC_FILES["flow.js"].read_text(encoding="utf-8")
+    assert "ants-flow-session" in flow and "let collapsed = true" in flow
+
+
+def test_scene_panel_is_labelled_with_its_real_source(tmp_path):
+    js = console_server.STATIC_FILES["console.js"].read_text(encoding="utf-8")
+    assert "has no scene text" in js and "Scene given to Synthesizer" not in js
+    from ants.studio import policy_dev
+
+    skill = policy_dev.load_skill()
+    cmd = policy_dev.generation_command("t", Path("d.json"), Path("o"), 1, 1, True, skill)
+    assert "--scene-text-file" not in cmd and cmd[cmd.index("--scenes") + 1] == "stock"

@@ -47,8 +47,7 @@ first, then `docs/studio/live-console-handoff.md` (older, general), then this fi
 ## Things to know / traps
 
 - Real runs spend Muse tokens: about 46k tokens (about $0.63) per rewrite at $13.5 per million,
-  capped by `--synth-token-budget` (default 200000). The default backend is the free mock
-  Adversary; `--backend cap_harness` needs services sam3 :8114, pyroki :8116, curobo :8118 and the
+  capped by the dialog's token cap. `/policy-dev` runs the real backend, which needs services sam3 :8114, pyroki :8116, curobo :8118 and the
   GPU. A cuRobo replay job was running on the GPU during the session; not ours.
 - A killed muse call is reported by the loop as a budget stop; `/stop` overrides the final `done`
   event to `user_stop`, but the per-cycle row still says `budget_stop` and the console may show the

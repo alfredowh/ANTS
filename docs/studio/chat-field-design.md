@@ -59,8 +59,8 @@ new chat message arrives
   built destination (orchestrator/human_gate.py) --  v                v
   Loop already accepts an ask_human callback,   queue the message,    run it as a one-shot
   just never wired to anything live yet.        show "queued -- will  Muse Code call, same
-                                                 send once the        mechanism --mode single
-                                                 current step ends"   already uses
+                                                 send once the        mechanism (a one-shot
+                                                 current step ends"   muse exec)
                                                  in the composer.     (stream_muse_exec),
                                                  Don't interrupt a    streamed into the turns
                                                  blocking muse exec   feed tagged "chat" (a
@@ -94,7 +94,7 @@ dead end that looks broken.
 ### Case 3: idle, free-form (reuses existing mechanism)
 
 When nothing is running and nothing is escalated, a chat message is just a one-off prompt to Muse
-Code — exactly what `--mode single` already does (`stream_muse_exec`, no `Loop` involved at all).
+Code — a one-shot call (`stream_muse_exec`, no `Loop` involved at all).
 **OPEN**: should this see the current incumbent program as context automatically (so "why does it
 grasp from the left?" can be answered), or should it be truly contextless unless the user pastes
 code in? Proposed default: always include the current incumbent + active constraints in the prompt

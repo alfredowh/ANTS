@@ -265,3 +265,9 @@ Defaults, limits and the dialog's fields: `docs/studio/skills/policy-dev.json`. 
 
 Removed: the question-by-question wizard (`policy_wizard.py`), `/policy-dev setup`, `/cancel`, `/wizard`.
 
+## Update: runs start only from `/policy-dev`
+
+`POST /run`, `--mode`, and the flags the dialog overrides (`--backend`, `--cycles`, `--eta`,
+`--adversary-model`, `--stall-window`, `--nominal-seeds`, `--synth-token-budget`, `--scene-repair`)
+are gone; older sections above that mention them are history. `--scene` now defaults to none, since
+`/policy-dev` sends no scene text. The browser snapshot and flow state are tied to the session id.

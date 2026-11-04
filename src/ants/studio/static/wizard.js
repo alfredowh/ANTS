@@ -246,8 +246,10 @@
       outEl = all[all.length - 1];
     }
     outLines.push(d.line);
-    outEl.textContent = outLines.slice(-5).join("\n");
-    refreshClamp(outEl.closest(".turn"));
+    if (outLines.length > 5000) outLines.shift();
+    outEl.textContent = outLines.join("\n");
+    // clamped to 5 lines, this one follows the newest lines; Show more opens the whole output
+    if (!outEl.closest(".turn").classList.contains("expanded")) outEl.scrollTop = outEl.scrollHeight;
   }
   window.wizardEvent = (d) => {
     if (d.kind === "session_reset") {
