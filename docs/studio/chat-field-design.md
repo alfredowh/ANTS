@@ -21,7 +21,7 @@ The console today (`console_template.html`) is three columns:
   generation/repair toggle), SAM 3 output (archived gallery), Agentview frames (archived gallery,
   "Open perception replay" link into the Perception tab). Unchanged by this.
 - **Center** (`#col-center`): incumbent name, the blocking-state banner, the turns feed
-  (`#turns`) — newest-first, fed by SSE (`muse_event` / `loop_event` / `attack_event` / `done` /
+  (`#turns`) — oldest-first (newest at the bottom), fed by SSE (`muse_event` / `loop_event` / `attack_event` / `done` /
   `error`).
 - **Right** (`#col-right`): Loop config tiles, Orchestrator/System 2 tool chips, Usage tiles,
   Reply/summary box.

@@ -687,7 +687,9 @@ function addTurn(cls, html) {
   const div = document.createElement("div");
   div.className = "turn " + cls;
   div.innerHTML = html;
-  turnsEl.insertBefore(div, turnsEl.firstChild); // newest on top
+  const stick = turnsEl.scrollHeight - turnsEl.scrollTop - turnsEl.clientHeight < 80; // follow the feed only if already at the bottom
+  turnsEl.appendChild(div); // oldest on top, newest at the bottom
+  if (stick || cls.includes("you")) requestAnimationFrame(() => { turnsEl.scrollTop = turnsEl.scrollHeight; });
   addClampToggle(div);
 }
 
