@@ -1215,7 +1215,7 @@ uv run python -m ants.evalkit.report data/runs/exp02_scaled --serve --open
 
 ### `curobo.replay`: Replay logged programs with the held-bowl attach or an oracle cloud (no tokens)
 
-Costs no model tokens (GPU and simulator only). Needs the SAM 3 and PyRoki services and the dev cuRobo service on 8118 (services.start, curobo.service). Runs one program at a time and resets the global attach file before each run; never start two at once. Written 2026-11-04 for the cuRobo false-negative debugging (docs/synthesizer/handoff-curobo-debug.md).
+Costs no model tokens (GPU and simulator only). Needs the SAM 3 and PyRoki services and the dev cuRobo service on 8118 (services.start, curobo.service). Runs one program at a time and resets the global attach file before each run; never start two at once. Written 2026-11-04 for the cuRobo false-negative debugging (docs/synthesizer/handoff-curobo-debug.md). Every plan's goal is labelled against the simulator (planner.label_goals); score with curobo.goal-confusion. Do not run while another simulator is running.
 
 ```bash
 ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py \
@@ -1228,6 +1228,7 @@ ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py \
 | `--mode` | `attach` | yes | sparse: no attach (single-frame carved cloud). attach: held bowl as spheres, written to the global data/runs/curobo/attach.json. oracle: bowl and plate pixels removed from the planning cloud with simulator segmentation (privileged upper bound). oracle-attach: both. Choices: sparse, attach, oracle, oracle-attach. |
 | `--out` | `data/runs/curobo/replay` | yes | Output root; results go to <out>/<mode>/<label>/result.json. |
 | `--only` | `exp10_nodemo_a1,exp10_nodemo_a2` | no | Comma-separated labels (see PROGRAMS in the script). Default: all seven. |
+| `--seeds` | `51,52,53` | no | Comma-separated acceptance seeds (51 to 65 only; default 51). Output folders end in _s<seed>. |
 | `--timeout-s` | `900` | no | Per-run wall clock. |
 
 Two programs, attach on:
@@ -1240,6 +1241,20 @@ Oracle upper bound:
 
 ```bash
 ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode oracle --out data/runs/curobo/replay_oracle --only exp10_nodemo_a1
+```
+
+### `curobo.goal-confusion`: Score cuRobo verdicts against the simulator (false negatives and positives)
+
+Reads the goal labels from curobo.replay. A refused goal that has no forbidden contact in the simulator is a false negative. Goal state only, not the path. No tokens, no GPU.
+
+```bash
+uv run python dev/curobo/goal_confusion.py data/runs/curobo/replay_seeds/attach data/runs/curobo/replay_seeds/sparse
+```
+
+Attach against sparse:
+
+```bash
+uv run python dev/curobo/goal_confusion.py data/runs/curobo/replay_seeds/attach data/runs/curobo/replay_seeds/sparse
 ```
 
 ## Scene reconstruction probe: cuRobo Mapper TSDF/ESDF on the LIBERO scene
@@ -1339,7 +1354,7 @@ cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/ma
 - Docs: `docs/synthesizer/exp12/analysis.ipynb` · run dir: `data/runs/demo_e3_s4_sim | data/runs/nodemo_task_only_sim`
 - Inputs: data/demospecs/hurobo_233859.json; data/scene_text/S4_L1.txt
 - Outputs: data/runs/demo_e3_s4_sim/; data/runs/nodemo_task_only_sim/
-- Result so far: Held-out seeds 1 to 5, two samples (T 0.2, 0.7) per arm. Demo: debug seed solved in 2 and 2 attempts; scaled 5/5 and 2/5, stock 4/5 and 3/5. No-demo: solved in 5 (no) and 3 attempts; scaled 4/5 and 4/5, stock 0/5 and 0/5. The arms also differ in scene text and evidence. Source: events.jsonl of each run.
+- Result so far: Held-out seeds 1 to 5, two samples (T 0.2, 0.7) per arm. Demo: debug seed solved in 2 and 2 attempts; scaled 5/5 and 2/5, stock 4/5 and 3/5. No-demo: solved in 5 (no) and 3 attempts; scaled 4/5 and 4/5, stock 0/5 and 0/5. The arms also differ in scene text and evidence. Source: events.jsonl of each run. Ran before the attach frame fix: spheres 9.65 cm too high, see docs/synthesizer/handoff-curobo-debug.md.
 
 ### `exp12.demo`: Exp 12 demo arm: demo + S4 + E3 on cuRobo (paid)
 

@@ -58,6 +58,9 @@ comes from a fit to the visible rim (curobo-sam3/31) or from the simulator box o
 (curobo-sim). `oracle_exclude` [body prefixes, e.g. "akita_black_bowl", "plate_1"]: the pixels of
 those bodies, from the simulator's segmentation render (PRIVILEGED), never enter the planning cloud;
 localisation for the program is unaffected. An upper-bound test, not a result for the method.
+`label_goals` {"file", "body_main"}: debugging only. Every cuRobo plan's goal joints are set on a COPY of the
+simulator state (a held object moves with the hand) and the real contacts go to `file` with cuRobo's verdict,
+so refusals can be scored against the simulator. The copy cannot change the run.
 The cuRobo service
 (`dev/curobo/service_dev.py`, carve margin ANTS_CARVE_MARGIN_M) must be running.
 
@@ -197,6 +200,16 @@ def spheres_to_local(world: np.ndarray, t: np.ndarray, rot: np.ndarray) -> np.nd
 def spheres_to_world(local: np.ndarray, t: np.ndarray, rot: np.ndarray) -> np.ndarray:
     """World spheres from hand-frame spheres at the hand pose (`t` position, `rot` rotation)."""
     return local @ rot.T + t
+
+
+# `end_effector_poses` is the gripper site; cuRobo's attached_object link is fixed to panda_hand.
+# Same orientation, the site is this far along the hand's z axis (FK against the logged state).
+EE_IN_HAND_Z_M = 0.0965
+
+
+def ee_local_to_hand(local: np.ndarray) -> np.ndarray:
+    """Points in the gripper-site frame, expressed in the panda_hand frame."""
+    return np.asarray(local, dtype=float) + np.array([0.0, 0.0, EE_IN_HAND_Z_M])
 
 
 def latch_action(latched: bool, closed: bool, near: bool) -> str:
@@ -360,6 +373,53 @@ def _sam31_union(shape: tuple[int, int], png: bytes, prompts) -> np.ndarray:
         for x1, y1, x2, y2 in _sam31_boxes(png, prompt):
             union[max(0, y1) : min(height, y2 + 1), max(0, x1) : min(width, x2 + 1)] = True
     return union
+
+
+def goal_contacts(env, goal_joints, held_body: str, gripper: float) -> dict:
+    """Real contacts with the arm at `goal_joints`, on a copy of the simulator state.
+
+    If the gripper is closed and `held_body` is near the hand, it moves rigidly with the hand.
+    Returns {"held": bool, "pairs": [[body, body, distance_m], ...]} for penetrating geom pairs.
+    """
+    import mujoco
+
+    model, live = env.sim.model._model, env.sim.data._data
+    data = mujoco.MjData(model)
+    data.qpos[:] = live.qpos
+    mujoco.mj_kinematics(model, data)
+    hand = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "robot0_right_hand")
+    body = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, held_body)
+    while body > 0 and model.body_jntnum[body] == 0:
+        body = int(model.body_parentid[body])
+    held = bool(
+        body > 0 and gripper < 0.5 and np.linalg.norm(data.xpos[body] - data.xpos[hand]) < 0.25
+    )
+    if held:
+        hand_rot = data.xmat[hand].reshape(3, 3).copy()
+        rel_pos = (data.xpos[body] - data.xpos[hand]) @ hand_rot
+        rel_rot = hand_rot.T @ data.xmat[body].reshape(3, 3)
+    for i, value in enumerate(goal_joints):
+        joint = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, f"robot0_joint{i + 1}")
+        data.qpos[model.jnt_qposadr[joint]] = float(value)
+    mujoco.mj_kinematics(model, data)
+    if held:
+        hand_rot = data.xmat[hand].reshape(3, 3)
+        adr = model.jnt_qposadr[model.body_jntadr[body]]
+        data.qpos[adr : adr + 3] = data.xpos[hand] + hand_rot @ rel_pos
+        quat = np.zeros(4)
+        mujoco.mju_mat2Quat(quat, (hand_rot @ rel_rot).reshape(9))
+        data.qpos[adr + 3 : adr + 7] = quat
+    mujoco.mj_fwdPosition(model, data)
+    name = lambda g: mujoco.mj_id2name(  # noqa: E731
+        model, mujoco.mjtObj.mjOBJ_BODY, int(model.geom_bodyid[g])
+    )
+    worst: dict = {}
+    for k in range(data.ncon):
+        con = data.contact[k]
+        if con.dist < 0:
+            pair = tuple(sorted((name(con.geom1) or "", name(con.geom2) or "")))
+            worst[pair] = min(worst.get(pair, 0.0), float(con.dist))
+    return {"held": held, "pairs": [[a, b, round(d, 4)] for (a, b), d in sorted(worst.items())]}
 
 
 def install_curobo_planning(cfg: dict) -> None:
@@ -655,7 +715,7 @@ def install_curobo_planning(cfg: dict) -> None:
                         file=sys.stderr,
                     )
                 local = held_state["local"]
-                write([[*map(float, p), sphere_r] for p in local])
+                write([[*map(float, p), sphere_r] for p in ee_local_to_hand(local)])
                 pred = spheres_to_world(local, t, rot)
                 remove_m = attach.get("remove_m", 0.02)
                 cut = removal_mask(
@@ -688,6 +748,32 @@ def install_curobo_planning(cfg: dict) -> None:
             return kept
 
         CapApi._exclude_target_from_scene = staticmethod(exclude_near)
+    label = cfg.get("label_goals")
+    if label:
+        from cap_harness.providers.curobo.client import CuRoboProvider
+
+        plan_to_joints = CuRoboProvider.plan_to_joints
+        label_path = Path(label["file"])
+        label_path.parent.mkdir(parents=True, exist_ok=True)
+
+        def labelled(self, robot_state, target_joints, **kw):
+            result = plan_to_joints(self, robot_state, target_joints, **kw)
+            row: dict = {"ok": bool(result.ok)}
+            try:
+                row["gripper"] = round(float(robot_state.gripper_positions["primary"]), 3)
+                row.update(
+                    goal_contacts(LIVE["env"], target_joints, label["body_main"], row["gripper"])
+                )
+                if not result.ok and result.error is not None:
+                    response = str((result.error.details or {}).get("response", ""))
+                    row["message"] = response[:90]
+            except Exception as err:  # debugging aid: never break planning
+                row["label_error"] = f"{type(err).__name__}: {err}"
+            with label_path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(row) + "\n")
+            return result
+
+        CuRoboProvider.plan_to_joints = labelled
     if oracle_prefixes:
         scene_builder = CapApi._planning_scene
 

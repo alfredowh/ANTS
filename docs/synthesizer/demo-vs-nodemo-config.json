@@ -10,7 +10,8 @@
     "held-out seeds 1 to 5 only",
     "the arms differ in scene text and evidence as well as the demonstration",
     "--attach-known and curobo-sim use simulator information (privileged)",
-    "debug seed 51 in the scaled scene for both arms"
+    "debug seed 51 in the scaled scene for both arms",
+    "Both arms ran before the attach frame fix: the held bowl's points were removed from the cloud, but its spheres were mounted 9.65 cm too high (inside the wrist), so cuRobo did not model the bowl as an obstacle. See docs/synthesizer/handoff-curobo-debug.md."
   ],
   "runs": {
     "demo": {

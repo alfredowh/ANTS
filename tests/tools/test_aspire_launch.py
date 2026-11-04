@@ -101,3 +101,18 @@ def test_removal_mask_cuts_around_observed_bowl_points():
     bowl = np.array([[0.0, 0.0, 0.005]])
     cut = launch.removal_mask(points, bowl, 0.02, np.zeros((0, 3)), 0.035)
     assert cut.tolist() == [True, False]
+
+
+def test_attached_spheres_are_written_in_the_panda_hand_frame():
+    """A point at the logged gripper site must land on panda_hand + the offset, by FK."""
+    import numpy as np
+
+    from ants.evalkit.panda import link_frames
+
+    # exp10 no-demo attempt 1, first plan with the gripper closed on the bowl (replay_clean/attach)
+    q = [0.2104, 0.7393, 0.0947, -1.8031, -0.1134, 2.5401, 1.1592]
+    logged_site = np.array([0.6178, 0.1925, 0.0385])
+    hand = np.asarray(link_frames(q)["panda_hand"], dtype=float)
+    site_in_hand = launch.ee_local_to_hand(np.zeros((1, 3)))
+    site_in_base = site_in_hand @ hand[:3, :3].T + hand[:3, 3]
+    assert site_in_base[0] == pytest.approx(logged_site, abs=0.002)

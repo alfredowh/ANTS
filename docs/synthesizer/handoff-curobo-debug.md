@@ -3,6 +3,28 @@
 For Claude Opus (or any coding agent). Read `AGENTS.md`, `docs/runbook/agent-access.md` and this file, then work.
 Do not print or commit `.env`. Muse tokens are not needed for anything below; if a step would spend them, stop and ask.
 
+## Status 2026-11-04: read this first (it corrects sections below)
+
+Found by reading the logged cuRobo responses and clouds. Numbers come from `data/runs/curobo/replay_framefix/` (seed 51 only).
+
+1. **Frame bug, fixed in `tools/aspire_launch.py`.** Attach spheres were computed in the gripper-site frame (`end_effector_poses`) but mounted on
+   `attached_object`, which is fixed to `panda_hand`. The site is 9.65 cm along the hand's z axis, so cuRobo modelled the held bowl 9.65 cm too high,
+   inside the wrist. Spheres touching `panda_link5` (not on the ignore list) gave `start state infeasible (self_collision)` at the lift. Every other overlap was with
+   ignored links, so the spheres protected nothing. **All attach runs before this fix are affected: exp09 to 11, exp12, the earlier replays.** Their benefit came only from
+   removing the bowl's points from the cloud. Test: `test_attached_spheres_are_written_in_the_panda_hand_frame`.
+2. **Effect (5 replays, one seed).** Exp10 no-demo attempts 1, 2 and 3 with SAM 3 masks, and attempts 1 and 2 with simulator masks, all succeed; attempts 1 and 3 have zero refusals. Attempt 1 had
+   failed under every earlier setting. This is one seed: a multi-seed run was started and stopped at the owner's request before any run finished (`replay_seeds`, no usable results).
+3. **Corrections to the hypotheses below.** H2 is out: the logged response says `start_state_feasible: true`, start scene collision 0, for the place refusal. H4 was wrong: the lift refusal was the frame bug, not the table.
+   Point 4 under "What is established" is resolved: the blockers of the place goal were a ghost of the hand and bowl at their current position, straight above the goal (−7 to +2 cm in height from the site, within 9.5 cm radially).
+   The oracle and simulator-mask tests each removed only one of the two sources, so they could not show this. My earlier statement that SAM 3 leakage is ruled out was unsound.
+4. **Remaining false negatives.** Attempt 2 still has 3 refusals, all the descent onto the rim with the gripper open and the bowl not yet held. The goal labeler marks all 3 free in the simulator (`replay_smoke`, simulator masks). In the SAM 3 run no cloud point is inside the goal spheres but 34 are within 1.5 cm, so these are rim points near the fingers.
+   The program does not pass `target_point_cloud`, so `exclude_radius_m` never applies to them. Untested fix: exclude the localized target from the cloud for grasp moves, in the launcher or through a generator rule. The program recovered with another grasp direction.
+5. **New tools.** `planner.label_goals` in the launcher scores each plan's goal on a copy of the simulator state, with the held bowl moved with the hand. `dev/curobo/goal_confusion.py` prints the confusion matrix. `replay_attach.py --seeds` takes acceptance seeds. The labeler scores the goal only, not the path.
+
+**Next, once the simulator is free:**
+`ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --out data/runs/curobo/replay_seeds --only exp10_nodemo_a1,exp10_nodemo_a2,exp10_nodemo_a3,exp10_clip233859_a3,exp10_clip233832_a2 --seeds 51,52,53`, then `--mode sparse`, then
+`uv run python dev/curobo/goal_confusion.py data/runs/curobo/replay_seeds/attach data/runs/curobo/replay_seeds/sparse`. Check that the fix does not add false positives (`plan_colliding`) and re-run the rack guard. With the bowl now modelled correctly, watch for new refusals at the place move (H5).
+
 ## Goal
 
 With `--planner curobo-sam3` (cuRobo plans on a depth cloud, the robot masked by SAM 3), cuRobo sometimes refuses a goal

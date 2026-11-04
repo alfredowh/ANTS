@@ -860,7 +860,8 @@
         "curobo.exp",
         "curobo.viewer",
         "report.run",
-        "curobo.replay"
+        "curobo.replay",
+        "curobo.goal-confusion"
       ],
       "inputs": [
         "data/demospecs/hurobo_233859.json",
@@ -932,7 +933,7 @@
         "data/runs/demo_e3_s4_sim/",
         "data/runs/nodemo_task_only_sim/"
       ],
-      "result": "Held-out seeds 1 to 5, two samples (T 0.2, 0.7) per arm. Demo: debug seed solved in 2 and 2 attempts; scaled 5/5 and 2/5, stock 4/5 and 3/5. No-demo: solved in 5 (no) and 3 attempts; scaled 4/5 and 4/5, stock 0/5 and 0/5. The arms also differ in scene text and evidence. Source: events.jsonl of each run."
+      "result": "Held-out seeds 1 to 5, two samples (T 0.2, 0.7) per arm. Demo: debug seed solved in 2 and 2 attempts; scaled 5/5 and 2/5, stock 4/5 and 3/5. No-demo: solved in 5 (no) and 3 attempts; scaled 4/5 and 4/5, stock 0/5 and 0/5. The arms also differ in scene text and evidence. Source: events.jsonl of each run. Ran before the attach frame fix: spheres 9.65 cm too high, see docs/synthesizer/handoff-curobo-debug.md."
     }
   ],
   "commands": [
@@ -3931,6 +3932,13 @@
           "desc": "Comma-separated labels (see PROGRAMS in the script). Default: all seven."
         },
         {
+          "flag": "--seeds",
+          "value": "51,52,53",
+          "kind": "value",
+          "on": false,
+          "desc": "Comma-separated acceptance seeds (51 to 65 only; default 51). Output folders end in _s<seed>."
+        },
+        {
           "flag": "--timeout-s",
           "value": "900",
           "kind": "value",
@@ -3938,7 +3946,7 @@
           "desc": "Per-run wall clock."
         }
       ],
-      "description": "Costs no model tokens (GPU and simulator only). Needs the SAM 3 and PyRoki services and the dev cuRobo service on 8118 (services.start, curobo.service). Runs one program at a time and resets the global attach file before each run; never start two at once. Written 2026-11-04 for the cuRobo false-negative debugging (docs/synthesizer/handoff-curobo-debug.md).",
+      "description": "Costs no model tokens (GPU and simulator only). Needs the SAM 3 and PyRoki services and the dev cuRobo service on 8118 (services.start, curobo.service). Runs one program at a time and resets the global attach file before each run; never start two at once. Written 2026-11-04 for the cuRobo false-negative debugging (docs/synthesizer/handoff-curobo-debug.md). Every plan's goal is labelled against the simulator (planner.label_goals); score with curobo.goal-confusion. Do not run while another simulator is running.",
       "examples": [
         {
           "title": "Two programs, attach on",
@@ -3959,7 +3967,32 @@
         "data/runs/curobo/exp10|exp11 program_attempt*.py"
       ],
       "out": [
-        "<out>/<mode>/<label>/result.json"
+        "<out>/<mode>/<label>_s<seed>/result.json",
+        "<out>/<mode>/<label>_s<seed>/goal_labels.jsonl"
+      ]
+    },
+    {
+      "id": "curobo.goal-confusion",
+      "title": "Score cuRobo verdicts against the simulator (false negatives and positives)",
+      "group": "experiments",
+      "runner": "ants",
+      "base": "dev/curobo/goal_confusion.py data/runs/curobo/replay_seeds/attach data/runs/curobo/replay_seeds/sparse",
+      "args": [],
+      "description": "Reads the goal labels from curobo.replay. A refused goal that has no forbidden contact in the simulator is a false negative. Goal state only, not the path. No tokens, no GPU.",
+      "examples": [
+        {
+          "title": "Attach against sparse",
+          "cmd": "uv run python dev/curobo/goal_confusion.py data/runs/curobo/replay_seeds/attach data/runs/curobo/replay_seeds/sparse"
+        }
+      ],
+      "modules": [
+        "launcher"
+      ],
+      "in": [
+        "goal_labels.jsonl"
+      ],
+      "out": [
+        "stdout"
       ]
     }
   ]
