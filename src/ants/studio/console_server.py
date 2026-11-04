@@ -220,9 +220,13 @@ def stream_muse_exec(
 
 @dataclass
 class LoopRunConfig:
-    """What the Run button drives in "loop" mode: the real closed loop, mock System 2 backend."""
+    """What the Run button drives in "loop" mode: the real closed loop, mock System 2 backend.
 
-    cycles: int = 6
+    Defaults kept deliberately small (3 cycles, 1 nominal seed, W=2) so a click-through demo stays
+    cheap and fast; pass the CLI flags for a fuller run.
+    """
+
+    cycles: int = 3
     categories: tuple[str, ...] | None = None  # None = AdversaryConfig's own default (all)
     rho: float = 0.8  # severity bound, Bounds(default=rho)
     eta: float = 0.2
@@ -232,9 +236,10 @@ class LoopRunConfig:
     )
     n_agents: int = 4
     stop_mode: str = "min_tests"
-    min_tests: int = 3
+    min_tests: int = 2
     tau: float = 0.1
-    stall_window: int = 3
+    stall_window: int = 2  # W: cycles one failure signature may stall before escalation
+    nominal_seeds: tuple[int, ...] = (51,)  # acceptance seeds for the nominal cases
     synth_token_budget: int = 200_000
     reasoning_effort: str = "high"
     max_model_steps: int = 20
@@ -284,7 +289,12 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
     )
     synth = GenerateSynthesizer(generate=muse_orch, workdir=run_dir / "work")
 
-    loop_cfg = LoopConfig(cycles=cfg.cycles, stall_window=cfg.stall_window, out=run_dir)
+    loop_cfg = LoopConfig(
+        cycles=cfg.cycles,
+        stall_window=cfg.stall_window,
+        nominal_seeds=cfg.nominal_seeds,
+        out=run_dir,
+    )
     loop = Loop(adv, synth, loop_cfg)
 
     log_path = run_dir / "loop.jsonl"
@@ -358,6 +368,8 @@ def make_handler(
                 "rho": loop_cfg.rho,
                 "eta": loop_cfg.eta,
                 "stall_window": loop_cfg.stall_window,
+                "nominal_seeds": list(loop_cfg.nominal_seeds),
+                "min_tests": loop_cfg.min_tests,
                 "synth_token_budget": loop_cfg.synth_token_budget,
                 "reasoning_effort": loop_cfg.reasoning_effort,
                 "max_model_steps": loop_cfg.max_model_steps,

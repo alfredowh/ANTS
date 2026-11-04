@@ -115,7 +115,8 @@ if (DATA.mode === "loop" && DATA.loop_config) {
   const c = DATA.loop_config;
   document.getElementById("config-tiles").innerHTML = [
     ["Max cycles", c.cycles], ["Severity (rho)", c.rho], ["Eta", c.eta],
-    ["Stall window (W)", c.stall_window], ["Adversary model", c.adversary_model],
+    ["Stall window (W)", c.stall_window], ["Nominal seeds", c.nominal_seeds.join(", ")],
+    ["Min tests to stop", c.min_tests], ["Adversary model", c.adversary_model],
     ["Reasoning effort", c.reasoning_effort], ["Max model steps", c.max_model_steps],
     ["Synth token budget", c.synth_token_budget],
   ].map(([l, v]) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("");

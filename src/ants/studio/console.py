@@ -42,8 +42,8 @@ def main() -> None:
         default=20,
         help="hard cap on Muse Code tool/model steps per rewrite call",
     )
-    # loop-mode only
-    parser.add_argument("--cycles", type=int, default=6, help="max attacks in the loop")
+    # loop-mode only -- small defaults (3 cycles, 1 nominal seed, W=2) for a cheap, fast demo
+    parser.add_argument("--cycles", type=int, default=3, help="max attacks in the loop")
     parser.add_argument(
         "--categories", default=None, help="comma-separated attack categories (default: all)"
     )
@@ -56,9 +56,14 @@ def main() -> None:
     )
     parser.add_argument("--n-agents", type=int, default=4, help="System 2 proposer agents")
     parser.add_argument("--stop-mode", choices=("min_tests", "posterior"), default="min_tests")
-    parser.add_argument("--min-tests", type=int, default=3)
+    parser.add_argument("--min-tests", type=int, default=2)
     parser.add_argument("--tau", type=float, default=0.1)
-    parser.add_argument("--stall-window", type=int, default=3, help="W: cycles before escalation")
+    parser.add_argument("--stall-window", type=int, default=2, help="W: cycles before escalation")
+    parser.add_argument(
+        "--nominal-seeds",
+        default="51",
+        help="comma-separated acceptance seeds for the nominal cases (default: one seed)",
+    )
     parser.add_argument(
         "--synth-token-budget",
         type=int,
@@ -78,6 +83,7 @@ def main() -> None:
         min_tests=args.min_tests,
         tau=args.tau,
         stall_window=args.stall_window,
+        nominal_seeds=tuple(int(s) for s in args.nominal_seeds.split(",")),
         synth_token_budget=args.synth_token_budget,
         reasoning_effort=args.reasoning_effort,
         max_model_steps=args.max_model_steps,
