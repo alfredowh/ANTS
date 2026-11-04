@@ -484,16 +484,11 @@ const runBtn = document.getElementById("run-btn");
 let turnCount = 0;
 let rewriteTokenTotal = 0;
 let cycleDetails = [];
+let currentRunName = null;
 
-turnsEl.addEventListener("click", (e) => {
-  const tk = e.target.closest(".tk");
-  if (tk && !e.target.closest("a,button")) {
-    tk.closest(".turn").classList.toggle("collapsed");
-    return;
-  }
-  const link = e.target.closest(".details-link");
-  if (!link) return;
-  const row = cycleDetails[+link.dataset.detailI];
+function openCycleDetailModal(idx) {
+  const row = cycleDetails[idx];
+  if (!row) return;
   const detail = row.rewrite_detail || {};
   const u = detail.usage || {};
   openModal(`
@@ -511,6 +506,17 @@ turnsEl.addEventListener("click", (e) => {
     </div>
     <div class="section"><div class="h">Program changes vs. the failed program</div><div class="delta">${esc(row.diff || "(no diff)")}</div></div>
   `);
+}
+
+turnsEl.addEventListener("click", (e) => {
+  const tk = e.target.closest(".tk");
+  if (tk && !e.target.closest("a,button")) {
+    tk.closest(".turn").classList.toggle("collapsed");
+    return;
+  }
+  const link = e.target.closest(".details-link");
+  if (!link) return;
+  openCycleDetailModal(+link.dataset.detailI);
 });
 
 function setStatus(kind, text) {
@@ -610,6 +616,7 @@ function handleLoopEvent(row) {
       if (row.rewrite_detail) {
         const idx = cycleDetails.push(row) - 1;
         main += `<br><span class="details-link" data-detail-i="${idx}">View details (reasoning, diff, cache)</span>`;
+        renderSynthPanel();
       }
     }
     if (row.gate) {
@@ -649,6 +656,7 @@ function handleAttackEvent(a) {
     setSys("orch", true, "replaying candidate / checking robust");
   }
   addTurn("task", `<div class="tk">attack ${esc(a.attack_id)}</div><div class="main">System 2 attacked with <b>${esc(a.category)}</b> (severity ${a.severity}) &rarr; <b>${esc(a.outcome)}</b></div>`);
+  renderAdvPanel();
 }
 
 function handleDone(payload) {
@@ -747,6 +755,8 @@ function openStream() {
       }
       document.getElementById("run-folder").textContent = "saving to " + data.run_dir;
       addTurn("task", `<div class="tk">run started</div><div class="main">saving this run to <b>${esc(data.run_dir)}</b> (backend: ${esc(data.backend)})</div>`);
+      currentRunName = data.run_dir.split("/").pop();
+      renderAdvPanel();
     }
     else if (data.kind === "perception_run") percGoLive(data.run_id);
     else if (data.kind === "perception_keyframe") percPushKeyframe(data);
@@ -781,6 +791,9 @@ runBtn.addEventListener("click", () => {
   document.getElementById("restored-note")?.remove();
   rewriteTokenTotal = 0;
   cycleDetails = [];
+  currentRunName = null;
+  renderSynthPanel();
+  renderAdvPanel();
   runBtn.disabled = true;
   turnCount = 0;
   turnsEl.innerHTML = "";
@@ -881,6 +894,89 @@ document.getElementById("chat-send").addEventListener("click", sendChat);
 document.getElementById("chat-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") sendChat();
 });
+
+/* ---------- Perception tab: Synthesizer / Adversary detail toggle ----------
+   Merges the loop's own rollout/result logging into one place: the Synthesizer side reuses
+   cycleDetails (same data the per-cycle "View details" modal already uses), the Adversary side
+   reads this run's attacks.jsonl (written in ants.studio.run's exact row shape by on_attack in
+   console_server.py, so it is readable by Daniel's existing Replay-view data shape too). Either
+   side shows a simple "missing" badge instead of an error when a run has no such logging yet
+   (an old run folder, or a run that hasn't reached its first attack/repair). */
+let percDetailSide = "synth";
+
+function setPercDetailBadge(hasData) {
+  const el = document.getElementById("perc-detail-badge");
+  el.textContent = hasData ? "archived" : "missing";
+  el.className = "src-badge" + (hasData ? "" : " missing");
+}
+
+function renderSynthPanel() {
+  const body = document.getElementById("perc-detail-synth-body");
+  if (!cycleDetails.length) {
+    body.innerHTML = `<div class="perc-empty">no repairs logged yet for this run</div>`;
+  } else {
+    body.innerHTML = cycleDetails.map((row, idx) => {
+      const detail = row.rewrite_detail || {};
+      const why = (detail.why || "").slice(0, 200);
+      return `<div class="turn">
+        <div class="tk">cycle ${esc(String(row.cycle))} &middot; v${esc(row.policy_version ?? "?")} &rarr; v${esc(row.candidate_version ?? "?")}</div>
+        <div class="main">${esc(why) || "(no WHY note)"}</div>
+        <span class="details-link" data-detail-i="${idx}">View full details</span>
+      </div>`;
+    }).reverse().join("");
+  }
+  if (percDetailSide === "synth") setPercDetailBadge(cycleDetails.length > 0);
+}
+
+function renderAdvPanel() {
+  const body = document.getElementById("perc-detail-adv-body");
+  if (!currentRunName) {
+    body.innerHTML = `<div class="perc-empty">no run yet</div>`;
+    if (percDetailSide === "adv") setPercDetailBadge(false);
+    return;
+  }
+  fetch("/attacks/" + encodeURIComponent(currentRunName))
+    .then((r) => { if (!r.ok) throw new Error("no attacks.jsonl"); return r.text(); })
+    .then((text) => {
+      const rows = text.split("\n").filter((l) => l.trim()).map((l) => {
+        try { return JSON.parse(l); } catch (e) { return null; }
+      }).filter(Boolean);
+      if (!rows.length) {
+        body.innerHTML = `<div class="perc-empty">no attacks logged yet</div>`;
+      } else {
+        body.innerHTML = rows.map((row) => {
+          const p = (row.report && row.report.perturbation) || {};
+          const res = (row.report && row.report.result) || {};
+          return `<div class="turn">
+            <div class="tk">${esc(p.category || "?")} &middot; severity ${p.severity ?? "?"}</div>
+            <div class="main"><b>${esc(res.outcome || "?")}</b>${row.explanation ? "<br>" + esc(row.explanation) : ""}</div>
+          </div>`;
+        }).reverse().join("");
+      }
+      if (percDetailSide === "adv") setPercDetailBadge(rows.length > 0);
+    })
+    .catch(() => {
+      body.innerHTML = `<div class="perc-empty">no attacks logged yet</div>`;
+      if (percDetailSide === "adv") setPercDetailBadge(false);
+    });
+}
+
+function switchPercDetailSide(side) {
+  percDetailSide = side;
+  document.getElementById("perc-side-synth").classList.toggle("on", side === "synth");
+  document.getElementById("perc-side-adv").classList.toggle("on", side === "adv");
+  document.getElementById("perc-detail-synth-body").hidden = side !== "synth";
+  document.getElementById("perc-detail-adv-body").hidden = side !== "adv";
+  if (side === "synth") renderSynthPanel(); else renderAdvPanel();
+}
+document.getElementById("perc-side-synth").addEventListener("click", () => switchPercDetailSide("synth"));
+document.getElementById("perc-side-adv").addEventListener("click", () => switchPercDetailSide("adv"));
+document.getElementById("perc-detail-synth-body").addEventListener("click", (e) => {
+  const link = e.target.closest(".details-link");
+  if (link) openCycleDetailModal(+link.dataset.detailI);
+});
+renderSynthPanel();
+renderAdvPanel();
 
 openStream();
 restoreUiState();

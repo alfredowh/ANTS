@@ -205,6 +205,17 @@ def _live_asset_path(run_id: str, rest: str, *, overlay: bool) -> Path | None:
     return resolved if resolved.exists() else None
 
 
+def _attacks_jsonl_path(out_dir: Path, run_name: str) -> Path | None:
+    """Resolve a /attacks/<run_name> request, refusing anything outside out_dir."""
+    candidate = out_dir / run_name / "attacks.jsonl"
+    try:
+        resolved = candidate.resolve()
+        resolved.relative_to(out_dir.resolve())
+    except (OSError, ValueError):
+        return None
+    return resolved if resolved.exists() else None
+
+
 TOOLS_LEFT = [
     {
         "name": "localize_object",
@@ -533,6 +544,14 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
                 "policy_version": attacked_policy.version,
             }
         )
+        # Also log this attack in Daniel's studio.run row shape (attacks.jsonl), so this run
+        # becomes readable by his Replay-view data shape, not just this console's own loop.jsonl.
+        try:
+            from ants.studio.run import append_row, attack_row
+
+            append_row(run_dir / "attacks.jsonl", attack_row(adv, report, attacked_policy))
+        except Exception as exc:  # noqa: BLE001 -- logging must never break the loop
+            state.broadcast({"kind": "error", "message": f"attacks.jsonl logging failed: {exc}"})
 
     def ask_human(escalation):
         from ants.orchestrator.human_gate import GateAnswer
@@ -779,6 +798,23 @@ def make_handler(
                 self.send_header("Content-Type", "image/png")
                 self.send_header("Content-Length", str(len(body)))
                 self.send_header("Cache-Control", "no-cache")  # live: never cache a stale frame
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if path.startswith("/attacks/"):
+                run_name = path[len("/attacks/") :]
+                attacks_path = (
+                    _attacks_jsonl_path(loop_cfg.out_dir, run_name) if loop_cfg else None
+                )
+                if attacks_path is None:
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                body = attacks_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/x-ndjson")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-cache")  # appended to live during a run
                 self.end_headers()
                 self.wfile.write(body)
                 return
