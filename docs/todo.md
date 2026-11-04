@@ -245,7 +245,7 @@ LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl
 LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
 ```
 
-**Exp 12: demo vs no demo on cuRobo (simulator robot mask, attached bowl)** (final (submission experiment, tag submission-experiment))
+**Demo vs no demo on cuRobo (simulator robot mask, attached bowl)** (final (submission experiment, tag submission-experiment))
 
 ```bash
 uv run python -m ants.orchestrator.demo_vs_nodemo \

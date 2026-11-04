@@ -1347,16 +1347,16 @@ Orbit rings used above:
 cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py --n-frames 32 --height 0.95 --out-dir ../data/runs/mapper_probe/frames_orbit_r1 && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py --n-frames 32 --height 1.35 --radius 0.5 --out-dir ../data/runs/mapper_probe/frames_orbit_r2
 ```
 
-## Exp 12: demo vs no demo on cuRobo (simulator robot mask, attached bowl)
+## Demo vs no demo on cuRobo (simulator robot mask, attached bowl)
 
 *final (submission experiment, tag submission-experiment).* With cuRobo planning and the held bowl attached, does one human demonstration (plus S4 scene text and E3 repair evidence) beat task text only?
 
-- Docs: `docs/synthesizer/exp12/analysis.ipynb` · run dir: `data/runs/demo_e3_s4_sim | data/runs/nodemo_task_only_sim`
+- Docs: `docs/synthesizer/show-once-vs-task-only/demo_vs_no_demo_analysis.ipynb` · run dir: `data/runs/demo_e3_s4_sim | data/runs/nodemo_task_only_sim`
 - Inputs: data/demospecs/hurobo_233859.json; data/scene_text/S4_L1.txt
 - Outputs: data/runs/demo_e3_s4_sim/; data/runs/nodemo_task_only_sim/
 - Result so far: Held-out seeds 1 to 5, two samples (T 0.2, 0.7) per arm. Demo: debug seed solved in 2 and 2 attempts; scaled 5/5 and 2/5, stock 4/5 and 3/5. No-demo: solved in 5 (no) and 3 attempts; scaled 4/5 and 4/5, stock 0/5 and 0/5. The arms also differ in scene text and evidence. Source: events.jsonl of each run. Ran before the attach frame fix: spheres 9.65 cm too high, see docs/synthesizer/handoff-curobo-debug.md.
 
-### `exp12.demo`: Exp 12 demo arm: demo + S4 + E3 on cuRobo (paid)
+### `exp12.demo`: Demo vs no demo, demo arm: demo + S4 + E3 on cuRobo (paid)
 
 Needs the SAM 3 and PyRoki services and the dev cuRobo service on port 8118 (runbook entries services.start and curobo.service). Settings saved in docs/synthesizer/demo-vs-nodemo-config.json. Run the demo and no-demo commands one after the other, not in parallel.
 
@@ -1401,13 +1401,13 @@ uv run python -m ants.orchestrator.demo_vs_nodemo \
 | `--contacts` |  | yes | Log simulator contacts per attempt. |
 | `--scene-text-file` | `data/scene_text/S4_L1.txt` | yes | S4 scene text (regenerate with g_scene_text('S4','L1') in ants.orchestrator.scene_context_exp). |
 
-Exp 12 demo arm: demo + S4 + E3 on cuRobo:
+Demo vs no demo, demo arm: demo + S4 + E3 on cuRobo:
 
 ```bash
 uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --temperatures 0.2,0.7 --explain --repairs 4 --planner curobo-sim --attach-known --save-clouds --debug-scene scaled --scenes scaled --eval-seeds 1,2,3,4,5 --token-budget 300000 --demospec data/demospecs/hurobo_233859.json --out data/runs/demo_e3_s4_sim --arms demo --evidence e3 --contacts --scene-text-file data/scene_text/S4_L1.txt
 ```
 
-### `exp12.nodemo`: Exp 12 no-demo arm: task text only on cuRobo (paid)
+### `exp12.nodemo`: Demo vs no demo, no-demo arm: task text only on cuRobo (paid)
 
 Needs the SAM 3 and PyRoki services and the dev cuRobo service on port 8118 (runbook entries services.start and curobo.service). Settings saved in docs/synthesizer/demo-vs-nodemo-config.json. Run the demo and no-demo commands one after the other, not in parallel.
 
@@ -1446,7 +1446,7 @@ uv run python -m ants.orchestrator.demo_vs_nodemo \
 | `--eval-seeds` | `1,2,3,4,5` | yes | Held-out seeds, reporting only. |
 | `--token-budget` | `300000` | yes | Hard cap on new tokens per command. Observed: demo 204,933, no-demo 247,243 (about 2.8 and 3.3 USD). |
 
-Exp 12 no-demo arm: task text only on cuRobo:
+Demo vs no demo, no-demo arm: task text only on cuRobo:
 
 ```bash
 uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --temperatures 0.2,0.7 --explain --repairs 4 --planner curobo-sim --attach-known --save-clouds --debug-scene scaled --scenes scaled --eval-seeds 1,2,3,4,5 --token-budget 300000 --demospec data/demospecs/hurobo_233859.json --out data/runs/nodemo_task_only_sim --arms nodemo

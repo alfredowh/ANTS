@@ -130,7 +130,7 @@ PYTHONPATH=src ASPIRE/.venv-libero/bin/python dev/curobo/make_viewer.py data/run
 
 ## Where the evidence lives
 
-- Final demo vs no-demo experiment (Exp 12): `docs/synthesizer/exp12/` (snapshot, notebook), settings in `docs/synthesizer/demo-vs-nodemo-config.json`.
+- Final demo vs no-demo experiment (the demo vs no demo run): `docs/synthesizer/show-once-vs-task-only/` (snapshot, notebook), settings in `docs/synthesizer/demo-vs-nodemo-config.json`.
 - cuRobo replays: `data/runs/curobo/replay_clean/`, `replay_oracle/`, `replay_simmask/` (git-ignored; ask the owner for the zip).
 - Earlier cuRobo docs: `docs/synthesizer/experiment-06-08-curobo.md`, `experiment-09-11-curobo-attach.md`, `dev/curobo/README.md`,
   `docs/perception/scene-reconstruction-probe.md` (the fused-mesh probe; not wired into the planner).

@@ -313,11 +313,11 @@ LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl
 LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
 ```
 
-## Exp 12: demo vs no demo on cuRobo (simulator robot mask, attached bowl)
+## Demo vs no demo on cuRobo (simulator robot mask, attached bowl)
 
-With cuRobo planning and the held bowl attached, does one human demonstration (plus S4 scene text and E3 repair evidence) beat task text only? Details: `docs/synthesizer/exp12/analysis.ipynb`.
+With cuRobo planning and the held bowl attached, does one human demonstration (plus S4 scene text and E3 repair evidence) beat task text only? Details: `docs/synthesizer/show-once-vs-task-only/demo_vs_no_demo_analysis.ipynb`.
 
-**Exp 12 demo arm: demo + S4 + E3 on cuRobo** (spends Muse tokens)
+**Demo vs no demo, demo arm: demo + S4 + E3 on cuRobo** (spends Muse tokens)
 
 ```bash
 uv run python -m ants.orchestrator.demo_vs_nodemo \
@@ -340,7 +340,7 @@ uv run python -m ants.orchestrator.demo_vs_nodemo \
     --scene-text-file data/scene_text/S4_L1.txt
 ```
 
-**Exp 12 no-demo arm: task text only on cuRobo** (spends Muse tokens)
+**Demo vs no demo, no-demo arm: task text only on cuRobo** (spends Muse tokens)
 
 ```bash
 uv run python -m ants.orchestrator.demo_vs_nodemo \
