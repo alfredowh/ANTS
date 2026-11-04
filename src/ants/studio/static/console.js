@@ -825,7 +825,7 @@ function restoreUiState() {
   if (snap.sceneKind) renderScene2D(snap.sceneKind);
   const note = document.createElement("div");
   note.id = "restored-note";
-  note.style.cssText = "font-size:10.5px;color:var(--dim);margin-bottom:8px";
+  note.style.cssText = "font-size:13.2px;color:var(--dim);margin-bottom:8px";
   note.textContent = "restored from this browser's last session (" + new Date(snap.ts).toLocaleString() + ")";
   turnsEl.parentElement.insertBefore(note, turnsEl);
 }

@@ -19,12 +19,12 @@
 }
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--fg)}
-body{font:13px/1.45 var(--sans)}
+body{font:15.7px/1.45 var(--sans)}
 a{color:var(--fg)} a:hover{color:var(--hi)}
 button{font:inherit}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .mono{font-family:var(--mono)}
-.h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500}
+.h{font-size:13.7px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500}
 .ico{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:square;flex:none}
 header{display:flex;flex-wrap:wrap;align-items:center;gap:24px;min-height:52px;border-bottom:1px solid var(--line);
   padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
@@ -40,15 +40,15 @@ nav{display:flex;align-self:stretch}
 .kv{display:grid;grid-template-columns:1fr auto;gap:6px 12px;color:var(--soft)}
 .tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
 .tile{background:var(--panel);padding:14px 16px}
-.tile .l{font-size:12px;color:var(--muted)} .tile .v{font-family:var(--mono);font-size:22px}
+.tile .l{font-size:14.7px;color:var(--muted)} .tile .v{font-family:var(--mono);font-size:24.7px}
 .strip{display:flex;gap:2px;height:36px}
 .strip a{flex:1;min-width:3px;display:block}
-.legend{display:flex;flex-wrap:wrap;gap:20px;font-size:12px;color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:20px;font-size:14.7px;color:var(--muted)}
 .legend span{display:flex;align-items:center;gap:6px}
 .sw{width:10px;height:10px;display:inline-block}
 .tblwrap{overflow-x:auto}
 table.log{width:100%;border-collapse:collapse;min-width:640px}
-.log th{text-align:left;font-weight:500;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);padding:8px 14px 8px 0;border-bottom:1px solid var(--line)}
+.log th{text-align:left;font-weight:500;font-size:13.7px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);padding:8px 14px 8px 0;border-bottom:1px solid var(--line)}
 .log td{padding:9px 14px 9px 0;border-bottom:1px solid #1A1A1A;vertical-align:middle}
 .log tr.row{cursor:pointer} .log tr.row:hover{background:var(--raise)}
 .bars{display:grid;grid-template-columns:72px minmax(0,1fr) 64px;gap:10px;align-items:center;color:var(--soft)}
@@ -60,7 +60,7 @@ table.log{width:100%;border-collapse:collapse;min-width:640px}
 .list a.on.pass{border-left-color:var(--fg)}
 .grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
 .grid2>div{background:var(--panel);padding:12px}
-.grid2 .l{font-size:11.5px;color:var(--muted)}
+.grid2 .l{font-size:14.2px;color:var(--muted)}
 .code{background:var(--panel);border:1px solid var(--line);padding:8px 0;font:12px/1.85 var(--mono);overflow-x:auto;max-height:340px;overflow-y:auto}
 .code div{white-space:pre;padding:0 12px;color:var(--dim)}
 .code div.hl{background:var(--line2);color:var(--hi);border-left:2px solid var(--fail);padding-left:10px}
@@ -76,20 +76,20 @@ table.log{width:100%;border-collapse:collapse;min-width:640px}
 .badge{font:500 10.5px/1 var(--mono);padding:3px 6px;border:1px solid var(--line);color:var(--muted);text-transform:uppercase;letter-spacing:.05em;width:fit-content}
 .badge.acc{border-color:var(--accent);color:var(--accent)} .badge.meta{border-color:var(--meta);color:var(--meta)} .badge.fail{border-color:var(--fail);color:var(--fail)}
 .tl{border:1px solid var(--line);background:var(--panel)}
-.tlhead{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:8px 12px;border-bottom:1px solid var(--line);color:var(--muted);font-size:11.5px}
+.tlhead{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:8px 12px;border-bottom:1px solid var(--line);color:var(--muted);font-size:14.2px}
 .tlbody{display:grid;grid-template-columns:92px minmax(0,1fr)}
-.tlnames>div{display:flex;align-items:center;padding:0 12px;border-bottom:1px solid var(--line2);font-size:11.5px;color:var(--muted)}
+.tlnames>div{display:flex;align-items:center;padding:0 12px;border-bottom:1px solid var(--line2);font-size:14.2px;color:var(--muted)}
 .tlarea{position:relative;border-left:1px solid var(--line);overflow:hidden}
 .lane{position:relative;border-bottom:1px solid var(--line2)}
-.ph{position:absolute;top:0;bottom:0;display:flex;align-items:center;padding-left:8px;font-size:11.5px;font-weight:500;color:#0A0A0A;overflow:hidden;white-space:nowrap;border-right:1px solid #000}
+.ph{position:absolute;top:0;bottom:0;display:flex;align-items:center;padding-left:8px;font-size:14.2px;font-weight:500;color:#0A0A0A;overflow:hidden;white-space:nowrap;border-right:1px solid #000}
 .dm{position:absolute;top:50%;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;transform:rotate(45deg);background:var(--muted)}
 .dm.f{background:var(--fail)}
 .flag{position:absolute;top:0;bottom:0;width:1px}
 .flag span{position:absolute;top:6px;left:1px;font:500 10.5px/1 var(--mono);padding:2px 5px;color:#000;white-space:nowrap}
-.note{color:var(--muted);font-size:12px}
-.empty{color:var(--dim);font-size:12.5px;border:1px dashed var(--line);padding:14px}
+.note{color:var(--muted);font-size:14.7px}
+.empty{color:var(--dim);font-size:15.2px;border:1px dashed var(--line);padding:14px}
 p{margin:0}
-h1{margin:0;font-size:17px;font-weight:500}
+h1{margin:0;font-size:19.7px;font-weight:500}
 @media (max-width:700px){.left,.right{max-width:none;border-right:0}.main{border-right:0}}
 @media (prefers-reduced-motion:no-preference){.agent,.list a,.log tr{transition:background .12s}}
 </style>
@@ -283,7 +283,7 @@ function timeline(a){
     return `<div class="flag" style="left:${(at*100).toFixed(2)}%;background:${color}"><span style="background:${color};${side}">${label}</span></div>`; };
   const fIdx = a.first_fail ?? (failed(a) ? n - 0.5 : null);
   return `<section class="tl" aria-label="Timeline">
-    <div class="tlhead"><span class="mono" style="color:var(--hi);font-size:14px">${a.calls.length} primitive calls</span><div style="flex:1"></div>
+    <div class="tlhead"><span class="mono" style="color:var(--hi);font-size:16.7px">${a.calls.length} primitive calls</span><div style="flex:1"></div>
       <span class="mono">P perturbation applied at reset</span><span class="mono">D first call that differs from the nominal run</span><span class="mono">F first failed call</span></div>
     <div class="tlbody">
       <div class="tlnames"><div style="height:30px"></div><div style="height:34px">Phase</div><div style="height:30px">Calls</div><div style="height:30px">Events</div></div>
@@ -345,7 +345,7 @@ function replay(id){
         <div><div class="l">Regression gate</div><div style="color:${a.loop ? (a.loop.decision === "accepted" ? "var(--hi)" : "var(--fail)") : "var(--muted)"}">${a.loop && a.loop.decision ? DEC[a.loop.decision][0] : "not run"}</div></div>
       </div></section>
     <section style="display:flex;flex-direction:column;gap:8px"><div class="h" style="display:flex;justify-content:space-between"><span>What went wrong</span><span style="letter-spacing:0;text-transform:none;${a.explanation_source==="model"?"color:var(--meta)":""}">${a.explanation_source==="model"?"Muse Spark":"template"}</span></div>
-      <p style="font-size:14px;line-height:1.6">${esc(a.explanation)}</p></section>
+      <p style="font-size:16.7px;line-height:1.6">${esc(a.explanation)}</p></section>
     <section style="display:flex;flex-direction:column;gap:8px"><div class="h" style="display:flex;justify-content:space-between"><span>Root cause</span><span class="mono" style="letter-spacing:0;text-transform:none">${a.line ? "v"+a.version+" · line "+a.line : ""}</span></div>
       <p style="color:var(--soft)">${esc(a.root_cause)}</p>${codeBlock(a.line, a.version)}</section>
     <section style="display:flex;flex-direction:column;gap:8px"><div class="h" style="display:flex;justify-content:space-between"><span>Constraint for Synthesizer</span><span class="mono" style="letter-spacing:0;text-transform:none">${esc((a.evidence||[])[0]||"")}</span></div>
@@ -354,7 +354,7 @@ function replay(id){
       ${a.loop && a.loop.gate ? "" : '<p class="note">' + (L ? "No rewrite was attempted for this attack." : "Rewrite and gate verdict appear here once Synthesizer is connected.") + "</p>"}</section>
     ${a.loop && a.loop.gate ? `<section style="display:flex;flex-direction:column;gap:8px"><div class="h" style="display:flex;justify-content:space-between"><span>Rewrite v${a.loop.policy_version} → v${a.loop.candidate_version}</span>${decBadge(a.loop.decision)}</div>
       ${gateBlock(a.loop.gate)}${diffBlock(a.loop.diff)}</section>` : ""}` :
-    `<section style="display:flex;flex-direction:column;gap:8px"><div class="h">Result</div><p style="font-size:14px">${a.outcome === "error" ? "The program crashed (" + esc(a.error) + "). Crashes are not counted as task failures." : "The program finished the task under this perturbation."}</p></section>`;
+    `<section style="display:flex;flex-direction:column;gap:8px"><div class="h">Result</div><p style="font-size:16.7px">${a.outcome === "error" ? "The program crashed (" + esc(a.error) + "). Crashes are not counted as task failures." : "The program finished the task under this perturbation."}</p></section>`;
   return `<div class="cols">
   <aside class="left">
     <div class="h pad" style="padding-bottom:10px">Program versions</div>
@@ -372,7 +372,7 @@ function replay(id){
     <div style="display:flex;flex-wrap:wrap;align-items:flex-end;gap:14px">
       <div><h1>Attack #${a.n} · ${esc(a.category)} <span style="color:${failed(a)?"var(--fail)":"var(--muted)"};font-weight:400">${failed(a)?"failed":a.outcome==="error"?"program error":"passed"}</span></h1>
       <span class="mono note">${esc(params(a.params))} · severity ${fx(a.severity)} · seed ${esc(a.seed)}</span></div></div>
-    ${a.rationale && a.proposal.source==="model" ? `<p style="color:var(--soft);font-size:14px;max-width:80ch">“${esc(a.rationale)}”</p>` : ""}
+    ${a.rationale && a.proposal.source==="model" ? `<p style="color:var(--soft);font-size:16.7px;max-width:80ch">“${esc(a.rationale)}”</p>` : ""}
     ${timeline(a)}
     ${why(a)}
   </main>
