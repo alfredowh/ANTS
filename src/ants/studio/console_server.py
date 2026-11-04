@@ -7,11 +7,11 @@ stream into the browser as they happen.
 
 Two modes, picked by `--mode`:
 - "loop" (default): drives the real closed loop, `ants.orchestrator.loop.Loop`, against the mock
-  System 2 backend (free, offline, already tested) with System 1's repair step real (`muse exec`
+  Adversary backend (free, offline, already tested) with Synthesizer's repair step real (`muse exec`
   via `MuseOrchestrator`). Only consumes `orchestrator`'s and `adversary`'s public APIs (`Loop`,
   `LoopConfig`, `Adversary`, `AdversaryConfig`, `GenerateSynthesizer`, `MuseOrchestrator`) the same
   way `orchestrator/run.py` and the tests do -- nothing here edits those packages.
-- "single": the original v1 scope, one Phase A repair step with no System 2 call at all. Kept for
+- "single": the original v1 scope, one Phase A repair step with no Adversary call at all. Kept for
   a cheaper/faster demo path. This mode shells out to `muse exec --json` directly instead of going
   through `muse_cli.py`, reading its stdout line by line instead of waiting for the whole subprocess
   to finish, so it has no dependency on `orchestrator/` at all.
@@ -56,8 +56,9 @@ def _assemble_shell() -> str:
         shell = shell.replace(marker, content)
     return shell
 
+
 # Archived example only: a real simulator rollout's agentview keyframes (exp04_scene, E3 evidence
-# arm, sample0). This console's own loop runs System 2 on the mock backend, which has no simulator
+# arm, sample0). This console's own loop runs Adversary on the mock backend, which has no simulator
 # or camera -- there is nothing live to show here yet. Kept as a labelled reference, not live data.
 AGENTVIEW_ARCHIVE_BASE = REPO_ROOT / "data" / "runs" / "exp04_scene" / "E-E3" / "sample0"
 
@@ -219,27 +220,27 @@ def _attacks_jsonl_path(out_dir: Path, run_name: str) -> Path | None:
 TOOLS_LEFT = [
     {
         "name": "localize_object",
-        "role": "System 1 primitive",
+        "role": "Synthesizer primitive",
         "desc": "perception lookup, returns a pose + point cloud",
     },
     {
         "name": "generate_grasps / select_grasp",
-        "role": "System 1 primitive",
+        "role": "Synthesizer primitive",
         "desc": "grasp candidates from the harness",
     },
     {
         "name": "move_to_pose",
-        "role": "System 1 primitive",
+        "role": "Synthesizer primitive",
         "desc": "motion planning to a target pose",
     },
     {
         "name": "close_gripper / open_gripper",
-        "role": "System 1 primitive",
+        "role": "Synthesizer primitive",
         "desc": "reports held / not held from contact",
     },
     {
         "name": "phase(name)",
-        "role": "System 1 primitive",
+        "role": "Synthesizer primitive",
         "desc": "records the program's current phase for replay",
     },
     {
@@ -252,17 +253,17 @@ TOOLS_LEFT = [
 TOOLS_RIGHT = [
     {
         "name": "Thompson selector",
-        "role": "System 2",
+        "role": "Adversary",
         "desc": "picks the perturbation category most likely to still break this policy",
     },
     {
         "name": "rollout runner",
-        "role": "System 2",
+        "role": "Adversary",
         "desc": "sandboxed execution, wall-clock timeout, crash = ERROR",
     },
     {
         "name": "diagnoser",
-        "role": "System 2",
+        "role": "Adversary",
         "desc": "mode, root cause, confidence, one imperative constraint",
     },
     {
@@ -448,7 +449,7 @@ def stream_muse_exec(
 
 @dataclass
 class LoopRunConfig:
-    """What the Run button drives in "loop" mode: the real closed loop, mock System 2 backend.
+    """What the Run button drives in "loop" mode: the real closed loop, mock Adversary backend.
 
     Defaults kept deliberately small (3 cycles, 1 nominal seed, W=2) so a click-through demo stays
     cheap and fast; pass the CLI flags for a fuller run.
@@ -492,9 +493,7 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
     run_dir = cfg.out_dir / time.strftime("run-%Y%m%dT%H%M%S")
     # Tell the UI where this run is being saved before anything runs, so the folder is
     # findable even if the run later crashes.
-    state.broadcast(
-        {"kind": "run_started", "run_dir": str(run_dir), "backend": cfg.backend}
-    )
+    state.broadcast({"kind": "run_started", "run_dir": str(run_dir), "backend": cfg.backend})
     policy = Policy(
         "bowl_on_plate", 0, "put the bowl on the plate", incumbent.read_text(encoding="utf-8")
     )
@@ -531,9 +530,10 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
     )
 
     def on_attack(report, attacked_policy) -> None:
-        # fires right after System 2 attacks, before System 1's rewrite call (which blocks on the
-        # real muse exec call) -- the only sub-cycle granularity Loop exposes, so the console can
-        # show "System 2 just attacked" separately from "System 1 is now writing a repair".
+        # fires right after Adversary attacks, before Synthesizer's rewrite call (which blocks on
+        # the real muse exec call) -- the only sub-cycle granularity Loop exposes, so the console
+        # can
+        # show "Adversary just attacked" separately from "Synthesizer is now writing a repair".
         state.broadcast(
             {
                 "kind": "attack_event",
@@ -655,7 +655,7 @@ def make_handler(
     scene_repair_path: Path | None = None,
 ):
     tools_right = (
-        TOOLS_RIGHT if mode == "loop" else [t for t in TOOLS_RIGHT if t["role"] != "System 2"]
+        TOOLS_RIGHT if mode == "loop" else [t for t in TOOLS_RIGHT if t["role"] != "Adversary"]
     )
     agentview = _find_agentview_keyframes()
     agentview_list = [
@@ -698,7 +698,7 @@ def make_handler(
         "agentview_archive": {
             "frames": agentview_list,
             "source": str(AGENTVIEW_ARCHIVE_BASE.relative_to(REPO_ROOT)),
-            # No live camera feed exists yet: System 2 runs on the mock backend (no simulator, no
+            # No live camera feed exists yet: Adversary runs on the mock backend (no simulator, no
             # camera). "live" stays False until a real rollout backend actually streams frames; a
             # future live source should just flip this and add a live frame URL, not change the
             # the shape the perception tab reads.
@@ -803,9 +803,7 @@ def make_handler(
                 return
             if path.startswith("/attacks/"):
                 run_name = path[len("/attacks/") :]
-                attacks_path = (
-                    _attacks_jsonl_path(loop_cfg.out_dir, run_name) if loop_cfg else None
-                )
+                attacks_path = _attacks_jsonl_path(loop_cfg.out_dir, run_name) if loop_cfg else None
                 if attacks_path is None:
                     self.send_response(404)
                     self.end_headers()
@@ -955,6 +953,7 @@ def make_handler(
                     self._send_json({"ok": True, "case": "queued"})
                     return
                 state.running = True
+
             # Case 2: idle -- a one-shot Muse call, streamed as chat_* SSE events.
             def drive_chat() -> None:
                 try:

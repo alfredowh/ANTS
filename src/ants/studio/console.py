@@ -1,17 +1,18 @@
 """CLI entry point for the live orchestrator console.
 
-    uv run python -m ants.studio.console                        # full loop, mock System 2
+    uv run python -m ants.studio.console                        # full loop, mock Adversary
     uv run python -m ants.studio.console --mode single --max-model-steps 6 --reasoning-effort medium
     uv run python -m ants.studio.console --cycles 6 --max-model-steps 6 --reasoning-effort medium
 
-Opens one local page with a turns viewer in the center, System 1/2/orchestrator tools on the
-sides, and a Run button gated by a "ready to run the policy development phase?" confirmation.
+Opens one local page with a turns viewer in the center, Synthesizer/Adversary/orchestrator
+tools on the sides, and a Run button gated by a "ready to run the policy development phase?"
+confirmation.
 
 Two modes (`--mode`):
 - "loop" (default): drives the real closed loop (`ants.orchestrator.loop.Loop`) against the mock
-  System 2 backend (free, offline) with System 1's repair step real (`muse exec`). Each cycle is
+  Adversary backend (free, offline) with Synthesizer's repair step real (`muse exec`). Each cycle is
   one attack -> rewrite -> gate verdict, streamed live from `loop.jsonl` as it is written.
-- "single": one Phase A repair step only, no System 2 call -- the cheaper/faster v1 path.
+- "single": one Phase A repair step only, no Adversary call -- the cheaper/faster v1 path.
 """
 
 from __future__ import annotations
@@ -51,7 +52,7 @@ def main() -> None:
         "--backend",
         choices=("mock", "cap_harness"),
         default="mock",
-        help="System 2 rollout backend. 'mock' (default): free, instant, offline. 'cap_harness': "
+        help="Adversary rollout backend. 'mock' (default): free, instant, offline. 'cap_harness': "
         "real ASPIRE/LIBERO rollouts (~40s+ each, real GPU time) -- needs the sam3/pyroki/curobo "
         "services up (uv run python -m ants.orchestrator.preflight) and feeds the Perception "
         "tab's layers live frames while a rollout is in progress.",
@@ -63,7 +64,7 @@ def main() -> None:
         default="mock",
         help="'mock' (free, default) or 'muse-spark' (spends tokens, unbudgeted here)",
     )
-    parser.add_argument("--n-agents", type=int, default=4, help="System 2 proposer agents")
+    parser.add_argument("--n-agents", type=int, default=4, help="Adversary proposer agents")
     parser.add_argument("--stop-mode", choices=("min_tests", "posterior"), default="min_tests")
     parser.add_argument("--min-tests", type=int, default=2)
     parser.add_argument("--tau", type=float, default=0.1)

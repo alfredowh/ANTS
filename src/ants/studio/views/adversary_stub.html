@@ -123,7 +123,7 @@ function params(p){
     return u[0].endsWith("×") ? u[0] + s : `${u[0]} ${s}${u[1] ? " "+u[1] : ""}`; }).join(" · ");
 }
 const modelName = () => R.model === "muse-spark" ? "Muse Spark" : "rules only";
-const L = D.loop;  /* null for a System 2 run, set for a closed-loop run */
+const L = D.loop;  /* null for a Adversary run, set for a closed-loop run */
 const progOf = v => { const x = L && L.versions.find(q => q.version === v); return x ? x.code : D.program; };
 const finalV = () => L ? (L.final_version ?? R.policy.version) : R.policy.version;
 const DEC = {accepted:["accepted","ok"], rejected:["rejected by gate","fail"], budget_stop:["budget stop",""]};
@@ -170,10 +170,10 @@ function harden(){
   return `<div class="cols">
   <aside class="left">
     <div class="pad" style="display:flex;flex-direction:column;gap:14px">
-      <div><div class="h">Hardening run</div><p class="note" style="margin-top:4px">${L ? "Closed loop: System 2 attacks, System 1 rewrites, the regression gate keeps a rewrite only if it is no worse on every case found so far." + (R.config.synthesizer === "patch fixture" ? " System 1 is the patch fixture here: this shows the loop logic, not robustness." : "") : "System 2 attacks the skill and explains every failure. Rewrites and the regression gate join when System 1 is connected."}</p></div>
+      <div><div class="h">Hardening run</div><p class="note" style="margin-top:4px">${L ? "Closed loop: Adversary attacks, Synthesizer rewrites, the regression gate keeps a rewrite only if it is no worse on every case found so far." + (R.config.synthesizer === "patch fixture" ? " Synthesizer is the patch fixture here: this shows the loop logic, not robustness." : "") : "Adversary attacks the skill and explains every failure. Rewrites and the regression gate join when Synthesizer is connected."}</p></div>
       <div class="kv">
         <span>Skill</span><span class="mono">bowl-on-plate · v${finalV()}</span>
-        ${L ? `<span>Regression gate</span><span class="mono">${esc(R.config.gate_mode)}</span><span>Escalate after</span><span class="mono">${esc(R.config.stall_window)} stalls</span><span>System 1</span><span>${esc(R.config.synthesizer)}</span>` : ""}
+        ${L ? `<span>Regression gate</span><span class="mono">${esc(R.config.gate_mode)}</span><span>Escalate after</span><span class="mono">${esc(R.config.stall_window)} stalls</span><span>Synthesizer</span><span>${esc(R.config.synthesizer)}</span>` : ""}
         <span>Attacks</span><span class="mono">${A.length} / ${R.attacks_planned}</span>
         <span>Reasoning model</span><span>${modelName()}</span>
         <span>Parallel attackers</span><span class="mono">${C.n_agents || "—"}</span>
@@ -222,7 +222,7 @@ function harden(){
         <span>Rollout time</span><span class="mono">${fx(u.sim_seconds,1)} s</span>
         <span>Model tokens</span><span class="mono">${u.tokens.toLocaleString()}</span>
         <span>Cost estimate</span><span class="mono">$${fx(u.usd_estimate)}</span></div>
-      <span class="note">Tokens from the proposer and diagnoser; cost at the $${u.usd_rate}/M System 1 logged for Muse.</span>
+      <span class="note">Tokens from the proposer and diagnoser; cost at the $${u.usd_rate}/M Synthesizer logged for Muse.</span>
     </section>
   </aside></div>`;
 }
@@ -239,11 +239,11 @@ function loopBanner(){
 
 /* ---------------- Versions (closed loop) ---------------- */
 function versions(){
-  if (!L) return `<div class="main"><div class="empty">This run has no rewrites: it is a System 2 run. Run the closed loop with python -m ants.orchestrator.run.</div></div>`;
+  if (!L) return `<div class="main"><div class="empty">This run has no rewrites: it is a Adversary run. Run the closed loop with python -m ants.orchestrator.run.</div></div>`;
   const vs = [...L.versions].reverse().map(v => `<section style="display:flex;flex-direction:column;gap:10px;padding-bottom:18px;border-bottom:1px solid var(--line2)">
       <div style="display:flex;flex-wrap:wrap;align-items:baseline;gap:12px"><h1 class="mono">v${v.version}</h1>
         ${v.version === finalV() ? '<span class="badge ok">head</span>' : ""}
-        ${v.accepted_at ? `<span class="note">accepted after attack <a href="#a-${esc(v.accepted_at)}" class="mono">${esc(v.accepted_at)}</a> · parent v${esc(v.parent)}</span>` : '<span class="note">from the demonstration (System 1)</span>'}</div>
+        ${v.accepted_at ? `<span class="note">accepted after attack <a href="#a-${esc(v.accepted_at)}" class="mono">${esc(v.accepted_at)}</a> · parent v${esc(v.parent)}</span>` : '<span class="note">from the demonstration (Synthesizer)</span>'}</div>
       ${v.constraint ? `<div><span class="h">Motivating constraint</span><p style="color:var(--hi);margin-top:4px">${esc(v.constraint.rule)}</p><p class="note mono">${esc(v.constraint.failure_signature)}</p></div>` : ""}
       ${v.gate ? gateBlock(v.gate) : ""}
       ${v.accepted_at ? diffBlock(v.diff) : ""}
@@ -348,10 +348,10 @@ function replay(id){
       <p style="font-size:14px;line-height:1.6">${esc(a.explanation)}</p></section>
     <section style="display:flex;flex-direction:column;gap:8px"><div class="h" style="display:flex;justify-content:space-between"><span>Root cause</span><span class="mono" style="letter-spacing:0;text-transform:none">${a.line ? "v"+a.version+" · line "+a.line : ""}</span></div>
       <p style="color:var(--soft)">${esc(a.root_cause)}</p>${codeBlock(a.line, a.version)}</section>
-    <section style="display:flex;flex-direction:column;gap:8px"><div class="h" style="display:flex;justify-content:space-between"><span>Constraint for System 1</span><span class="mono" style="letter-spacing:0;text-transform:none">${esc((a.evidence||[])[0]||"")}</span></div>
+    <section style="display:flex;flex-direction:column;gap:8px"><div class="h" style="display:flex;justify-content:space-between"><span>Constraint for Synthesizer</span><span class="mono" style="letter-spacing:0;text-transform:none">${esc((a.evidence||[])[0]||"")}</span></div>
       <p style="color:var(--hi)">${esc(a.rule)}</p><p class="note">Applies ${esc(a.when)}</p>
       ${a.code_sketch ? `<div class="code">${a.code_sketch.split("\n").map(t => `<div class="add"><span style="color:var(--accent)">+ </span>${esc(t)}</div>`).join("")}</div>` : ""}
-      ${a.loop && a.loop.gate ? "" : '<p class="note">' + (L ? "No rewrite was attempted for this attack." : "Rewrite and gate verdict appear here once System 1 is connected.") + "</p>"}</section>
+      ${a.loop && a.loop.gate ? "" : '<p class="note">' + (L ? "No rewrite was attempted for this attack." : "Rewrite and gate verdict appear here once Synthesizer is connected.") + "</p>"}</section>
     ${a.loop && a.loop.gate ? `<section style="display:flex;flex-direction:column;gap:8px"><div class="h" style="display:flex;justify-content:space-between"><span>Rewrite v${a.loop.policy_version} → v${a.loop.candidate_version}</span>${decBadge(a.loop.decision)}</div>
       ${gateBlock(a.loop.gate)}${diffBlock(a.loop.diff)}</section>` : ""}` :
     `<section style="display:flex;flex-direction:column;gap:8px"><div class="h">Result</div><p style="font-size:14px">${a.outcome === "error" ? "The program crashed (" + esc(a.error) + "). Crashes are not counted as task failures." : "The program finished the task under this perturbation."}</p></section>`;
@@ -362,7 +362,7 @@ function replay(id){
       <div style="width:10px;height:10px;background:${v.version === a.version ? "var(--accent)" : v.version === finalV() ? "var(--fg)" : "var(--dim)"};margin-top:4px"></div>
       <div><div class="mono" style="font-weight:500">v${v.version} ${v.version === finalV() ? '<span style="color:var(--muted)">head</span>' : ""}${v.version === a.version ? ' <span style="color:var(--accent)">attacked here</span>' : ""}</div>
       <div class="note">${v.constraint ? esc(v.constraint.failure_signature) : esc(R.policy.path)}</div></div></div>`).join("")}
-    ${L ? "" : '<p class="note pad">Rewrites appear here when System 1 is connected.</p>'}
+    ${L ? "" : '<p class="note pad">Rewrites appear here when Synthesizer is connected.</p>'}
     <div class="h pad" style="padding-top:22px;padding-bottom:8px;display:flex;justify-content:space-between"><span>Failures</span><span class="mono" style="letter-spacing:0">${fl.length} of ${A.length}</span></div>
     <div class="list">${fl.map(item).join("") || '<p class="note pad">none</p>'}</div>
     <div class="h pad" style="padding-top:22px;padding-bottom:8px">Recent passes</div>

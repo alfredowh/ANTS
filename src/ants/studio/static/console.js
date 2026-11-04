@@ -47,7 +47,7 @@ function renderToolList(el, tools) {
 document.getElementById("incumbent-name").textContent = "incumbent: " + DATA.incumbent_name;
 renderToolList(document.getElementById("tools-left-wrap"), DATA.tools_left);
 
-/* ---------- run settings (Loop config + Orchestrator/System 2 tools): a modal, not a column ---------- */
+/* ---------- run settings (Loop config + Orchestrator/Adversary tools): a modal, not a column ---------- */
 function renderRunSettings() {
   const tpl = document.getElementById("run-settings-template");
   openModal(tpl.innerHTML);
@@ -125,7 +125,7 @@ function renderScene2D(kind) {
     return;
   }
   asofEl.textContent = "as of " + scene.as_of;
-  noteEl.textContent = "Scene given to System 1";
+  noteEl.textContent = "Scene given to Synthesizer";
   noteEl.title = "S4-style scene text: oracle geometry, no robot trajectory.";
 
   const pad = 14;
@@ -581,7 +581,7 @@ function addTurn(cls, html) {
   turnsEl.insertBefore(div, turnsEl.firstChild); // newest on top
 }
 
-/* ---------- System 1 / System 2 / Orchestrator status ---------- */
+/* ---------- Synthesizer / Adversary / Orchestrator status ---------- */
 function setSys(id, active, stage) {
   const badge = document.getElementById(id + "-badge");
   badge.classList.toggle("active", active);
@@ -637,7 +637,7 @@ function handleLoopEvent(row) {
       setSys("sys2", false, "idle");
       setSys("orch", true, "blocked: budget exhausted");
       setSys("escalate", true, "budget exhausted");
-      showBanner(`<b>Budget exhausted.</b> System 1's rewrite budget (${esc(String(row.cycle))} cycles in) ran out before the loop could reach a stop condition. It cannot continue on its own from here &mdash; raise <code>--synth-token-budget</code> and re-run, or treat this as a point for human review.`);
+      showBanner(`<b>Budget exhausted.</b> Synthesizer's rewrite budget (${esc(String(row.cycle))} cycles in) ran out before the loop could reach a stop condition. It cannot continue on its own from here &mdash; raise <code>--synth-token-budget</code> and re-run, or treat this as a point for human review.`);
     } else {
       setSys("sys2", false, "idle (result logged)");
       setSys("orch", true, decision === "accepted" ? "gate: accepted" : "gate: rejected");
@@ -679,7 +679,7 @@ function handleLoopEvent(row) {
     setSys("sys2", false, "idle");
     setSys("orch", true, "blocked: no working policy");
     setSys("escalate", true, "no working policy");
-    showBanner(`<b>No working policy &mdash; needs human intervention.</b> ${esc(row.request)}. v0 fails its own nominal cases, so there is nothing for System 2 to attack yet.`);
+    showBanner(`<b>No working policy &mdash; needs human intervention.</b> ${esc(row.request)}. v0 fails its own nominal cases, so there is nothing for Adversary to attack yet.`);
     addTurn("error", `<div class="tk">no working policy</div><div class="main">${esc(row.request)}</div>`);
   } else if (event === "end") {
     addTurn("done", `<div class="tk">loop end</div><div class="main">stopped: <b>${esc(row.stopped)}</b>, stage: ${esc(row.stage)}, final v${row.final_version}, cycles run: ${row.cycles_run}</div>`);
@@ -691,12 +691,12 @@ function handleLoopEvent(row) {
 function handleAttackEvent(a) {
   setSys("sys2", false, "idle");
   if (a.outcome === "failure") {
-    setSys("orch", true, "failure found, routing to System 1");
+    setSys("orch", true, "failure found, routing to Synthesizer");
     setSys("sys1", true, "writing repair (muse exec)");
   } else {
     setSys("orch", true, "replaying candidate / checking robust");
   }
-  addTurn("task", `<div class="tk">attack ${esc(a.attack_id)}</div><div class="main">System 2 attacked with <b>${esc(a.category)}</b> (severity ${a.severity}) &rarr; <b>${esc(a.outcome)}</b></div>`);
+  addTurn("task", `<div class="tk">attack ${esc(a.attack_id)}</div><div class="main">Adversary attacked with <b>${esc(a.category)}</b> (severity ${a.severity}) &rarr; <b>${esc(a.outcome)}</b></div>`);
   renderAdvPanel();
 }
 
@@ -817,9 +817,9 @@ runBtn.addEventListener("click", () => {
   const realBackend = DATA.loop_config && DATA.loop_config.backend === "cap_harness";
   const gateMsg = DATA.mode === "loop"
     ? "Ready to run the policy development phase?\n\n" +
-      "This runs the real closed loop: System 2 attacks (" +
+      "This runs the real closed loop: Adversary attacks (" +
       (realBackend ? "real ASPIRE/LIBERO rollouts, ~40s+ and real GPU time each" : "mock backend, free") +
-      ") and System 1 rewrites for real via muse exec (Muse Code), up to " +
+      ") and Synthesizer rewrites for real via muse exec (Muse Code), up to " +
       (DATA.loop_config ? DATA.loop_config.cycles : "N") +
       " cycles. Each rewrite spends Muse tokens (observed ~$0.5 per rewrite); the loop stops " +
       "earlier if it becomes robust, stalls, or hits the token budget." +

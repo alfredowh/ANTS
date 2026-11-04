@@ -1,9 +1,9 @@
 <div id="tab-console" class="on">
 <div class="sysbar">
-  <span class="flow-loop" title="the loop repeats: System 2 attacks, a failure goes to System 1, the gate decides, repeat">&#8634;</span>
-  <div class="sys" id="sys2-badge" title="selector &rarr; proposer &rarr; rollout &rarr; diagnoser, all inside one call -- Loop only reports when the whole attack is done, not each inner step"><span class="dot"></span><span class="who">System 2</span><span class="stage" id="sys2-stage">idle</span></div>
+  <span class="flow-loop" title="the loop repeats: Adversary attacks, a failure goes to Synthesizer, the gate decides, repeat">&#8634;</span>
+  <div class="sys" id="sys2-badge" title="selector &rarr; proposer &rarr; rollout &rarr; diagnoser, all inside one call -- Loop only reports when the whole attack is done, not each inner step"><span class="dot"></span><span class="who">Adversary</span><span class="stage" id="sys2-stage">idle</span></div>
   <span class="flow-arrow">&rarr;</span>
-  <div class="sys" id="sys1-badge" title="muse_orchestrator.py -&gt; muse exec, one blocking call per repair"><span class="dot"></span><span class="who">System 1</span><span class="stage" id="sys1-stage">idle</span></div>
+  <div class="sys" id="sys1-badge" title="muse_orchestrator.py -&gt; muse exec, one blocking call per repair"><span class="dot"></span><span class="who">Synthesizer</span><span class="stage" id="sys1-stage">idle</span></div>
   <span class="flow-arrow">&rarr;</span>
   <div class="sys" id="orch-badge" title="orchestrator/gate.py: no worse on every case seen, better on at least one"><span class="dot"></span><span class="who">Orchestrator</span><span class="stage" id="orch-stage">idle</span></div>
   <span class="flow-arrow">&rarr;</span>
@@ -72,7 +72,7 @@
   <h3>Run settings &amp; tools</h3>
   <div class="sub">Static for this server session &mdash; set by the CLI flags it was started with, not changed by any run.</div>
   <div class="section"><div class="h">Loop config</div><div class="tiles" id="config-tiles"></div></div>
-  <div class="section"><div class="h">Orchestrator / System 2</div><div class="tool-list" id="tools-right"></div></div>
+  <div class="section"><div class="h">Orchestrator / Adversary</div><div class="tool-list" id="tools-right"></div></div>
 </template>
 
 

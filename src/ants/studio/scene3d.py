@@ -1,4 +1,4 @@
-"""A simple, interactive 3D viewer for the oracle scene System 1 reads (the S4 scene section).
+"""A simple, interactive 3D viewer for the oracle scene Synthesizer reads (the S4 scene section).
 
 Reads the same `contacts_scene.json` files `orchestrator/scene_context_exp.py` already produces
 under `data/scenes/<level>/` (via `--prep`) and `levels.json` for titles, and renders one
