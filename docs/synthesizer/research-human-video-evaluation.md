@@ -1,6 +1,6 @@
 # Research: how to see the performance of a human-video demonstration (beyond longer horizon)
 
-Research done 2026-11-01 by three parallel literature passes. **Nothing here has been run in ANTS.** "Read" means the arXiv HTML was fetched and read through a page summariser, not the raw text; several numbers sit only in figures and are marked so. The plan that uses this is [plan-human-video-power.md](plan-human-video-power.md).
+Research done 2026-11-01 by three parallel literature passes. **Nothing here has been run in ANTS.** "Read" means the arXiv HTML was fetched and read through a page summariser, not the raw text; several numbers sit only in figures and are marked so. The plan that uses this is plan-human-video-power.md.
 
 ## 1. Bottom line
 

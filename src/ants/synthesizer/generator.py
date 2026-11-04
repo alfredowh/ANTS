@@ -18,6 +18,7 @@ The program is plain Python executed in a sandbox. Rules:
 - Builtins are restricted: no `getattr`, `setattr`, `hasattr`, `isinstance`, `eval`, `open` or `__import__`. Probe an object's fields with direct attribute access inside `try/except AttributeError` and fall back to the next field name.
 - Positions are metres in the `robot_base` frame. Do not hard-code absolute object positions: localize objects at run time.
 - Check the `.ok` of every result and stop safely when something fails.
+- If a planned move (`move_to_pose`, `plan_motion`, ...) fails because trajectory planning refused it or found no path (not because of a wrong `.ok` check), do not retry with the identical pose: change something geometric before the next attempt (a different approach angle/direction, a larger standoff, an intermediate waypoint). An unchanged request will be refused again for the same reason.
 - Use `print(...)` to log the numbers you rely on (object positions, sizes, target poses) so a failure can be diagnosed.
 - Start the program with two dict literals. `params` holds every number you take from the demonstration (grasp height, approach offsets, carry and release heights), each as a fraction of a measured object size, never absolute metres. `attack_ranges` maps each `params` key to a `[min, max]` list of values you consider still safe. Read these values from `params` below; do not repeat them as literals.
 - Set a top-level variable `result` to a small dict reporting what happened (which steps succeeded, key numbers).

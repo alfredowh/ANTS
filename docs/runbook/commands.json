@@ -2,7 +2,7 @@
   "version": 1,
   "updated": "2026-11-01",
   "artifact_url": "https://claude.ai/artifact/AimCCqfBF2ooHEqZwiFVMS",
-  "about": "Single source of truth for every command that runs an ANTS experiment or tool. Edit this file, then run `uv run python -m ants.evalkit.runbook build` to regenerate docs/runbook.html, docs/runbook/commands-full.md, docs/synthesizer/experiment-commands.md and the Run book block in docs/todo.md.",
+  "about": "Single source of truth for every command that runs an ANTS experiment or tool. Edit this file, then run `uv run python -m ants.evalkit.runbook build` to regenerate docs/runbook.html, docs/runbook/commands-full.md, docs/synthesizer/experiment-commands.md.",
   "repo_url": "https://github.com/alfredowh/ANTS/blob/synthesizer/",
   "runners": {
     "ants": {
@@ -60,7 +60,7 @@
       "out": [
         "states"
       ],
-      "doc": "docs/HANDOFF.md"
+      "doc": "docs/architecture.md"
     },
     {
       "id": "demospec_tools",
@@ -84,7 +84,7 @@
       "role": "Shared dataclasses: DemoSpec, Policy, Constraint, Perturbation, CaseSpec, EpisodeTrace, Skill.",
       "in": [],
       "out": [],
-      "doc": "docs/synthesizer/discussion.md"
+      "doc": "docs/synthesizer/experiment-commands.md"
     },
     {
       "id": "generator",
@@ -101,7 +101,7 @@
       "out": [
         "program.py"
       ],
-      "doc": "docs/synthesizer/discussion.md"
+      "doc": "docs/synthesizer/experiment-commands.md"
     },
     {
       "id": "llm",
@@ -293,22 +293,6 @@
       "doc": "dev/curobo/README.md"
     },
     {
-      "id": "scene_recon",
-      "name": "scene reconstruction probe (cuRobo Mapper)",
-      "group": "dev",
-      "path": "tools/mapper_probe/",
-      "role": "Orbit-scans a LIBERO scene and fuses the frames into a cuRobo Mapper TSDF/ESDF, extracting a mesh. Offline probe, not wired into synthesizer/ or adversary/ yet.",
-      "in": [
-        "LIBERO scene (suite/task/seed)"
-      ],
-      "out": [
-        "data/runs/mapper_probe/frames/*.npz",
-        "data/runs/mapper_probe/reconstructed_scene.ply",
-        "data/runs/mapper_probe/reconstructed_view_*.png"
-      ],
-      "doc": "docs/perception/scene-reconstruction-probe.md"
-    },
-    {
       "id": "muse",
       "name": "Meta API (Muse)",
       "group": "external",
@@ -320,21 +304,7 @@
       "out": [
         "program + reasoning tokens"
       ],
-      "doc": "docs/HANDOFF.md"
-    },
-    {
-      "id": "radar",
-      "name": "research radar",
-      "group": "tools",
-      "path": ".claude/skills/robot-research-radar/",
-      "role": "Scripts that merge and enrich the Robot Research Radar artifact database.",
-      "in": [
-        "JSON sources"
-      ],
-      "out": [
-        "radar documents"
-      ],
-      "doc": ".claude/skills/robot-research-radar/SKILL.md"
+      "doc": "docs/architecture.md"
     }
   ],
   "flow": [
@@ -718,30 +688,6 @@
       "result": "6 configurations compared; only the scene-aware ones (5, 6) had 0 forbidden-contact steps. One scene, one seed."
     },
     {
-      "id": "radar",
-      "title": "Research radar maintenance",
-      "status": "tooling",
-      "kind": "tool",
-      "question": "Keep the Robot Research Radar artifact in sync.",
-      "doc": ".claude/skills/robot-research-radar/SKILL.md",
-      "run_dir": null,
-      "modules": [
-        "radar"
-      ],
-      "commands": [
-        "radar.build",
-        "radar.pending",
-        "radar.metrics"
-      ],
-      "inputs": [
-        "JSON sources"
-      ],
-      "outputs": [
-        "documents for the artifact db"
-      ],
-      "result": "Usually driven by the robot-research-radar skill, not by hand."
-    },
-    {
       "id": "agent-skills",
       "title": "Agent skills (slash commands)",
       "status": "reference",
@@ -749,14 +695,8 @@
       "question": "Prompts that write into the ANTS To-do artifact.",
       "doc": "docs/runbook/agent-access.md",
       "run_dir": null,
-      "modules": [
-        "radar"
-      ],
-      "commands": [
-        "skill.idea",
-        "skill.storyline",
-        "skill.radar"
-      ],
+      "modules": [],
+      "commands": [],
       "inputs": [
         "free text"
       ],
@@ -873,31 +813,38 @@
       "result": "Not run yet."
     },
     {
-      "id": "scene_recon",
-      "title": "Scene reconstruction probe: cuRobo Mapper TSDF/ESDF on the LIBERO scene",
-      "status": "probe working, logged once",
+      "id": "exp12",
+      "title": "Demo vs no demo on cuRobo (simulator robot mask, attached bowl)",
+      "status": "final (submission experiment, tag submission-experiment)",
       "kind": "experiment",
-      "question": "Can ANTS fuse a multi-view camera scan of the LIBERO scene into a persistent 3D reconstruction (cuRobo's Mapper: TSDF to ESDF to mesh), as a step toward a policy planning against a reconstructed scene instead of a single-frame point cloud?",
-      "doc": "docs/perception/scene-reconstruction-probe.md",
-      "run_dir": "data/runs/mapper_probe",
+      "question": "With cuRobo planning and the held bowl attached, does one human demonstration (plus S4 scene text and E3 repair evidence) beat task text only?",
+      "doc": "docs/synthesizer/show-once-vs-task-only/demo_vs_no_demo_analysis.ipynb",
+      "run_dir": "data/runs/demo_e3_s4_sim | data/runs/nodemo_task_only_sim",
       "modules": [
-        "scene_recon",
-        "aspire"
+        "orch_exp",
+        "generator",
+        "llm",
+        "muse",
+        "rollout",
+        "launcher",
+        "aspire",
+        "services",
+        "evalkit"
       ],
       "commands": [
-        "scene_recon.scan",
-        "scene_recon.scan_arm",
-        "scene_recon.fuse"
+        "exp12.demo",
+        "exp12.nodemo",
+        "report.run"
       ],
       "inputs": [
-        "LIBERO scene: libero_goal_swap task 8 seed 51"
+        "data/demospecs/hurobo_233859.json",
+        "data/scene_text/S4_L1.txt"
       ],
       "outputs": [
-        "data/runs/mapper_probe/frames/*.npz",
-        "data/runs/mapper_probe/reconstructed_scene.ply",
-        "data/runs/mapper_probe/reconstructed_view_*.png"
+        "data/runs/demo_e3_s4_sim/",
+        "data/runs/nodemo_task_only_sim/"
       ],
-      "result": "Logged run, 2026-11-03: 16 orbit frames fused into a mesh (23,441 vertices, 44,253 faces); rendered views match the real scene layout. Virtual orbiting camera, not yet the real arm; not wired into any owned package. See the doc for caveats and next steps."
+      "result": "Held-out seeds 1 to 5, two samples (T 0.2, 0.7) per arm. Demo: debug seed solved in 2 and 2 attempts; scaled 5/5 and 2/5, stock 4/5 and 3/5. No-demo: solved in 5 (no) and 3 attempts; scaled 4/5 and 4/5, stock 0/5 and 0/5. The arms also differ in scene text and evidence. Source: events.jsonl of each run. Ran before the attach frame fix: spheres 9.65 cm too high."
     }
   ],
   "commands": [
@@ -1034,7 +981,7 @@
           "desc": "Default of the dialog's Muse token cap for /policy-dev."
         }
       ],
-      "description": "Start the server, click the /policy-dev chip, choose a marker clip with +, type the task, press Enter; a settings dialog opens; Run starts it. Stages: preflight, hurobo extraction (5.75 cm marker; 7 of 26 clips pass, listed in docs/studio/live-console-handoff.md), DemoSpec, prompt, one Muse generation on seed 51 in the stock scene, then the Adversary loop on real cap_harness rollouts with the mock proposer. Dialog defaults (docs/studio/skills/policy-dev.json): Synthesizer on, 5 retries, Adversary on, Thompson, 2 attacks, 1 seed, 300000 token cap. Synthesizer off attacks a given .py and reports, with no tokens. Adversary off saves the program to data/deploy/. Bowl-on-plate only. Spends Muse tokens up to the cap (about $4 at 300000). Stops and spends nothing if preflight fails or another simulator is running.",
+      "description": "Start the server, click the /policy-dev chip, choose a marker clip with +, type the task, press Enter; a settings dialog opens; Run starts it. Stages: preflight, hurobo extraction (5.75 cm marker; 7 of 26 clips pass: 233607, 233646, 233859, 234314, 234347, 234603, 234827), DemoSpec, prompt, one Muse generation on seed 51 in the stock scene (prompt includes the measured stock scene, S4 format, and repairs add e3 contact evidence), then the Adversary loop on real cap_harness rollouts with the mock proposer. Dialog defaults (docs/studio/skills/policy-dev.json): Synthesizer on, 5 retries, Adversary on, Thompson, 2 attacks, 1 seed, 300000 token cap. Synthesizer off attacks a given .py and reports, with no tokens. Adversary off saves the program to data/deploy/. Bowl-on-plate only. Spends Muse tokens up to the cap (about $4 at 300000). Stops and spends nothing if preflight fails or another simulator is running.",
       "examples": [
         {
           "title": "Start the server, then use the chip",
@@ -1049,6 +996,30 @@
       "paid": true,
       "cost": "about $4 at most (300k tokens)",
       "minutes": 40
+    },
+    {
+      "id": "studio.stock-scene",
+      "title": "Studio: measure the stock scene /policy-dev sends",
+      "group": "viewer",
+      "runner": "ants",
+      "where": "ANTS repo root",
+      "base": "-m ants.studio.stock_scene",
+      "args": [],
+      "description": "One no-op rollout in the stock scene on seed 51 (no model, no tokens) through the launcher, then writes data/scenes/stock/contacts_scene.json and data/scene_text/stock_seed51_S4.txt. /policy-dev runs this itself if the text is missing. The S4_L* files describe the scaled scene and must not be sent to a stock run. Needs the simulator to be free.",
+      "examples": [
+        {
+          "title": "Measure once",
+          "cmd": "uv run python -m ants.studio.stock_scene"
+        }
+      ],
+      "modules": [],
+      "in": [],
+      "out": [
+        "data/scene_text/stock_seed51_S4.txt",
+        "data/scenes/stock/contacts_scene.json"
+      ],
+      "paid": false,
+      "minutes": 1
     },
     {
       "id": "setup.sync",
@@ -2798,190 +2769,6 @@
       "doc": "dev/curobo/README.md"
     },
     {
-      "id": "radar.build",
-      "title": "Radar: merge JSON sources into documents",
-      "group": "tools",
-      "runner": "ants",
-      "base": ".claude/skills/robot-research-radar/scripts/radar.py build",
-      "args": [
-        {
-          "flag": "--in",
-          "value": "scratch/orgs.json scratch/works.json",
-          "kind": "value",
-          "on": true,
-          "required": true,
-          "desc": "One or more JSON sources to merge.",
-          "raw": true
-        },
-        {
-          "flag": "--out",
-          "value": "scratch/radar_docs.json",
-          "kind": "value",
-          "on": true,
-          "required": true,
-          "desc": "Documents for the radar artifact database."
-        }
-      ],
-      "description": "Merges research-radar JSON sources into documents for the artifact db. Normally driven by the robot-research-radar skill.",
-      "examples": [],
-      "modules": [
-        "radar"
-      ],
-      "in": [
-        "JSON sources"
-      ],
-      "out": [
-        "radar documents"
-      ],
-      "cost": "free",
-      "minutes": 0,
-      "doc": ".claude/skills/robot-research-radar/SKILL.md"
-    },
-    {
-      "id": "radar.pending",
-      "title": "Radar: dump works still pending",
-      "group": "tools",
-      "runner": "ants",
-      "base": ".claude/skills/robot-research-radar/scripts/radar.py pending",
-      "args": [
-        {
-          "flag": "--dump",
-          "value": "scratch/pending.json",
-          "kind": "value",
-          "on": true,
-          "required": true,
-          "desc": "Where to write the pending works."
-        }
-      ],
-      "description": "Lists queued/draft works so the skill can verify them from Claude Code.",
-      "examples": [],
-      "modules": [
-        "radar"
-      ],
-      "in": [
-        "radar db export"
-      ],
-      "out": [
-        "pending.json"
-      ],
-      "cost": "free",
-      "minutes": 0,
-      "doc": ".claude/skills/robot-research-radar/SKILL.md"
-    },
-    {
-      "id": "radar.metrics",
-      "title": "Radar: citations and GitHub stars",
-      "group": "tools",
-      "runner": "ants",
-      "base": ".claude/skills/robot-research-radar/scripts/metrics.py",
-      "args": [
-        {
-          "flag": "--arxiv",
-          "value": "2609.30249",
-          "kind": "value",
-          "on": true,
-          "desc": "arXiv ids (batch endpoint; single lookups get rate-limited)."
-        },
-        {
-          "flag": "--github",
-          "value": "owner/repo",
-          "kind": "value",
-          "on": false,
-          "desc": "GitHub repos (stars via gh api graphql)."
-        },
-        {
-          "flag": "--title",
-          "value": "TITLE",
-          "kind": "value",
-          "on": false,
-          "desc": "Titles."
-        },
-        {
-          "flag": "--file",
-          "value": "works.json",
-          "kind": "value",
-          "on": false,
-          "desc": "Batch file."
-        }
-      ],
-      "description": "Semantic Scholar unauthenticated; the old gh lacks auth token.",
-      "examples": [],
-      "modules": [
-        "radar"
-      ],
-      "in": [
-        "ids"
-      ],
-      "out": [
-        "metrics JSON"
-      ],
-      "cost": "free",
-      "minutes": 0,
-      "doc": ".claude/skills/robot-research-radar/SKILL.md"
-    },
-    {
-      "id": "skill.idea",
-      "title": "/idea-judge <idea>",
-      "group": "agent-skills",
-      "runner": "shell",
-      "base": "/idea-judge  # then your raw idea text",
-      "args": [],
-      "description": "Reviews a raw idea with Judge A (supportive) and Judge B (strict) and writes it to the Ideas tab of the ANTS To-do artifact. Instructions: .claude/skills/idea-judge/SKILL.md.",
-      "examples": [],
-      "modules": [],
-      "in": [
-        "idea text"
-      ],
-      "out": [
-        "artifact db: ideas"
-      ],
-      "cost": "agent time",
-      "minutes": 5,
-      "doc": ".claude/skills/idea-judge/SKILL.md"
-    },
-    {
-      "id": "skill.storyline",
-      "title": "/storyline-judge <storyline>",
-      "group": "agent-skills",
-      "runner": "shell",
-      "base": "/storyline-judge  # then the storyline text or a storyline_id",
-      "args": [],
-      "description": "Reviews a hackathon storyline against the current code and runs. Writes to the Storyline tab. Instructions: .claude/skills/storyline-judge/SKILL.md.",
-      "examples": [],
-      "modules": [],
-      "in": [
-        "storyline text"
-      ],
-      "out": [
-        "artifact db: storyline"
-      ],
-      "cost": "agent time",
-      "minutes": 5,
-      "doc": ".claude/skills/storyline-judge/SKILL.md"
-    },
-    {
-      "id": "skill.radar",
-      "title": "/robot-research-radar (refresh, extend, sync)",
-      "group": "agent-skills",
-      "runner": "shell",
-      "base": "/robot-research-radar  # refresh | extend | sync | re-rank",
-      "args": [],
-      "description": "Maintains the Robot Research Radar artifact. Instructions: .claude/skills/robot-research-radar/SKILL.md.",
-      "examples": [],
-      "modules": [
-        "radar"
-      ],
-      "in": [
-        "links queued on the page"
-      ],
-      "out": [
-        "artifact db: orgs, works"
-      ],
-      "cost": "agent time",
-      "minutes": 20,
-      "doc": ".claude/skills/robot-research-radar/SKILL.md"
-    },
-    {
       "id": "exp05.probe",
       "title": "Exp 05 step 1: perceive the L1 start state (SAM 3, two arm poses)",
       "group": "exp05",
@@ -3233,264 +3020,292 @@
       "doc": "dev/curobo/make_viewer.py"
     },
     {
-      "id": "scene_recon.scan",
-      "title": "Orbit-scan a LIBERO scene (RGB-D + camera pose per frame)",
-      "group": "scene-recon",
-      "runner": "libero",
-      "base": "../tools/mapper_probe/scan_orbit.py",
+      "id": "exp12.demo",
+      "title": "Demo vs no demo, demo arm: demo + S4 + E3 on cuRobo",
+      "group": "experiments",
+      "runner": "ants",
+      "paid": true,
+      "base": "-m ants.orchestrator.demo_vs_nodemo",
       "args": [
         {
-          "flag": "--suite",
-          "value": "libero_goal_swap",
+          "flag": "--aspire",
+          "value": "ASPIRE",
           "kind": "value",
-          "on": false,
-          "desc": "LIBERO suite name."
+          "on": true,
+          "required": true,
+          "desc": "ASPIRE checkout."
         },
         {
-          "flag": "--task-id",
-          "value": "8",
+          "flag": "--out",
+          "value": "data/runs/demo_e3_s4_sim",
           "kind": "value",
-          "on": false,
-          "desc": "Task index within the suite (8 = put-the-bowl-on-the-plate)."
+          "on": true,
+          "required": true,
+          "desc": "Run folder. Repeat the same --out to resume."
         },
         {
-          "flag": "--seed",
-          "value": "51",
+          "flag": "--demospec",
+          "value": "data/demospecs/hurobo_233859.json",
           "kind": "value",
-          "on": false,
-          "desc": "LIBERO seed (acceptance seeds 51-65; never a held-out seed 1-50 for anything other than reporting)."
+          "on": true,
+          "required": true,
+          "desc": "DemoSpec of clip 233859 (the no-demo arm ignores its content but the flag is required)."
         },
         {
-          "flag": "--n-frames",
-          "value": "16",
+          "flag": "--arms",
+          "value": "demo",
           "kind": "value",
-          "on": false,
-          "desc": "Number of orbit waypoints."
+          "on": true,
+          "desc": "demo or nodemo."
         },
         {
-          "flag": "--camera",
-          "value": "robot0_eye_in_hand",
+          "flag": "--temperatures",
+          "value": "0.2,0.7",
           "kind": "value",
-          "on": false,
-          "desc": "Default is the fixed 'agentview' camera (teleported each frame). 'robot0_eye_in_hand' needs real arm motion first -- it is parented to the moving gripper, not world, so teleporting it directly is not yet implemented."
+          "on": true,
+          "desc": "One sample per temperature."
         },
         {
-          "flag": "--out-dir",
-          "value": "../data/runs/mapper_probe/frames",
+          "flag": "--explain",
+          "kind": "switch",
+          "on": true,
+          "desc": "Repair replies start with WHY."
+        },
+        {
+          "flag": "--repairs",
+          "value": "4",
           "kind": "value",
-          "on": false,
-          "desc": "Where per-frame .npz files and manifest.txt are written."
+          "on": true,
+          "desc": "Max repairs per sample (5 attempts)."
+        },
+        {
+          "flag": "--planner",
+          "value": "curobo-sim",
+          "kind": "value",
+          "on": true,
+          "desc": "cuRobo with the robot mask from the simulator (privileged)."
+        },
+        {
+          "flag": "--attach-known",
+          "kind": "switch",
+          "on": true,
+          "desc": "Attach the held bowl with its known size (privileged). Needs the dev cuRobo service with ANTS_ATTACH_FILE=data/runs/curobo/attach.json; do not run two such commands at once (one shared attach file)."
+        },
+        {
+          "flag": "--save-clouds",
+          "kind": "switch",
+          "on": true,
+          "desc": "Keep every planning cloud for dev/curobo/make_viewer.py."
+        },
+        {
+          "flag": "--debug-scene",
+          "value": "scaled",
+          "kind": "value",
+          "on": true,
+          "desc": "Debug and repair in the scaled scene."
+        },
+        {
+          "flag": "--scenes",
+          "value": "scaled",
+          "kind": "value",
+          "on": true,
+          "desc": "As run on 2026-11-04. The run also logged stock-scene evaluation."
+        },
+        {
+          "flag": "--eval-seeds",
+          "value": "1,2,3,4,5",
+          "kind": "value",
+          "on": true,
+          "desc": "Held-out seeds, reporting only."
+        },
+        {
+          "flag": "--token-budget",
+          "value": "300000",
+          "kind": "value",
+          "on": true,
+          "desc": "Hard cap on new tokens per command. Observed: demo 204,933, no-demo 247,243 (about 2.8 and 3.3 USD)."
+        },
+        {
+          "flag": "--evidence",
+          "value": "e3",
+          "kind": "value",
+          "on": true,
+          "desc": "Repair adds the contact log, the scene text and stall readings."
+        },
+        {
+          "flag": "--contacts",
+          "kind": "switch",
+          "on": true,
+          "desc": "Log simulator contacts per attempt."
+        },
+        {
+          "flag": "--scene-text-file",
+          "value": "data/scene_text/S4_L1.txt",
+          "kind": "value",
+          "on": true,
+          "desc": "S4 scene text (regenerate with g_scene_text('S4','L1') in ants.orchestrator.scene_context_exp)."
         }
       ],
-      "description": "Teleports a LIBERO camera through N orbit waypoints around the scene and saves RGB-D + world-frame camera pose per frame, in the same convention cap_harness's LiberoAdapter uses for its own camera reads.",
+      "description": "Needs the SAM 3 and PyRoki services and the dev cuRobo service on port 8118 (runbook entries services.start and curobo.service). Settings saved in docs/synthesizer/demo-vs-nodemo-config.json. Run the demo and no-demo commands one after the other, not in parallel.",
       "examples": [
         {
-          "title": "Default bowl-on-plate orbit scan (what produced the 2026-11-03 result)",
-          "cmd": "cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py"
+          "title": "Demo vs no demo, demo arm: demo + S4 + E3 on cuRobo",
+          "cmd": "uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --temperatures 0.2,0.7 --explain --repairs 4 --planner curobo-sim --attach-known --save-clouds --debug-scene scaled --scenes scaled --eval-seeds 1,2,3,4,5 --token-budget 300000 --demospec data/demospecs/hurobo_233859.json --out data/runs/demo_e3_s4_sim --arms demo --evidence e3 --contacts --scene-text-file data/scene_text/S4_L1.txt"
         }
       ],
       "modules": [
-        "scene_recon",
-        "aspire"
+        "orch_exp",
+        "generator",
+        "llm",
+        "muse",
+        "rollout",
+        "launcher",
+        "aspire",
+        "services",
+        "evalkit"
       ],
-      "in": [],
+      "in": [
+        "data/demospecs/hurobo_233859.json",
+        "data/scene_text/S4_L1.txt",
+        "data/scenes/L1/contacts_scene.json"
+      ],
       "out": [
-        "data/runs/mapper_probe/frames/*.npz",
-        "data/runs/mapper_probe/frames/manifest.txt"
-      ],
-      "cost": "free",
-      "minutes": 1,
-      "doc": "docs/perception/scene-reconstruction-probe.md"
+        "data/runs/demo_e3_s4_sim"
+      ]
     },
     {
-      "id": "scene_recon.scan_arm",
-      "title": "Real arm-driven scan: sweep the Franka's wrist camera (not a teleport)",
-      "group": "scene-recon",
-      "runner": "libero",
-      "base": "../tools/mapper_probe/scan_arm.py",
+      "id": "exp12.nodemo",
+      "title": "Demo vs no demo, no-demo arm: task text only on cuRobo",
+      "group": "experiments",
+      "runner": "ants",
+      "paid": true,
+      "base": "-m ants.orchestrator.demo_vs_nodemo",
       "args": [
         {
-          "flag": "--pan-offsets",
-          "value": "-0.5 -0.25 0.0 0.25 0.5",
+          "flag": "--aspire",
+          "value": "ASPIRE",
           "kind": "value",
-          "on": false,
-          "desc": "Radians added to the reset shoulder-pan joint per waypoint."
+          "on": true,
+          "required": true,
+          "desc": "ASPIRE checkout."
         },
         {
-          "flag": "--lift-offsets",
-          "value": "-0.15 0.0 0.15",
+          "flag": "--out",
+          "value": "data/runs/nodemo_task_only_sim",
           "kind": "value",
-          "on": false,
-          "desc": "Radians added to the reset shoulder-lift joint per waypoint; waypoints are the pan x lift grid."
+          "on": true,
+          "required": true,
+          "desc": "Run folder. Repeat the same --out to resume."
         },
         {
-          "flag": "--out-dir",
-          "value": "../data/runs/mapper_probe/frames_arm_full",
+          "flag": "--demospec",
+          "value": "data/demospecs/hurobo_233859.json",
           "kind": "value",
-          "on": false,
-          "desc": "Where per-frame .npz files and manifest.txt are written."
+          "on": true,
+          "required": true,
+          "desc": "DemoSpec of clip 233859 (the no-demo arm ignores its content but the flag is required)."
+        },
+        {
+          "flag": "--arms",
+          "value": "nodemo",
+          "kind": "value",
+          "on": true,
+          "desc": "demo or nodemo."
+        },
+        {
+          "flag": "--temperatures",
+          "value": "0.2,0.7",
+          "kind": "value",
+          "on": true,
+          "desc": "One sample per temperature."
+        },
+        {
+          "flag": "--explain",
+          "kind": "switch",
+          "on": true,
+          "desc": "Repair replies start with WHY."
+        },
+        {
+          "flag": "--repairs",
+          "value": "4",
+          "kind": "value",
+          "on": true,
+          "desc": "Max repairs per sample (5 attempts)."
+        },
+        {
+          "flag": "--planner",
+          "value": "curobo-sim",
+          "kind": "value",
+          "on": true,
+          "desc": "cuRobo with the robot mask from the simulator (privileged)."
+        },
+        {
+          "flag": "--attach-known",
+          "kind": "switch",
+          "on": true,
+          "desc": "Attach the held bowl with its known size (privileged). Needs the dev cuRobo service with ANTS_ATTACH_FILE=data/runs/curobo/attach.json; do not run two such commands at once (one shared attach file)."
+        },
+        {
+          "flag": "--save-clouds",
+          "kind": "switch",
+          "on": true,
+          "desc": "Keep every planning cloud for dev/curobo/make_viewer.py."
+        },
+        {
+          "flag": "--debug-scene",
+          "value": "scaled",
+          "kind": "value",
+          "on": true,
+          "desc": "Debug and repair in the scaled scene."
+        },
+        {
+          "flag": "--scenes",
+          "value": "scaled",
+          "kind": "value",
+          "on": true,
+          "desc": "As run on 2026-11-04. The run also logged stock-scene evaluation."
+        },
+        {
+          "flag": "--eval-seeds",
+          "value": "1,2,3,4,5",
+          "kind": "value",
+          "on": true,
+          "desc": "Held-out seeds, reporting only."
+        },
+        {
+          "flag": "--token-budget",
+          "value": "300000",
+          "kind": "value",
+          "on": true,
+          "desc": "Hard cap on new tokens per command. Observed: demo 204,933, no-demo 247,243 (about 2.8 and 3.3 USD)."
         }
       ],
-      "description": "Closed-loop drives the Franka's shoulder-pan and shoulder-lift joints through a pan x lift waypoint grid using the exact delta-joint formula LiberoActionCodec.encode uses, then saves robot0_eye_in_hand RGB-D + world-frame camera pose per waypoint -- genuine robot motion, not a camera teleport.",
+      "description": "Needs the SAM 3 and PyRoki services and the dev cuRobo service on port 8118 (runbook entries services.start and curobo.service). Settings saved in docs/synthesizer/demo-vs-nodemo-config.json. Run the demo and no-demo commands one after the other, not in parallel.",
       "examples": [
         {
-          "title": "Default 15-waypoint pan x tilt grid",
-          "cmd": "cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py"
+          "title": "Demo vs no demo, no-demo arm: task text only on cuRobo",
+          "cmd": "uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --temperatures 0.2,0.7 --explain --repairs 4 --planner curobo-sim --attach-known --save-clouds --debug-scene scaled --scenes scaled --eval-seeds 1,2,3,4,5 --token-budget 300000 --demospec data/demospecs/hurobo_233859.json --out data/runs/nodemo_task_only_sim --arms nodemo"
         }
       ],
       "modules": [
-        "scene_recon",
-        "aspire"
-      ],
-      "in": [],
-      "out": [
-        "data/runs/mapper_probe/frames_arm_full/*.npz",
-        "data/runs/mapper_probe/frames_arm_full/manifest.txt"
-      ],
-      "cost": "free",
-      "minutes": 1,
-      "doc": "docs/perception/scene-reconstruction-probe.md"
-    },
-    {
-      "id": "scene_recon.scan_lookat",
-      "title": "IK look-at scan: fixate the bowl from arc viewpoints via PyRoki",
-      "group": "scene-recon",
-      "runner": "libero",
-      "base": "../tools/mapper_probe/scan_lookat.py",
-      "args": [
-        {
-          "flag": "--azimuths-deg",
-          "value": "-60 -20 20 60",
-          "kind": "value",
-          "on": false,
-          "desc": "Azimuths around the look-at target, 0 = behind the robot."
-        },
-        {
-          "flag": "--heights-m",
-          "value": "0.35 0.55",
-          "kind": "value",
-          "on": false,
-          "desc": "Camera heights above the target per azimuth."
-        },
-        {
-          "flag": "--out-dir",
-          "value": "../data/runs/mapper_probe/frames_lookat",
-          "kind": "value",
-          "on": false,
-          "desc": "Where per-frame .npz files and manifest.txt are written."
-        }
-      ],
-      "description": "Solves fixated camera poses with the PyRoki IK service (start it with supervise_services.sh --providers pyroki) and closed-loop drives the Franka there. Narrow reachable set: expect IK skips outside the az=-20 column.",
-      "examples": [],
-      "modules": [
-        "scene_recon",
-        "aspire"
+        "orch_exp",
+        "generator",
+        "llm",
+        "muse",
+        "rollout",
+        "launcher",
+        "aspire",
+        "services",
+        "evalkit"
       ],
       "in": [
-        "PyRoki IK service on 127.0.0.1:8116"
+        "data/demospecs/hurobo_233859.json",
+        "data/scene_text/S4_L1.txt",
+        "data/scenes/L1/contacts_scene.json"
       ],
       "out": [
-        "data/runs/mapper_probe/frames_lookat/*.npz",
-        "data/runs/mapper_probe/frames_lookat/manifest.txt"
-      ],
-      "cost": "free",
-      "minutes": 3,
-      "doc": "docs/perception/scene-reconstruction-probe.md"
-    },
-    {
-      "id": "scene_recon.plan_esdf",
-      "title": "Plan one motion against the fused mesh vs the single-frame mesh",
-      "group": "scene-recon",
-      "runner": "curobo",
-      "base": "../tools/mapper_probe/plan_esdf.py",
-      "args": [],
-      "description": "Fuses the orbit frames into a Mapper ESDF mesh, plans home-to-pan-sweep with it as the cuRobo world obstacle, and repeats with the single-frame voxel mesh. Planning only, nothing executes.",
-      "examples": [],
-      "modules": [
-        "scene_recon",
-        "aspire"
-      ],
-      "in": [
-        "data/runs/mapper_probe/frames/*.npz"
-      ],
-      "out": [],
-      "cost": "free",
-      "minutes": 3,
-      "doc": "docs/perception/scene-reconstruction-probe.md"
-    },
-    {
-      "id": "scene_recon.viewer",
-      "title": "Build the single-file HTML viewer for the fused meshes",
-      "group": "scene-recon",
-      "runner": "shell",
-      "base": "uv run python tools/mapper_probe/make_viewer.py",
-      "args": [],
-      "description": "Embeds the orbit and full arm-scan PLYs as base64 in one portable HTML page (three.js orbit controls, mesh toggle). Open data/runs/mapper_probe/viewer.html straight from disk.",
-      "examples": [],
-      "modules": [
-        "scene_recon"
-      ],
-      "in": [
-        "data/runs/mapper_probe/reconstructed_scene.ply",
-        "data/runs/mapper_probe/arm_scan_full/reconstructed_scene.ply"
-      ],
-      "out": [
-        "data/runs/mapper_probe/viewer.html"
-      ],
-      "cost": "free",
-      "minutes": 1,
-      "doc": "docs/perception/scene-reconstruction-probe.md"
-    },
-    {
-      "id": "scene_recon.fuse",
-      "title": "Fuse orbit-scan frames into a cuRobo Mapper mesh",
-      "group": "scene-recon",
-      "runner": "curobo",
-      "base": "../tools/mapper_probe/fuse_mapper.py",
-      "args": [
-        {
-          "flag": "--frames-dir",
-          "value": "../data/runs/mapper_probe/frames",
-          "kind": "value",
-          "on": false,
-          "desc": "Output of scene_recon.scan."
-        },
-        {
-          "flag": "--voxel-size",
-          "value": "0.01",
-          "kind": "value",
-          "on": false,
-          "desc": "TSDF voxel size in meters; smaller is sharper and slower."
-        },
-        {
-          "flag": "--n-render-views",
-          "value": "3",
-          "kind": "value",
-          "on": false,
-          "desc": "How many shaded PNG renders to save from scan camera poses."
-        }
-      ],
-      "description": "Integrates every saved frame into curobo.perception.Mapper (Warp backend), computes the ESDF, extracts a surface mesh, and saves it plus a few shaded renders.",
-      "examples": [
-        {
-          "title": "Default fuse on the orbit scan above",
-          "cmd": "cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py"
-        }
-      ],
-      "modules": [
-        "scene_recon",
-        "aspire"
-      ],
-      "in": [
-        "data/runs/mapper_probe/frames/*.npz"
-      ],
-      "out": [
-        "data/runs/mapper_probe/reconstructed_scene.ply",
-        "data/runs/mapper_probe/reconstructed_view_*.png"
-      ],
-      "cost": "free",
-      "minutes": 2,
-      "doc": "docs/perception/scene-reconstruction-probe.md"
+        "data/runs/nodemo_task_only_sim"
+      ]
     }
   ]
 }

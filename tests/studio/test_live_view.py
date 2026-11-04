@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import struct
 import subprocess
 import sys
 from pathlib import Path
@@ -141,3 +142,54 @@ def test_enable_keeps_an_existing_pythonpath(monkeypatch):
     view = live_view.enable()
     assert os.environ["ANTS_LIVE_DIR"] == str(view.dir)
     assert os.environ["PYTHONPATH"] == os.pathsep.join([str(live_view.HOOK_DIR), "/existing"])
+
+
+def test_mirror_route_only_serves_its_three_files(tmp_path):
+    (tmp_path / "mirror_state.bin").write_bytes(b"x")
+    (tmp_path / "status.json").write_text("{}", encoding="utf-8")
+    live = live_view.LiveView(tmp_path)
+    assert live.mirror("state.bin") == b"x"
+    assert live.mirror("model.json") is None  # not written yet
+    for other in ("status.json", "../status.json", "mirror_state.bin"):
+        assert live.mirror(other) is None
+
+
+def test_status_names_the_mirror_of_the_running_rollout(tmp_path):
+    status = {"pid": os.getpid(), "ended": False, "mirror": "1-2", "cameras": []}
+    (tmp_path / "status.json").write_text(json.dumps(status), encoding="utf-8")
+    assert live_view.LiveView(tmp_path).status(True)["mirror"] == "1-2"
+
+
+def test_mirror_state_format_and_it_only_reads_the_simulator():
+    np = pytest.importorskip("numpy")
+    sys.path.insert(0, str(live_view.HOOK_DIR))
+    try:
+        import ants_live_mirror as mirror
+    finally:
+        sys.path.remove(str(live_view.HOOK_DIR))
+
+    class Contact:
+        pos = np.array([[1.0, 2.0, 3.0], [9.0, 9.0, 9.0]])
+
+    class Data:  # no method to call: writing state cannot step or recompute anything
+        ncon = 1
+        contact = Contact
+        geom_xpos = np.arange(9.0).reshape(3, 3)
+        geom_xmat = np.arange(27.0).reshape(3, 9)
+
+    blob = mirror.state_bytes(Data, np.array([2]), 41)
+    assert struct.unpack("<II", blob[:8]) == (41, 1)
+    values = np.frombuffer(blob[8:], dtype="<f4")
+    assert values[:3].tolist() == [1.0, 2.0, 3.0]
+    assert values[3:6].tolist() == [6.0, 7.0, 8.0]
+    assert values[6:].tolist() == list(range(18, 27))
+
+
+def test_panel_wiring_loads_the_mirror_after_the_panel():
+    shell = (live_view.HOOK_DIR.parents[1] / "src/ants/studio/views/shell.html").read_text("utf-8")
+    assert shell.index("/static/live.js") < shell.index("/static/live_mirror.js")
+    script = (live_view.HOOK_DIR.parents[1] / "src/ants/studio/static/live_mirror.js").read_text(
+        "utf-8"
+    )
+    assert "SIMULATOR TRUTH" in script and "LIVE MIRROR" in script
+    assert "reconstruct" not in script.replace("not a reconstruction", "")

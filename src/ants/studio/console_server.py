@@ -40,6 +40,7 @@ STATIC_FILES = {
     "flow.js": STATIC_DIR / "flow.js",
     "live.js": STATIC_DIR / "live.js",
     "live.css": STATIC_DIR / "live.css",
+    "live_mirror.js": STATIC_DIR / "live_mirror.js",
     "flow.css": STATIC_DIR / "flow.css",
     "flow_blocks.json": REPO_ROOT / "docs" / "studio" / "process-flow-blocks.json",
 }
@@ -753,14 +754,17 @@ def make_handler(
             return state.session.runs_dir
         return loop_cfg.out_dir if loop_cfg else None
 
+    # what /policy-dev sends; --scene shows some other file, for reference only
+    sent_scene = REPO_ROOT / policy_dev.load_skill()["scene_context"]["dump"]
     data = {
         "incumbent_name": incumbent.name,
         "incumbent_code": incumbent.read_text(encoding="utf-8"),
         "tools_left": TOOLS_LEFT,
         "tools_right": TOOLS_RIGHT,
         "scene2d": {
-            "generation": _scene2d_or_none(scene_generation_path),
-            "source": str(scene_generation_path) if scene_generation_path else None,
+            "generation": _scene2d_or_none(scene_generation_path or sent_scene),
+            "source": str(scene_generation_path or sent_scene.relative_to(REPO_ROOT)),
+            "sent": scene_generation_path is None,
         },
         "loop_config": (
             {
@@ -905,6 +909,19 @@ def make_handler(
                 body = state.live.frame(path[len("/live/frame/") : -4]) if state.live else None
                 self.send_response(200 if body else 404)
                 self.send_header("Content-Type", "image/jpeg")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(body or b"")))
+                self.end_headers()
+                self.wfile.write(body or b"")
+                return
+            if path.startswith("/live/mirror/"):
+                name = path[len("/live/mirror/") :]
+                body = state.live.mirror(name) if state.live else None
+                self.send_response(200 if body else 404)
+                self.send_header(
+                    "Content-Type",
+                    "application/json" if name.endswith(".json") else "application/octet-stream",
+                )
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("Content-Length", str(len(body or b"")))
                 self.end_headers()

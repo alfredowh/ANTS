@@ -1,6 +1,6 @@
 {
  "version": 2,
- "note": "Block hierarchy of the live process-flow panel (static/flow.js). The top-level blocks with a 'stage' are driven by SSE events; see process-flow-design.md. status: built or planned. live.signal: live, after_the_fact, grouped or static. There is no production view (D18).",
+ "note": "Block hierarchy of the live process-flow panel (static/flow.js). status: built or planned. live.signal: live, after_the_fact, grouped or static. There is no production view (D18).",
  "stages": [
   "video",
   "extract",

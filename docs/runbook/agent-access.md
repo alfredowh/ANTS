@@ -4,7 +4,7 @@ Goal: whichever coding agent continues the work can run the same experiments, wi
 
 ## Start-up prompt (paste as the first message to a new agent)
 
-> Read `AGENTS.md`, then `docs/HANDOFF.md` and `docs/runbook/agent-access.md`. Run `uv run python -m ants.evalkit.runbook list` to see every experiment and command. Do not print or commit `.env`. Ask me before any run that spends Muse tokens beyond `--token-budget 100000`.
+> Read `AGENTS.md`, then `docs/runbook/agent-access.md`. Run `uv run python -m ants.evalkit.runbook list` to see every experiment and command. Do not print or commit `.env`. Ask me before any run that spends Muse tokens beyond `--token-budget 100000`.
 
 ## What the agent needs (same as Claude Code has now)
 
@@ -21,7 +21,6 @@ Goal: whichever coding agent continues the work can run the same experiments, wi
 ## Fallbacks that work without Claude's tools
 
 - **Run book UI:** Claude artifact https://claude.ai/artifact/AimCCqfBF2ooHEqZwiFVMS (Claude only); elsewhere open `docs/runbook.html` in a browser (static, no server). Same content: `uv run python -m ants.evalkit.runbook list | show <exp> | cmd <id>`.
-- **To-do:** `docs/todo.md` (items plus the generated run book block). The interactive To-do artifact needs Claude's Artifact tool.
 - **Run viewer:** `uv run python -m ants.evalkit.report data/runs --open`.
 - **Skills** (`.claude/skills/*/SKILL.md`) are plain markdown procedures. Another agent can read and follow them; only the steps that write to the artifact database need the Artifact tools, so skip those or write the result into `docs/`.
 
@@ -40,5 +39,5 @@ Goal: whichever coding agent continues the work can run the same experiments, wi
 When you add or change a command, experiment or flag:
 
 1. Edit `docs/runbook/commands.json` (the only hand-edited file).
-2. `uv run python -m ants.evalkit.runbook check` then `... build`. This regenerates `docs/runbook.html`, `docs/runbook/commands-full.md`, `docs/synthesizer/experiment-commands.md` and the block in `docs/todo.md`.
+2. `uv run python -m ants.evalkit.runbook check` then `... build`. This regenerates `docs/runbook.html`, `docs/runbook/commands-full.md`, `docs/synthesizer/experiment-commands.md`.
 3. `uv run pytest tests/evalkit/test_runbook.py` must pass.

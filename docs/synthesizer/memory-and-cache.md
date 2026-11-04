@@ -14,7 +14,6 @@ Status: synthesis of six research reports, 2026-11-01. Nothing here is decided a
 | [R4] | [research/memory-skill-libraries-llm-agents.md](research/memory-skill-libraries-llm-agents.md) | What the skill-library literature shows |
 | [R5] | [research/memory-correction-and-failure-libraries.md](research/memory-correction-and-failure-libraries.md) | Correction and failure libraries |
 | [R6] | [research/memory-management-and-caching.md](research/memory-management-and-caching.md) | Lifecycle, rankers, cache engineering |
-| [R7] | [research/memory-radar-shortlist.md](research/memory-radar-shortlist.md) | Radar mined for memory works: family map, 25-paper deep-read list, 53 paste-ready radar additions, 12 data issues |
 
 ---
 

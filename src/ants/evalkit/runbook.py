@@ -182,6 +182,8 @@ def todo_block(data: dict) -> str:
 
 
 def write_todo(data: dict, path: Path) -> None:
+    if not path.exists():  # a personal to-do list is optional; the repo does not ship one
+        return
     text = path.read_text(encoding="utf-8")
     block = todo_block(data)
     if START in text:
@@ -212,7 +214,9 @@ def build(data: dict, root: Path = ROOT, artifact_out: Path | None = None) -> li
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
     write_todo(data, root / "docs" / "todo.md")
-    written = [*targets, root / "docs" / "todo.md"]
+    written = [*targets]
+    if (root / "docs" / "todo.md").exists():
+        written.append(root / "docs" / "todo.md")
     if artifact_out:
         artifact_out.write_text(html(data, local=False), encoding="utf-8")
         written.append(artifact_out)
