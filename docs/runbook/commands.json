@@ -902,6 +902,155 @@
   ],
   "commands": [
     {
+      "id": "studio.console",
+      "title": "Studio live console (sessions)",
+      "group": "viewer",
+      "runner": "ants",
+      "where": "ANTS repo root",
+      "base": "-m ants.studio.console",
+      "args": [
+        {
+          "flag": "--port",
+          "value": "8765",
+          "kind": "value",
+          "on": true,
+          "desc": "Port to serve on."
+        },
+        {
+          "flag": "--max-model-steps",
+          "value": "6",
+          "kind": "value",
+          "on": true,
+          "desc": "Hard cap on Muse Code tool/model steps per rewrite call."
+        },
+        {
+          "flag": "--reasoning-effort",
+          "value": "medium",
+          "kind": "value",
+          "on": true,
+          "desc": "Muse Code reasoning effort."
+        },
+        {
+          "flag": "--session",
+          "value": "sess-20261104-120000",
+          "kind": "value",
+          "on": false,
+          "desc": "Resume an existing session folder data/console_sessions/<id> instead of starting a new one. A session stores session.json, chat.jsonl, events.jsonl and runs/run-<ts>/; the navigator's New session button starts a fresh one."
+        },
+        {
+          "flag": "--adversary-run",
+          "value": "data/runs/<name>",
+          "kind": "value",
+          "on": false,
+          "desc": "Run folder the Adversary view shows while this session has no run of its own, e.g. a finished ants.orchestrator.run directory. Read-only apart from rebuilding its studio.html."
+        },
+        {
+          "flag": "--video-dir",
+          "value": "hurobo/data/raw/e1/clips",
+          "kind": "value",
+          "on": false,
+          "desc": "Folder /policy-dev's file dialog opens at."
+        },
+        {
+          "flag": "--pipeline-token-budget",
+          "value": "300000",
+          "kind": "value",
+          "on": false,
+          "desc": "Default of the dialog's Muse token cap for /policy-dev."
+        }
+      ],
+      "description": "Serves ANTS Studio: an Adversary | Synthesizer switch over Daniel's Harden/Replay/Versions page and the agent console. Runs start from /policy-dev in the chat (see studio.policy-dev); backend, attacks, seeds, strategy and budgets are chosen in its dialog. Every server start creates a session folder under data/console_sessions/ holding the chat log, every broadcast event and the per-run folders. While a rollout of a run it started is in progress, a live panel shows the agentview and wrist cameras: the console sets ANTS_LIVE_DIR and PYTHONPATH=tools/ants_live_hook for its children, which tee the frames ASPIRE already renders for its video (about 6 fps while the robot moves; no effect on results). Each rewrite spends Muse tokens (about $0.5 observed) and the loop stops at --synth-token-budget.",
+      "examples": [
+        {
+          "title": "Start the server",
+          "cmd": "uv run python -m ants.studio.console --port 8765 --max-model-steps 6 --reasoning-effort medium"
+        },
+        {
+          "title": "Resume a stored session",
+          "cmd": "uv run python -m ants.studio.console --session sess-20261104-120000"
+        },
+        {
+          "title": "See the Adversary view on a finished run",
+          "cmd": "uv run python -m ants.studio.console --adversary-run data/runs/<name>"
+        }
+      ],
+      "modules": [],
+      "in": [],
+      "out": [
+        "data/console_sessions/<id>/"
+      ],
+      "paid": true,
+      "cost": "~$0.5 per rewrite; bounded by --synth-token-budget",
+      "minutes": 10
+    },
+    {
+      "id": "studio.policy-dev",
+      "title": "Studio: full pipeline with /policy-dev (video to hardened program)",
+      "group": "viewer",
+      "runner": "ants",
+      "where": "ANTS repo root",
+      "base": "-m ants.studio.console",
+      "args": [
+        {
+          "flag": "--port",
+          "value": "8765",
+          "kind": "value",
+          "on": true,
+          "desc": "Port to serve on."
+        },
+        {
+          "flag": "--max-model-steps",
+          "value": "6",
+          "kind": "value",
+          "on": true,
+          "desc": "Hard cap on Muse Code tool/model steps per rewrite call."
+        },
+        {
+          "flag": "--reasoning-effort",
+          "value": "medium",
+          "kind": "value",
+          "on": true,
+          "desc": "Muse Code reasoning effort."
+        },
+        {
+          "flag": "--session",
+          "value": "sess-20261104-120000",
+          "kind": "value",
+          "on": false,
+          "desc": "Resume an existing session folder data/console_sessions/<id> instead of starting a new one. A session stores session.json, chat.jsonl, events.jsonl and runs/run-<ts>/; the navigator's New session button starts a fresh one."
+        },
+        {
+          "flag": "--video-dir",
+          "value": "hurobo/data/raw/e1/clips",
+          "kind": "value",
+          "on": false,
+          "desc": "Folder /policy-dev's file dialog opens at."
+        },
+        {
+          "flag": "--pipeline-token-budget",
+          "value": "300000",
+          "kind": "value",
+          "on": true,
+          "desc": "Default of the dialog's Muse token cap for /policy-dev."
+        }
+      ],
+      "description": "Start the server, click the /policy-dev chip, choose a marker clip with +, type the task, press Enter; a settings dialog opens; Run starts it. Stages: preflight, hurobo extraction (5.75 cm marker; 7 of 26 clips pass, listed in docs/studio/live-console-handoff.md), DemoSpec, prompt, one Muse generation on seed 51 in the stock scene, then the Adversary loop on real cap_harness rollouts with the mock proposer. Dialog defaults (docs/studio/skills/policy-dev.json): Synthesizer on, 5 retries, Adversary on, Thompson, 2 attacks, 1 seed, 300000 token cap. Synthesizer off attacks a given .py and reports, with no tokens. Adversary off saves the program to data/deploy/. Bowl-on-plate only. Spends Muse tokens up to the cap (about $4 at 300000). Stops and spends nothing if preflight fails or another simulator is running.",
+      "examples": [
+        {
+          "title": "Start the server, then use the chip",
+          "cmd": "uv run python -m ants.studio.console --port 58910 --max-model-steps 6 --reasoning-effort medium --pipeline-token-budget 300000"
+        }
+      ],
+      "modules": [],
+      "in": [],
+      "out": [
+        "data/console_sessions/<id>/"
+      ],
+      "paid": true,
+      "cost": "about $4 at most (300k tokens)",
+      "minutes": 40
+    },
+    {
       "id": "setup.sync",
       "title": "Install / sync the ANTS env",
       "group": "setup",

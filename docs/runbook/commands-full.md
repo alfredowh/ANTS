@@ -1247,7 +1247,7 @@ cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/ma
 
 ### `scene_recon.scan_arm`: Real arm-driven scan: sweep the Franka's wrist camera (not a teleport)
 
-Closed-loop drives the Franka's shoulder-pan joint through N waypoints using the exact delta-joint formula LiberoActionCodec.encode uses, then saves robot0_eye_in_hand RGB-D + world-frame camera pose per waypoint -- genuine robot motion, not a camera teleport.
+Closed-loop drives the Franka's shoulder-pan and shoulder-lift joints through a pan x lift waypoint grid using the exact delta-joint formula LiberoActionCodec.encode uses, then saves robot0_eye_in_hand RGB-D + world-frame camera pose per waypoint -- genuine robot motion, not a camera teleport.
 
 ```bash
 LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
@@ -1255,10 +1255,11 @@ LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl
 
 | Flag | Default | On | Meaning |
 |---|---|---|---|
-| `--pan-offsets` | `-0.5 -0.3 -0.1 0.1 0.3 0.5` | no | Radians added to the reset shoulder-pan joint per waypoint. |
-| `--out-dir` | `../data/runs/mapper_probe/frames_arm` | no | Where per-frame .npz files and manifest.txt are written. |
+| `--pan-offsets` | `-0.5 -0.25 0.0 0.25 0.5` | no | Radians added to the reset shoulder-pan joint per waypoint. |
+| `--lift-offsets` | `-0.15 0.0 0.15` | no | Radians added to the reset shoulder-lift joint per waypoint; waypoints are the pan x lift grid. |
+| `--out-dir` | `../data/runs/mapper_probe/frames_arm_full` | no | Where per-frame .npz files and manifest.txt are written. |
 
-Default 6-waypoint pan sweep:
+Default 15-waypoint pan x tilt grid:
 
 ```bash
 cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
