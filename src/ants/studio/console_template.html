@@ -43,7 +43,7 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
 .scene2d svg text.m{fill:var(--dim);font-size:8px}
 .scene2d-legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:10.5px;color:var(--muted);margin-top:6px}
 .scene2d-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
-.scene2d-note{font-size:10.5px;color:var(--dim);margin-top:6px;line-height:1.5}
+.scene2d-note{font-size:10px;color:var(--dim);margin-top:5px;cursor:help}
 .h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500;margin-bottom:10px}
 .tool{border:1px solid var(--line);background:var(--panel);padding:8px 10px;margin-bottom:8px;border-left:3px solid var(--faint)}
 .tool .name{font-family:var(--mono);font-size:12px}
@@ -77,15 +77,14 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
 .banner{display:none;border:1px solid var(--fail);background:#2a0f0f;color:#ffb3b0;padding:10px 14px;margin-bottom:14px;font-size:12.5px;line-height:1.5}
 .banner.on{display:block}
 .banner b{color:#ff8884}
-.agentview{margin:18px 0}
-.agentview-note{font-size:10.5px;color:var(--dim);line-height:1.5;margin-bottom:8px}
-.agentview-grid{display:flex;flex-direction:column;gap:10px;max-height:360px;overflow-y:auto}
-.agentview-pair{border:1px solid var(--line);background:var(--panel);padding:6px}
-.agentview-pair .call{font-size:11px;color:var(--muted);margin-bottom:5px;font-family:var(--mono)}
-.agentview-imgs{display:flex;gap:4px}
+.agentview{margin:16px 0}
+.agentview-note{font-size:10px;color:var(--dim);margin-bottom:6px;cursor:help}
+.agentview-grid{display:flex;flex-direction:column;gap:6px;max-height:190px;overflow-y:auto}
+.agentview-pair{border:1px solid var(--line);background:var(--panel);padding:5px}
+.agentview-pair .call{font-size:10.5px;color:var(--muted);margin-bottom:4px;font-family:var(--mono)}
+.agentview-imgs{display:flex;gap:3px}
 .agentview-imgs figure{margin:0;flex:1;min-width:0}
-.agentview-imgs img{width:100%;display:block;border:1px solid var(--line2)}
-.agentview-imgs figcaption{font-size:9.5px;color:var(--dim);text-align:center;margin-top:2px}
+.agentview-imgs img{width:100%;display:block;border-radius:2px}
 </style>
 </head>
 <body>
@@ -225,13 +224,15 @@ function renderScene2D(kind) {
   if (!scene) {
     svg.innerHTML = "";
     asofEl.textContent = "";
-    noteEl.textContent = "no scene data (pass --scene / --scene-repair to the console)";
+    noteEl.textContent = "no scene data";
+    noteEl.title = "Pass --scene / --scene-repair to the console.";
     return;
   }
   asofEl.textContent = "as of " + scene.as_of;
-  noteEl.textContent = kind === "generation"
-    ? "S4-style scene text given to System 1 for the first program (oracle geometry, no robot trajectory)."
-    : "Scene given to the repair step" + (s2d.same_source ? " -- same data as generation; E3-style contact/stall evidence isn't wired into this console yet." : ".");
+  noteEl.textContent = kind === "generation" ? "Given to System 1's first draft" : "Given to the repair step";
+  noteEl.title = kind === "generation"
+    ? "S4-style scene text: oracle geometry, no robot trajectory."
+    : "Same data as generation" + (s2d.same_source ? " -- E3-style contact/stall evidence isn't wired into this console yet." : ".");
 
   const pad = 14;
   let xs = [], ys = [];
@@ -271,16 +272,18 @@ function renderScene2D(kind) {
   svg.setAttribute("viewBox", `0 0 ${Math.max(1, w).toFixed(1)} ${Math.max(1, h).toFixed(1)}`);
   svg.innerHTML = parts.join("");
 }
-document.getElementById("scene-gen-btn").addEventListener("click", () => renderScene2D("generation"));
-document.getElementById("scene-repair-btn").addEventListener("click", () => renderScene2D("repair"));
+document.getElementById("scene-gen-btn").addEventListener("click", () => { renderScene2D("generation"); saveUiState(); });
+document.getElementById("scene-repair-btn").addEventListener("click", () => { renderScene2D("repair"); saveUiState(); });
 renderScene2D("generation");
 
 /* ---------- archived agentview frames (reference, not live) ---------- */
 (function () {
   const archive = DATA.agentview_archive || { frames: [] };
-  document.getElementById("agentview-note").textContent = archive.frames.length
-    ? `Archived example (${esc(archive.source)}), not from this run — this console's loop uses the mock System 2 backend, which has no simulator or camera. Real frames need the ASPIRE/cap_harness backend.`
-    : "No archived example found (expected under " + esc(archive.source || "data/runs/exp04_scene") + ").";
+  const noteEl = document.getElementById("agentview-note");
+  noteEl.textContent = archive.frames.length ? "Archived example, not live" : "No archived example found";
+  noteEl.title = archive.frames.length
+    ? `From ${archive.source} — this console's loop uses the mock System 2 backend (no simulator or camera), so real frames aren't available yet.`
+    : `Expected under ${archive.source || "data/runs/exp04_scene"}.`;
   const grid = document.getElementById("agentview-grid");
   const frames = archive.frames;
   const pairs = [];
@@ -291,8 +294,8 @@ renderScene2D("generation");
     <div class="agentview-pair">
       <div class="call">${esc(before.call)} <span style="color:var(--dim)">#${esc(before.index)}</span></div>
       <div class="agentview-imgs">
-        <figure><img src="${before.src}" loading="lazy" alt="before ${esc(before.call)}"><figcaption>before</figcaption></figure>
-        <figure><img src="${after.src}" loading="lazy" alt="after ${esc(after.call)}"><figcaption>after</figcaption></figure>
+        <figure><img src="${before.src}" loading="lazy" title="before" alt="before ${esc(before.call)}"></figure>
+        <figure><img src="${after.src}" loading="lazy" title="after" alt="after ${esc(after.call)}"></figure>
       </div>
     </div>`).join("") || `<div class="empty">no frames found</div>`;
 })();
@@ -474,6 +477,54 @@ function handleError(payload) {
   addTurn("error", `<div class="tk">error</div><div class="main">${esc(payload.message)}</div>`);
 }
 
+/* ---------- persist the last UI state locally, so a reload shows it, not a blank page ---------- */
+const UI_STATE_KEY = "ants-console-last-state";
+function saveUiState() {
+  try {
+    localStorage.setItem(UI_STATE_KEY, JSON.stringify({
+      ts: new Date().toISOString(),
+      turnsHTML: turnsEl.innerHTML,
+      turnCount, rewriteTokenTotal,
+      statusClass: pill.className, statusText: pill.textContent,
+      bannerOn: document.getElementById("banner").classList.contains("on"),
+      bannerHTML: document.getElementById("banner").innerHTML,
+      sys: ["sys1", "sys2", "orch"].reduce((o, id) => {
+        o[id] = [document.getElementById(id + "-badge").classList.contains("active"), document.getElementById(id + "-stage").textContent];
+        return o;
+      }, {}),
+      usageTilesHTML: document.getElementById("usage-tiles").innerHTML,
+      replyText: document.getElementById("reply-box").textContent,
+      sceneKind,
+    }));
+  } catch (e) {}
+}
+function restoreUiState() {
+  let snap;
+  try { snap = JSON.parse(localStorage.getItem(UI_STATE_KEY) || "null"); } catch (e) { snap = null; }
+  if (!snap || !snap.turnCount) return;
+  turnsEl.innerHTML = snap.turnsHTML;
+  turnCount = snap.turnCount;
+  rewriteTokenTotal = snap.rewriteTokenTotal || 0;
+  const wasRunning = (snap.statusClass || "").includes("running");
+  setStatus(wasRunning ? "idle" : snap.statusClass.replace("status-pill", "").trim(), wasRunning ? "idle (reload)" : snap.statusText);
+  if (snap.bannerOn) {
+    document.getElementById("banner").innerHTML = snap.bannerHTML;
+    document.getElementById("banner").classList.add("on");
+  }
+  for (const id of ["sys1", "sys2", "orch"]) {
+    const [active, stage] = snap.sys[id] || [false, "idle"];
+    setSys(id, wasRunning ? false : active, wasRunning ? "idle (reload)" : stage);
+  }
+  if (snap.usageTilesHTML) document.getElementById("usage-tiles").innerHTML = snap.usageTilesHTML;
+  if (snap.replyText) document.getElementById("reply-box").textContent = snap.replyText;
+  if (snap.sceneKind) renderScene2D(snap.sceneKind);
+  const note = document.createElement("div");
+  note.id = "restored-note";
+  note.style.cssText = "font-size:10.5px;color:var(--dim);margin-bottom:8px";
+  note.textContent = "restored from this browser's last session (" + new Date(snap.ts).toLocaleString() + ")";
+  turnsEl.parentElement.insertBefore(note, turnsEl);
+}
+
 function openStream() {
   const es = new EventSource("/events");
   es.onmessage = (ev) => {
@@ -483,6 +534,7 @@ function openStream() {
     else if (data.kind === "attack_event") handleAttackEvent(data);
     else if (data.kind === "done") { handleDone(data); es.close(); }
     else if (data.kind === "error") { handleError(data); es.close(); }
+    saveUiState();
   };
   es.onerror = () => es.close();
 }
@@ -500,6 +552,7 @@ runBtn.addEventListener("click", () => {
       "program shown here, not the full loop.";
   const ok = window.confirm(gateMsg);
   if (!ok) return;
+  document.getElementById("restored-note")?.remove();
   rewriteTokenTotal = 0;
   runBtn.disabled = true;
   turnCount = 0;
@@ -509,6 +562,7 @@ runBtn.addEventListener("click", () => {
   if (DATA.mode === "loop") { setSys("sys2", false, "idle"); setSys("orch", true, "starting"); }
   setStatus("running", "running");
   document.getElementById("reply-box").textContent = "(waiting)";
+  saveUiState();
   openStream();
   fetch("/run", {
     method: "POST",
@@ -518,6 +572,8 @@ runBtn.addEventListener("click", () => {
     if (!r.ok) { handleError({message: r.error}); }
   });
 });
+
+restoreUiState();
 </script>
 </body>
 </html>
