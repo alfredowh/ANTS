@@ -232,7 +232,7 @@
     return svg(W, H, edges + kids.map((k, i) => { const p = pos(i); return nodeHtml(k, p.x, p.y, w, h); }).join(""));
   }
   function svg(w, h, inner) {
-    return `<svg class="flow-svg" viewBox="0 0 ${w} ${h}" role="group" aria-label="Process blocks"><defs><marker id="fl-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="fl-arrow" d="M0 0L8 4L0 8z"/></marker></defs>${inner}</svg>`;
+    return `<svg class="flow-svg" viewBox="0 0 ${w} ${h}" role="group" aria-label="Process blocks"><defs><marker id="fl-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerUnits="userSpaceOnUse" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path class="fl-arrow" d="M0 0L8 4L0 8z"/></marker></defs>${inner}</svg>`;
   }
   function detailHtml() {
     const r = runningTop();
