@@ -48,3 +48,7 @@
 .demo-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .demo-toggle #demo-title{flex:1;min-width:0}
 .demo-hint{flex:none;color:var(--accent);text-transform:none;letter-spacing:0}
+#candidate-box{margin-top:12px}
+#candidate-box[hidden]{display:none}
+#candidate-video{display:block;width:100%;height:auto;background:#000}
+.review-actions{display:flex;gap:8px;margin-top:8px}

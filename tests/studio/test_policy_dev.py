@@ -83,6 +83,7 @@ SCENES: list = []
 
 
 def _settings(**over):
+    over.setdefault("pause_after_v0", False)
     settings, error = pd.parse_settings(over, SKILL)
     assert error is None
     return settings
@@ -575,3 +576,65 @@ def test_muse_spark_setting_defaults_off_and_is_logged(tmp_path):
     record = pd.execution_record(req, skill, tmp_path)
     assert record["adversary"]["proposer_model"] == "muse-spark-1.3"
     assert record["adversary"]["spark_token_cap"] == 50000
+
+
+def _pausing(tmp_path, on_wait, stop=lambda: False):
+    events, loops = [], []
+    text = tmp_path / SKILL["scene_context"]["text"]
+    text.parent.mkdir(parents=True, exist_ok=True)
+    text.write_text("Scene, measured\n", encoding="utf-8")
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"v")
+    (tmp_path / "run").mkdir(exist_ok=True)
+    req = pd.Request(
+        "put the bowl on the plate", clip, tmp_path / "run", _settings(pause_after_v0=True)
+    )
+
+    def emit(event):
+        events.append(event)
+        if event["kind"] == "pipeline_wait":
+            assert p.waiting and not loops  # no attack before the person decides
+            on_wait(p)
+
+    p = pd.Pipeline(
+        req, SKILL, emit, run_loop=lambda *a: loops.append(a), run_attacks=lambda *a: None,
+        stop_requested=stop, popen=FakeWorld(), root=tmp_path, simulator_jobs=lambda: [],
+        prompt_preview=_preview,
+    )  # fmt: skip
+    p.run()
+    return events, loops, p
+
+
+def test_run_holds_after_v0_until_the_person_continues(tmp_path):
+    events, loops, p = _pausing(tmp_path, lambda pipe: pipe.resume.set())
+    assert len(loops) == 1 and not p.waiting
+    assert [s for s in _stages(events) if s[0] == "review"] == [
+        ("review", "started"),
+        ("review", "done"),
+    ]
+
+
+def test_stop_ends_the_hold_without_attacking(tmp_path):
+    flag = []
+    events, loops, p = _pausing(tmp_path, lambda pipe: flag.append(1), stop=lambda: bool(flag))
+    assert not loops and not p.waiting
+    assert _done(events)[-1]["stopped"] == "user_stop"
+
+
+def test_manager_resume_needs_a_waiting_run():
+    m = pd.Manager(
+        lambda e: None, set_running=lambda on: True, run_loop=lambda *a: None,
+        run_attacks=lambda *a: None, stop_requested=lambda: False, clear_stop=lambda: None,
+        runs_dir=lambda: None, skill=SKILL,
+    )  # fmt: skip
+    assert m.resume()["ok"] is False
+
+
+def test_candidate_video_is_the_attempts_agentview(tmp_path):
+    (tmp_path / "program_attempt2.py").write_text("x", encoding="utf-8")
+    assert pd.candidate_video(tmp_path / "program_attempt2.py") is None
+    videos = tmp_path / "debug_attempt2" / "r" / "media" / "videos"
+    videos.mkdir(parents=True)
+    (videos / "agentview.mp4").write_bytes(b"v")
+    (videos / "robot0_eye_in_hand.mp4").write_bytes(b"v")
+    assert pd.candidate_video(tmp_path / "program_attempt2.py").name == "agentview.mp4"

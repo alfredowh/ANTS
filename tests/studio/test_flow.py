@@ -18,6 +18,7 @@ def test_every_pipeline_stage_has_a_top_level_block():
         "prompt",
         "generate",
         "nominal",
+        "review",
         "attack",
         "diagnose",
         "rewrite",

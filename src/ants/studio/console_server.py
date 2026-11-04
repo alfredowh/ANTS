@@ -1012,8 +1012,19 @@ def make_handler(
                     {
                         "raw": self._demo_raw() is not None,
                         "overlay": bool(overlay and overlay.is_file()),
+                        "candidate": bool(
+                            current_run and (current_run / "candidate_v0.mp4").is_file()
+                        ),
                     }
                 )
+                return
+            if path == "/demo-video/candidate":
+                file = current_run / "candidate_v0.mp4" if current_run else None
+                if file is None or not file.is_file():
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                self._send_ranged(file, "video/mp4")
                 return
             if path in ("/demo-video/raw", "/demo-video/overlay"):
                 file = (
@@ -1065,6 +1076,7 @@ def make_handler(
                         "current": pipeline.current,
                         "settings": skill["settings"],
                         "budget": skill["budget"],
+                        "waiting": pipeline.waiting,
                         "proposer_model": (
                             "muse-spark"
                             if (pipeline.current or {}).get("settings", {}).get("spark")
@@ -1103,6 +1115,9 @@ def make_handler(
                 return
             if path == "/session/new":
                 self._handle_new_session()
+                return
+            if path == "/policy-dev/continue":
+                self._send_json(pipeline.resume())
                 return
             if path == "/policy-dev":
                 self._handle_policy_dev()

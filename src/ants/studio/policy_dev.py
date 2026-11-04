@@ -34,7 +34,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILL_PATH = REPO_ROOT / "docs" / "studio" / "skills" / "policy-dev.json"
 STAGES = (
-    "video", "extract", "demospec", "prompt", "generate", "nominal",
+    "video", "extract", "demospec", "prompt", "generate", "nominal", "review",
     "attack", "diagnose", "rewrite", "gate", "deploy",
 )  # fmt: skip
 SIMULATOR_MARKERS = ("aspire_launch.py", "cap-harness\0run", "cap_harness.cli\0run")
@@ -352,6 +352,15 @@ def generation_command(
     ]  # fmt: skip
 
 
+def candidate_video(program: Path) -> Path | None:
+    """The agentview recording of the nominal rollout of `program_attempt<K>.py`."""
+    attempt = program.stem.removeprefix("program_attempt")
+    found = sorted(
+        (program.parent / f"debug_attempt{attempt}").glob("**/media/videos/agentview.mp4")
+    )
+    return found[-1] if found else None
+
+
 def passing_program(out: Path, arm: str) -> tuple[Path | None, dict]:
     """The latest attempt whose rollout really passed the nominal seed (from `record.json`), or
     None. The newest `program_attempt*.py` is NOT the answer: it may be a failing last repair."""
@@ -543,6 +552,8 @@ class Pipeline:
         prompt_preview: Callable[..., dict] = build_prompt_preview,
         deploy_dir: Path | None = None,
     ) -> None:
+        self.waiting = False
+        self.resume = threading.Event()
         self.req, self.skill, self._emit = req, skill, emit
         self.run_loop, self.run_attacks, self.stop_requested = run_loop, run_attacks, stop_requested
         self.popen, self.root = popen, root
@@ -585,6 +596,27 @@ class Pipeline:
     def check_stop(self) -> None:
         if self.stop_requested():
             raise Stopped
+
+    def show_candidate(self, program: Path) -> None:
+        """Keep the recording of the candidate in the run folder and show it on the page."""
+        video = candidate_video(program)
+        if video is None:
+            return
+        shutil.copyfile(video, self.req.run_dir / "candidate_v0.mp4")
+        self._emit({"kind": "pipeline_candidate", "program": program.name})
+
+    def wait_for_human(self, program: Path) -> None:
+        """Hold before the Adversary until the person continues or stops. Nothing is spent here."""
+        self.stage("review", "started", f"{program.name} passed its nominal seed. Waiting for you.")
+        self.waiting = True
+        self._emit({"kind": "pipeline_wait", "program": program.name})
+        try:
+            while not self.resume.wait(0.5):
+                self.check_stop()
+        finally:
+            self.waiting = False
+        self.check_stop()
+        self.stage("review", "done", "Continued by you")
 
     def run_cmd(self, stage: str, cmd: list[str], cwd: Path, log: Path) -> int:
         self.check_stop()
@@ -907,6 +939,9 @@ class Pipeline:
                 return
             program, spent = made
             self.check_stop()
+            self.show_candidate(program)
+            if cfg["adversary"] and cfg.get("pause_after_v0"):
+                self.wait_for_human(program)
             if not cfg["adversary"]:
                 self.deploy(program, spent)
                 return
@@ -949,6 +984,18 @@ class Manager:
         self.skill = skill or load_skill()
         self.pipeline = pipeline
         self.current: dict | None = None
+        self.active: Any = None
+
+    @property
+    def waiting(self) -> bool:
+        return bool(getattr(self.active, "waiting", False))
+
+    def resume(self) -> dict:
+        """The person continues a run that is holding for review."""
+        if not self.waiting:
+            return {"ok": False, "error": "Nothing is waiting for you."}
+        self.active.resume.set()
+        return {"ok": True}
 
     def start(self, task: str, video: str | None, raw_settings: dict | None = None) -> dict:
         path = Path(video) if video else None
@@ -968,11 +1015,12 @@ class Manager:
 
         def work() -> None:
             try:
-                self.pipeline(
+                self.active = self.pipeline(
                     Request(task, path, run_dir, settings), self.skill, self.emit,
                     run_loop=self.run_loop, run_attacks=self.run_attacks,
                     stop_requested=self.stop_requested,
-                ).run()  # fmt: skip
+                )  # fmt: skip
+                self.active.run()
             except Exception as exc:  # noqa: BLE001 -- surface any failure in the console
                 self.emit({"kind": "error", "message": f"{type(exc).__name__}: {exc}"})
             finally:

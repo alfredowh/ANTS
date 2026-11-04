@@ -49,7 +49,18 @@
       else hide();
     }).catch(() => {});
   }
+  const cBox = document.getElementById("candidate-box"), cVideo = document.getElementById("candidate-video");
+  function showCandidate(on) {
+    if (cBox.hidden === !on) return;
+    cBox.hidden = !on;
+    if (on) { cVideo.src = `/demo-video/candidate?t=${Date.now()}`; cVideo.play().catch(() => {}); }
+    else { cVideo.removeAttribute("src"); cVideo.load(); }
+    if (window.studioForceRight) window.studioForceRight("candidate", on);
+  }
+  fetch("/demo-video/status").then((r) => r.json()).then((s) => showCandidate(!!s.candidate)).catch(() => {});
   window.demoEvent = (d) => {
+    if (d.kind === "pipeline_candidate") showCandidate(true);
+    if (d.kind === "pipeline_start" || d.kind === "session_reset") showCandidate(false);
     if (d.kind === "pipeline_start") { shown = null; refresh(); }
     else if (d.kind === "session_reset") hide();
     else if (d.kind === "pipeline_demo_video") {
