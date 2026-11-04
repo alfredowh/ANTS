@@ -73,6 +73,34 @@ def _part(value: object, default: str) -> str:
     return text.replace(":", "_") or default
 
 
+def without_nominal(fb: Mapping, nominal_fb: Mapping | None) -> dict:
+    """`fb` without the failed calls that also fail in the nominal run on the same seed.
+
+    A call that fails in the unperturbed scene too (for example a move the program deliberately
+    accepts after a timeout) happens in every run, so it cannot explain this failure. Each such
+    call is removed as many times as it occurs in the nominal run; what remains are the calls
+    that only fail under the perturbation. The removed ones are kept as evidence.
+    """
+    out = dict(fb)
+    if not nominal_fb:
+        return out
+    budget: dict[tuple[str, str], int] = {}
+    for c in nominal_fb.get("failed_calls") or []:
+        key = (str(c.get("tool")), str(c.get("status")))
+        budget[key] = budget.get(key, 0) + 1
+    kept, expected = [], []
+    for c in fb.get("failed_calls") or []:
+        key = (str(c.get("tool")), str(c.get("status")))
+        if budget.get(key, 0) > 0:
+            budget[key] -= 1
+            expected.append(c)
+        else:
+            kept.append(c)
+    out["failed_calls"] = kept
+    out["expected_failed_calls"] = expected
+    return out
+
+
 def signature(perturbation: Perturbation, fb: Mapping) -> str:
     """`<category>:<failing call>:<status>`, e.g. `size:move_to_pose:timeout`."""
     failed = fb.get("failed_calls") or []
@@ -112,6 +140,10 @@ def diagnose(perturbation: Perturbation, fb: Mapping, index: int) -> Constraint:
         f"after {c.get('steps_executed')} steps"
         for c in (fb.get("failed_calls") or [])[:3]
     ]
+    expected = fb.get("expected_failed_calls") or []
+    if expected:
+        names = ", ".join(f"{c.get('tool')} {c.get('status')}" for c in expected[:3])
+        evidence.append(f"also failing in the nominal run, so not the cause: {names}")
     final = (fb.get("final_gripper") or {}).get("position_robot_base")
     if final:
         evidence.append(f"final gripper {final}")

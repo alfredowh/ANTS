@@ -8,6 +8,10 @@ accepts rewrites or escalates.
     status = adv.status(policy)            # stop rule for the current version
     text, source = adv.explain(report, policy)  # plain-language account of a failure
 
+Every failure is compared with the nominal run of the same program on the same seed (run once
+and cached per version and seed): calls that fail there too are not blamed, and the diagnoser
+sees both runs' printed measurements.
+
 With `model="muse-spark"`, M proposer agents choose each perturbation from the program's code, the
 model diagnoser explains each failure, and the explainer writes for people; every model step falls
 back to rules on any error. With `model="mock"` everything is rule-based and deterministic.
@@ -22,7 +26,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ants.adversary.config import AdversaryConfig
-from ants.adversary.diagnoser import classify, diagnose
+from ants.adversary.diagnoser import classify, diagnose, without_nominal
 from ants.adversary.diagnoser.model import ModelDiagnoser
 from ants.adversary.explainer import explain
 from ants.adversary.history import AttackRecord, FailureHistory, policy_key
@@ -65,6 +69,7 @@ class Adversary:
         self.backend = backend
         self.history = history if history is not None else FailureHistory(config.history_path)
         self.model = model
+        self._nominal_fb: dict[tuple[str, int], dict[str, Any]] = {}
         self.proposer = Proposer(model, DEFAULT_SPACE, config.n_agents) if model else None
         self.diagnoser = ModelDiagnoser(model, config.confidence_floor) if model else None
         self.planner = TestPlanner(
@@ -79,11 +84,21 @@ class Adversary:
     @classmethod
     def from_config(cls, config: AdversaryConfig) -> Adversary:
         model = None if config.model == "mock" else get_model(config.model)
+        if model is not None and config.token_budget is not None and hasattr(model, "token_budget"):
+            model.token_budget = config.token_budget
         if config.backend == "mock":
             return cls(config, MockBackend(), model=model)
         if config.backend == "cap_harness":
             return cls(config, AspireBackend(config.aspire), model=model)
         raise ValueError(f"unknown backend {config.backend!r}")
+
+    def nominal_feedback(self, policy: Policy, seed: int) -> dict[str, Any]:
+        """Feedback of the unperturbed scene for this version and seed, run once and cached."""
+        key = (policy_key(policy.policy_id, policy.version), seed)
+        if key not in self._nominal_fb:
+            nominal = self.replay(policy, [None], seed=seed)[0]
+            self._nominal_fb[key] = {**to_feedback(nominal), "outcome": nominal.outcome.value}
+        return self._nominal_fb[key]
 
     def _sync_planner(self, policy: Policy) -> None:
         counts = self.history.counts(
@@ -145,7 +160,15 @@ class Adversary:
 
         failure = constraint = None
         if result.outcome is Outcome.FAILURE:
-            fb = to_feedback(result)
+            nominal_fb = self.nominal_feedback(policy, seed)
+            fb = without_nominal(to_feedback(result), nominal_fb)
+            notes["nominal"] = {
+                "outcome": nominal_fb["outcome"],
+                "expected_failed_calls": [
+                    f"{c.get('tool')}:{c.get('status')}"
+                    for c in fb.get("expected_failed_calls", [])
+                ],
+            }
             n_failures = sum(r.outcome is Outcome.FAILURE for r in self.history.records)
             if self.diagnoser is None:
                 failure = classify(perturbation, fb)
@@ -158,7 +181,14 @@ class Adversary:
                     if e.kind != "call" or not e.detail.get("ok", True)
                 ]
                 d = self.diagnoser.diagnose(
-                    perturbation, fb, n_failures, policy.code, policy.task, events, result.metrics
+                    perturbation,
+                    fb,
+                    n_failures,
+                    policy.code,
+                    policy.task,
+                    events,
+                    result.metrics,
+                    nominal_fb=nominal_fb,
                 )
                 failure, constraint = d.failure, d.constraint
                 notes["diagnosis"] = {
