@@ -53,6 +53,10 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
 .incumbent{font-family:var(--mono);font-size:12px;color:var(--muted)}
 .turns{display:flex;flex-direction:column;gap:6px}
 .turn{border:1px solid var(--line);background:var(--panel);padding:10px 12px}
+.turn .tk{cursor:pointer}
+.turn .tk::after{content:" \25BE";color:var(--dim)}
+.turn.collapsed .tk::after{content:" \25B8"}
+.turn.collapsed .main,.turn.collapsed .delta{display:none}
 .turn .tk{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
 .turn.task .tk{color:var(--meta)}
 .turn.task.completed{border-left:3px solid var(--built)}
@@ -160,6 +164,7 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
   <span class="phase" id="phase-summary"></span>
   <span style="flex:1"></span>
   <span class="status-pill" id="status-pill">idle</span>
+  <span class="phase" id="run-folder" title="Every run is saved to its own timestamped folder: loop.jsonl (the run log), history.jsonl, muse/cycleN/ (each repair's reply + token usage). Nothing is overwritten."></span>
   <button class="btn" id="run-btn">Run policy development step</button>
 </header>
 
@@ -184,9 +189,11 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
       <div class="scene2d-head">
         <button class="btn sm on" id="scene-gen-btn">generation</button>
         <button class="btn sm" id="scene-repair-btn">repair</button>
+        <button class="btn sm" id="scene-graph-btn" title="The scene graph: objects (nodes) and their spatial relations (edges, gap in mm) from the same scene file the prompt is built from">scene graph</button>
         <span class="asof" id="scene-asof"></span>
       </div>
       <svg id="scene2d-svg" viewBox="0 0 240 240"></svg>
+      <div id="scene-graph" style="display:none;font-size:11px"></div>
       <div class="scene2d-legend">
         <span><i style="background:#6fb2e0"></i>task object</span>
         <span><i style="background:#e8a553"></i>wine rack</span>
@@ -212,6 +219,9 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
   <div class="col" id="col-center">
     <div class="center-top">
       <span class="incumbent" id="incumbent-name"></span>
+      <span style="flex:1"></span>
+      <button class="btn sm" id="collapse-all" type="button" title="Minimize every log card below">Collapse all</button>
+      <button class="btn sm" id="expand-all" type="button" title="Expand every log card below">Expand all</button>
     </div>
     <div class="banner" id="banner"></div>
     <div class="turns" id="turns"><div class="empty">No run yet. Click "Run policy development step" to start one Phase A repair cycle.</div></div>
@@ -238,6 +248,10 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
     <label class="perc-toggle"><input type="checkbox" id="perc-toggle-curobo" checked> cuRobo trajectory &amp; collision</label>
     <span style="flex:1"></span>
     <span class="perc-note">Toggle layers on/off for a cleaner or more informative view.</span>
+    <span class="perc-note">Source:</span>
+    <button class="btn sm on" id="perc-mode-auto" type="button" title="Live while a rollout is running, replay (archived) the rest of the time">Auto</button>
+    <button class="btn sm" id="perc-mode-live" type="button" title="Always show live frames (blank until a rollout with --backend cap_harness runs)">Live</button>
+    <button class="btn sm" id="perc-mode-replay" type="button" title="Always show the archived replay, even during a rollout">Replay</button>
   </div>
   <div class="perc-grid">
     <section class="perc-panel perc-player" id="perc-panel-agentview">
@@ -410,6 +424,20 @@ function renderScene2D(kind) {
 }
 document.getElementById("scene-gen-btn").addEventListener("click", () => { renderScene2D("generation"); saveUiState(); });
 document.getElementById("scene-repair-btn").addEventListener("click", () => { renderScene2D("repair"); saveUiState(); });
+let sceneGraphOn = false;
+document.getElementById("scene-graph-btn").addEventListener("click", (e) => {
+  sceneGraphOn = !sceneGraphOn;
+  e.target.classList.toggle("on", sceneGraphOn);
+  document.getElementById("scene2d-svg").style.display = sceneGraphOn ? "none" : "";
+  const el = document.getElementById("scene-graph");
+  el.style.display = sceneGraphOn ? "" : "none";
+  if (!sceneGraphOn) return;
+  const scene = (DATA.scene2d || {})[sceneKind];
+  if (!scene) { el.innerHTML = `<div class="empty">no scene data</div>`; return; }
+  const nodes = scene.objects.map((o) => `<div><b>${esc(o.label)}</b> <span style="color:var(--dim)">${esc(o.cat)}</span></div>`).join("");
+  const edges = scene.relations.map((r) => `<div>${esc(r.a)} &mdash; ${esc(r.b)}: <b>${r.mm} mm</b> gap</div>`).join("");
+  el.innerHTML = `<div class="h">Objects (nodes)</div>${nodes || '<div class="empty">none</div>'}<div class="h" style="margin-top:8px">Relations (edges)</div>${edges || '<div class="empty">none</div>'}`;
+});
 renderScene2D("generation");
 
 /* ---------- archived SAM 3 output (reference, not live) ---------- */
@@ -487,6 +515,23 @@ let percAgentviewFrames = [];
 let percAgentviewIdx = 0, percAgentviewPlaying = false, percAgentviewTimer = null;
 let percSam3Frames = [];
 let percLiveRunId = null;
+let percMode = localStorage.getItem("ants-perc-mode") || "auto"; // auto | live | replay
+let percRolloutActive = false;
+let percLiveFrames = [], percLiveSam3 = [];
+let percArchivedFrames = [], percArchivedSam3 = [];
+
+function percShowLive() { return percMode === "live" || (percMode === "auto" && percRolloutActive); }
+function percApplySource() {
+  const live = percShowLive() && percLiveFrames.length;
+  percAgentviewFrames = live ? percLiveFrames : percArchivedFrames;
+  percSam3Frames = live ? percLiveSam3 : percArchivedSam3;
+  percAgentviewIdx = Math.min(percAgentviewIdx, Math.max(0, percAgentviewFrames.length - 1));
+  if (percAgentviewFrames.length) percRenderFrame();
+  percRenderSam3();
+  for (const m of ["auto", "live", "replay"]) {
+    document.getElementById("perc-mode-" + m).classList.toggle("on", percMode === m);
+  }
+}
 
 function percRenderFrame() {
   const f = percAgentviewFrames[percAgentviewIdx];
@@ -510,31 +555,47 @@ function percRenderSam3() {
 }
 
 function percGoLive(runId) {
-  if (percLiveRunId === runId) return;
+  percRolloutActive = true;
+  if (percLiveRunId === runId) { percApplySource(); return; }
   percLiveRunId = runId;
-  percAgentviewFrames = [];
-  percSam3Frames = [];
+  percLiveFrames = [];
+  percLiveSam3 = [];
   percAgentviewPlaying = false;
   clearInterval(percAgentviewTimer);
   document.getElementById("perc-player-play").textContent = "play";
-  renderSrcBadge("perc-agentview-badge", true, true, "");
-  document.getElementById("perc-agentview-note").textContent = "Streaming run " + runId + ".";
-  renderSrcBadge("perc-sam3-badge", true, true, "");
-  document.getElementById("perc-sam3-note").textContent = "Live detections for run " + runId + ".";
-  percRenderSam3();
+  if (percShowLive()) {
+    renderSrcBadge("perc-agentview-badge", true, true, "");
+    document.getElementById("perc-agentview-note").textContent = "Streaming run " + runId + ".";
+    renderSrcBadge("perc-sam3-badge", true, true, "");
+    document.getElementById("perc-sam3-note").textContent = "Live detections for run " + runId + ".";
+  }
+  percApplySource();
 }
 
 function percPushKeyframe(ev) {
   percGoLive(ev.run_id);
-  percAgentviewFrames.push(ev);
-  percAgentviewIdx = percAgentviewFrames.length - 1; // follow the rollout as it happens
-  percRenderFrame();
+  percLiveFrames.push(ev);
+  if (percShowLive()) { percAgentviewIdx = percLiveFrames.length - 1; }
+  percApplySource();
 }
 
 function percPushSam3(ev) {
   percGoLive(ev.run_id);
-  percSam3Frames.push(ev);
-  percRenderSam3();
+  percLiveSam3.push(ev);
+  percApplySource();
+}
+
+function percRolloutEnded() {
+  percRolloutActive = false;
+  if (percMode === "auto") {
+    renderSrcBadge("perc-agentview-badge", false, percArchivedFrames.length ? true : null,
+      "Rollout finished — back to replay. Run with --backend cap_harness for live.");
+    document.getElementById("perc-agentview-note").textContent = "Rollout finished — showing replay (archived).";
+    renderSrcBadge("perc-sam3-badge", false, percArchivedSam3.length ? true : null,
+      "Rollout finished — back to replay.");
+    document.getElementById("perc-sam3-note").textContent = "Rollout finished — showing replay (archived).";
+  }
+  percApplySource();
 }
 
 (function () {
@@ -568,7 +629,16 @@ function percPushSam3(ev) {
   document.getElementById("perc-agentview-note").textContent = agentview.frames.length
     ? "Showing an archived rollout; switches to the live feed the moment a real rollout starts."
     : "No archived example found either.";
+  percArchivedFrames = agentview.frames;
   percAgentviewFrames = agentview.frames;
+  for (const m of ["auto", "live", "replay"]) {
+    document.getElementById("perc-mode-" + m).addEventListener("click", () => {
+      percMode = m;
+      localStorage.setItem("ants-perc-mode", m);
+      percApplySource();
+    });
+  }
+  percApplySource();
   if (percAgentviewFrames.length) {
     percRenderFrame();
   } else {
@@ -594,6 +664,7 @@ function percPushSam3(ev) {
   document.getElementById("perc-sam3-note").textContent = sam3.frames.length
     ? "Showing archived detections; switches to live the moment a real rollout starts."
     : "No archived example found either.";
+  percArchivedSam3 = sam3.frames;
   percSam3Frames = sam3.frames;
   percRenderSam3();
 
@@ -641,6 +712,11 @@ let rewriteTokenTotal = 0;
 let cycleDetails = [];
 
 turnsEl.addEventListener("click", (e) => {
+  const tk = e.target.closest(".tk");
+  if (tk && !e.target.closest("a,button")) {
+    tk.closest(".turn").classList.toggle("collapsed");
+    return;
+  }
   const link = e.target.closest(".details-link");
   if (!link) return;
   const row = cycleDetails[+link.dataset.detailI];
@@ -667,6 +743,13 @@ function setStatus(kind, text) {
   pill.className = "status-pill " + kind;
   pill.textContent = text;
 }
+
+document.getElementById("collapse-all").addEventListener("click", () => {
+  turnsEl.querySelectorAll(".turn").forEach((t) => t.classList.add("collapsed"));
+});
+document.getElementById("expand-all").addEventListener("click", () => {
+  turnsEl.querySelectorAll(".turn").forEach((t) => t.classList.remove("collapsed"));
+});
 
 function addTurn(cls, html) {
   if (turnCount === 0) turnsEl.innerHTML = "";
@@ -795,6 +878,7 @@ function handleAttackEvent(a) {
 }
 
 function handleDone(payload) {
+  percRolloutEnded();
   setStatus("done", "done");
   runBtn.disabled = false;
   resetSys();
@@ -817,6 +901,7 @@ function handleDone(payload) {
 }
 
 function handleError(payload) {
+  percRolloutEnded();
   setStatus("error", "error");
   runBtn.disabled = false;
   addTurn("error", `<div class="tk">error</div><div class="main">${esc(payload.message)}</div>`);
@@ -877,6 +962,10 @@ function openStream() {
     if (data.kind === "muse_event") handleMuseEvent(data.event);
     else if (data.kind === "loop_event") handleLoopEvent(data.row);
     else if (data.kind === "attack_event") handleAttackEvent(data);
+    else if (data.kind === "run_started") {
+      document.getElementById("run-folder").textContent = "saving to " + data.run_dir;
+      addTurn("task", `<div class="tk">run started</div><div class="main">saving this run to <b>${esc(data.run_dir)}</b> (backend: ${esc(data.backend)})</div>`);
+    }
     else if (data.kind === "perception_run") percGoLive(data.run_id);
     else if (data.kind === "perception_keyframe") percPushKeyframe(data);
     else if (data.kind === "perception_sam3") percPushSam3(data);

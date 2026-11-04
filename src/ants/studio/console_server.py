@@ -404,6 +404,11 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
         return
 
     run_dir = cfg.out_dir / time.strftime("run-%Y%m%dT%H%M%S")
+    # Tell the UI where this run is being saved before anything runs, so the folder is
+    # findable even if the run later crashes.
+    state.broadcast(
+        {"kind": "run_started", "run_dir": str(run_dir), "backend": cfg.backend}
+    )
     policy = Policy(
         "bowl_on_plate", 0, "put the bowl on the plate", incumbent.read_text(encoding="utf-8")
     )
