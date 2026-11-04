@@ -47,6 +47,15 @@ def main() -> None:
     parser.add_argument(
         "--categories", default=None, help="comma-separated attack categories (default: all)"
     )
+    parser.add_argument(
+        "--backend",
+        choices=("mock", "cap_harness"),
+        default="mock",
+        help="System 2 rollout backend. 'mock' (default): free, instant, offline. 'cap_harness': "
+        "real ASPIRE/LIBERO rollouts (~40s+ each, real GPU time) -- needs the sam3/pyroki/curobo "
+        "services up (uv run python -m ants.orchestrator.preflight) and feeds the Perception "
+        "tab's layers live frames while a rollout is in progress.",
+    )
     parser.add_argument("--rho", type=float, default=0.8, help="severity bound")
     parser.add_argument("--eta", type=float, default=0.2, help="selector exploration rate")
     parser.add_argument(
@@ -87,6 +96,7 @@ def main() -> None:
     args = parser.parse_args()
 
     loop_cfg = LoopRunConfig(
+        backend=args.backend,
         cycles=args.cycles,
         categories=tuple(args.categories.split(",")) if args.categories else None,
         rho=args.rho,

@@ -99,6 +99,83 @@ def _split_keyframe_name(name: str) -> dict[str, str]:
     return {"index": index, "phase": phase, "call": call.replace("-", " ")}
 
 
+# Where AspireBackend.run_program() writes each real rollout (adversary/rollout/aspire_backend.py's
+# AspireConfig.output_root default). cap_harness's own artifact writer appends one keyframe/overlay
+# directory to disk as each primitive call finishes, WHILE the subprocess is still running -- see
+# ASPIRE/src/cap_harness/artifacts.py's `_keyframe`/overlay writers. So a thread polling this
+# directory tree genuinely observes a rollout in progress, not just its finished result.
+ASPIRE_LIVE_ROOT = REPO_ROOT / "data" / "runs" / "aspire"
+
+
+def watch_aspire_live(state: RunState, stop: threading.Event) -> None:
+    """Tail the newest real rollout's keyframes/SAM3 overlays, broadcasting each as it appears."""
+    started = time.time()
+    current: Path | None = None
+    seen_kf: set[str] = set()
+    seen_ov: set[str] = set()
+    while not stop.is_set():
+        if ASPIRE_LIVE_ROOT.exists():
+            # Only runs touched since this watcher started count as live; an older finished
+            # run must never flip the Perception tab to "live" with stale frames.
+            run_dirs = sorted(
+                (
+                    p
+                    for p in ASPIRE_LIVE_ROOT.iterdir()
+                    if p.is_dir() and p.stat().st_mtime >= started - 1.0
+                ),
+                key=lambda p: p.stat().st_mtime,
+            )
+            if run_dirs and run_dirs[-1] != current:
+                current = run_dirs[-1]
+                seen_kf, seen_ov = set(), set()
+                state.broadcast({"kind": "perception_run", "run_id": current.name})
+            if current is not None:
+                kf_dir = current / "media" / "keyframes"
+                if kf_dir.exists():
+                    for kf in sorted(kf_dir.iterdir()):
+                        img = kf / "agentview.png"
+                        if kf.name not in seen_kf and img.exists():
+                            seen_kf.add(kf.name)
+                            state.broadcast(
+                                {
+                                    "kind": "perception_keyframe",
+                                    "run_id": current.name,
+                                    "src": f"/live/keyframe/{current.name}/{kf.name}",
+                                    **_split_keyframe_name(kf.name),
+                                }
+                            )
+                ov_dir = current / "media" / "overlays"
+                if ov_dir.exists():
+                    for ov in sorted(ov_dir.glob("sam3-*.png")):
+                        if ov.stem not in seen_ov:
+                            seen_ov.add(ov.stem)
+                            state.broadcast(
+                                {
+                                    "kind": "perception_sam3",
+                                    "run_id": current.name,
+                                    "name": ov.stem,
+                                    "src": f"/live/overlay/{current.name}/{ov.stem}",
+                                    **_sam3_overlay_meta(ov),
+                                }
+                            )
+        time.sleep(0.3)
+
+
+def _live_asset_path(run_id: str, rest: str, *, overlay: bool) -> Path | None:
+    """Resolve a /live/keyframe or /live/overlay request, refusing anything outside the root."""
+    candidate = (
+        ASPIRE_LIVE_ROOT / run_id / "media" / "overlays" / f"{rest}.png"
+        if overlay
+        else ASPIRE_LIVE_ROOT / run_id / "media" / "keyframes" / rest / "agentview.png"
+    )
+    try:
+        resolved = candidate.resolve()
+        resolved.relative_to(ASPIRE_LIVE_ROOT.resolve())
+    except (OSError, ValueError):
+        return None
+    return resolved if resolved.exists() else None
+
+
 TOOLS_LEFT = [
     {
         "name": "localize_object",
@@ -291,6 +368,7 @@ class LoopRunConfig:
     cheap and fast; pass the CLI flags for a fuller run.
     """
 
+    backend: str = "mock"  # "mock" (free, instant) or "cap_harness" (real ASPIRE/LIBERO rollouts)
     cycles: int = 3
     categories: tuple[str, ...] | None = None  # None = AdversaryConfig's own default (all)
     rho: float = 0.8  # severity bound, Bounds(default=rho)
@@ -332,7 +410,7 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
 
     adv_kwargs: dict = {
         "model": cfg.adversary_model,
-        "backend": "mock",
+        "backend": cfg.backend,
         "eta": cfg.eta,
         "bounds": Bounds(default=cfg.rho),
         "min_severity": cfg.min_severity,
@@ -420,8 +498,13 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
                     pos = f.tell()
             time.sleep(0.3)
 
-    tailer = threading.Thread(target=tail, daemon=True)
-    tailer.start()
+    threads = [threading.Thread(target=tail, daemon=True)]
+    if cfg.backend == "cap_harness":
+        threads.append(
+            threading.Thread(target=watch_aspire_live, args=(state, stop_tail), daemon=True)
+        )
+    for t in threads:
+        t.start()
     try:
         result = loop.run(policy)
         time.sleep(0.4)  # let the tailer pick up the final "end" row before it stops
@@ -491,6 +574,7 @@ def make_handler(
         ),
         "loop_config": (
             {
+                "backend": loop_cfg.backend,
                 "cycles": loop_cfg.cycles,
                 "rho": loop_cfg.rho,
                 "eta": loop_cfg.eta,
@@ -549,6 +633,23 @@ def make_handler(
                 self.send_response(200)
                 self.send_header("Content-Type", "text/html; charset=utf-8")
                 self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if path.startswith("/live/keyframe/") or path.startswith("/live/overlay/"):
+                overlay = path.startswith("/live/overlay/")
+                prefix = "/live/overlay/" if overlay else "/live/keyframe/"
+                run_id, _, rest = path[len(prefix) :].partition("/")
+                image_path = _live_asset_path(run_id, rest, overlay=overlay)
+                if image_path is None:
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                body = image_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-cache")  # live: never cache a stale frame
                 self.end_headers()
                 self.wfile.write(body)
                 return

@@ -473,12 +473,74 @@ function renderSrcBadge(elId, live, available, archivedLabel) {
   el.title = live ? "" : archivedLabel;
 }
 
-/* ---------- Perception tab: agentview scrubber + SAM 3 grounding + cuRobo view, each togglable ---------- */
+/* ---------- Perception tab: agentview scrubber + SAM 3 grounding + cuRobo view, each togglable ----------
+   Each layer starts on its archived fallback. If the loop is run with --backend cap_harness, the
+   server's watch_aspire_live() thread tails the real rollout's keyframes/SAM3 overlays on disk as
+   cap_harness writes them (one directory per primitive call, written WHILE the subprocess is still
+   running -- confirmed in ASPIRE/src/cap_harness/artifacts.py) and broadcasts perception_run /
+   perception_keyframe / perception_sam3 over the same SSE channel as everything else. The first such
+   event for a layer flips it from archived to live and starts replacing its content; nothing here
+   fakes liveness the data doesn't have -- cuRobo's trajectory/collision view has no such live path
+   (its archived plan_viewer.html is built by a separate offline script, dev/curobo/make_viewer.py,
+   not produced by an ordinary rollout), so it stays on its archived embed permanently, honestly. */
+let percAgentviewFrames = [];
+let percAgentviewIdx = 0, percAgentviewPlaying = false, percAgentviewTimer = null;
+let percSam3Frames = [];
+let percLiveRunId = null;
+
+function percRenderFrame() {
+  const f = percAgentviewFrames[percAgentviewIdx];
+  if (!f) return;
+  document.getElementById("perc-player-img").src = f.src;
+  document.getElementById("perc-player-pos").textContent = percAgentviewIdx + 1;
+  document.getElementById("perc-player-total").textContent = percAgentviewFrames.length;
+  document.getElementById("perc-player-call").textContent = (f.phase || "") + " " + (f.call || "");
+  document.getElementById("perc-player-index").textContent = "#" + (f.index ?? "");
+  const slider = document.getElementById("perc-player-slider");
+  slider.max = percAgentviewFrames.length - 1;
+  slider.value = percAgentviewIdx;
+}
+
+function percRenderSam3() {
+  document.getElementById("perc-sam3-grid").innerHTML = percSam3Frames.map((s) => `
+    <div class="sam3-item">
+      <img src="${s.src}" loading="lazy" title="${esc(s.name)}" alt="SAM 3: ${esc(s.label || "")}">
+      <div class="cap">${esc(s.label || "?")}${s.score != null ? " " + s.score : ""}</div>
+    </div>`).join("") || `<div class="empty">no frames found</div>`;
+}
+
+function percGoLive(runId) {
+  if (percLiveRunId === runId) return;
+  percLiveRunId = runId;
+  percAgentviewFrames = [];
+  percSam3Frames = [];
+  percAgentviewPlaying = false;
+  clearInterval(percAgentviewTimer);
+  document.getElementById("perc-player-play").textContent = "play";
+  renderSrcBadge("perc-agentview-badge", true, true, "");
+  document.getElementById("perc-agentview-note").textContent = "Streaming run " + runId + ".";
+  renderSrcBadge("perc-sam3-badge", true, true, "");
+  document.getElementById("perc-sam3-note").textContent = "Live detections for run " + runId + ".";
+  percRenderSam3();
+}
+
+function percPushKeyframe(ev) {
+  percGoLive(ev.run_id);
+  percAgentviewFrames.push(ev);
+  percAgentviewIdx = percAgentviewFrames.length - 1; // follow the rollout as it happens
+  percRenderFrame();
+}
+
+function percPushSam3(ev) {
+  percGoLive(ev.run_id);
+  percSam3Frames.push(ev);
+  percRenderSam3();
+}
+
 (function () {
   const agentview = DATA.agentview_archive || { frames: [], live: false };
   const sam3 = DATA.sam3_archive || { frames: [], live: false };
   const planViewer = DATA.plan_viewer || { available: false, live: false };
-  const frames = agentview.frames;
 
   // -- layer toggles, persisted --
   const TOGGLE_KEY = "ants-perception-toggles";
@@ -500,57 +562,49 @@ function renderSrcBadge(elId, live, available, archivedLabel) {
   }
   applyToggles();
 
-  // -- agentview player, mounted directly in the tab (not a modal) --
-  renderSrcBadge("perc-agentview-badge", agentview.live, frames.length ? true : null,
-    `From ${agentview.source} — this console's loop uses the mock System 2 backend (no simulator or camera), so real frames aren't available yet.`);
-  document.getElementById("perc-agentview-note").textContent = agentview.live
-    ? "Streaming the current run."
-    : "Showing an archived rollout until a live camera feed exists (keeps something informative on screen instead of a blank panel).";
-  if (frames.length) {
-    let idx = 0, playing = false, timer = null;
-    document.getElementById("perc-player-total").textContent = frames.length;
-    function renderFrame() {
-      document.getElementById("perc-player-img").src = frames[idx].src;
-      document.getElementById("perc-player-pos").textContent = idx + 1;
-      document.getElementById("perc-player-call").textContent = frames[idx].phase + " " + frames[idx].call;
-      document.getElementById("perc-player-index").textContent = "#" + frames[idx].index;
-      document.getElementById("perc-player-slider").value = idx;
-    }
-    document.getElementById("perc-player-slider").max = frames.length - 1;
-    renderFrame();
-    document.getElementById("perc-player-prev").addEventListener("click", () => { idx = Math.max(0, idx - 1); renderFrame(); });
-    document.getElementById("perc-player-next").addEventListener("click", () => { idx = Math.min(frames.length - 1, idx + 1); renderFrame(); });
-    document.getElementById("perc-player-slider").addEventListener("input", (e) => { idx = +e.target.value; renderFrame(); });
-    document.getElementById("perc-player-play").addEventListener("click", (e) => {
-      playing = !playing;
-      e.target.textContent = playing ? "pause" : "play";
-      if (playing) { timer = setInterval(() => { idx = idx + 1 >= frames.length ? 0 : idx + 1; renderFrame(); }, 500); }
-      else { clearInterval(timer); }
-    });
+  // -- agentview player, mounted directly in the tab (not a modal); starts on the archive --
+  renderSrcBadge("perc-agentview-badge", false, agentview.frames.length ? true : null,
+    `From ${agentview.source} — run with --backend cap_harness for a live camera feed during the rollout.`);
+  document.getElementById("perc-agentview-note").textContent = agentview.frames.length
+    ? "Showing an archived rollout; switches to the live feed the moment a real rollout starts."
+    : "No archived example found either.";
+  percAgentviewFrames = agentview.frames;
+  if (percAgentviewFrames.length) {
+    percRenderFrame();
   } else {
     document.getElementById("perc-panel-agentview").querySelector(".player-frame").innerHTML = `<div class="empty">no frames found</div>`;
   }
+  document.getElementById("perc-player-prev").addEventListener("click", () => { percAgentviewIdx = Math.max(0, percAgentviewIdx - 1); percRenderFrame(); });
+  document.getElementById("perc-player-next").addEventListener("click", () => { percAgentviewIdx = Math.min(percAgentviewFrames.length - 1, percAgentviewIdx + 1); percRenderFrame(); });
+  document.getElementById("perc-player-slider").addEventListener("input", (e) => { percAgentviewIdx = +e.target.value; percRenderFrame(); });
+  document.getElementById("perc-player-play").addEventListener("click", (e) => {
+    percAgentviewPlaying = !percAgentviewPlaying;
+    e.target.textContent = percAgentviewPlaying ? "pause" : "play";
+    if (percAgentviewPlaying) {
+      percAgentviewTimer = setInterval(() => {
+        percAgentviewIdx = percAgentviewIdx + 1 >= percAgentviewFrames.length ? 0 : percAgentviewIdx + 1;
+        percRenderFrame();
+      }, 500);
+    } else { clearInterval(percAgentviewTimer); }
+  });
 
-  // -- SAM 3 grounding gallery --
-  renderSrcBadge("perc-sam3-badge", sam3.live, sam3.frames.length ? true : null,
-    `From ${sam3.source} — segmentation candidates System 1 reads to localize objects; this console's loop doesn't run perception.`);
-  document.getElementById("perc-sam3-note").textContent = sam3.live
-    ? "Live detections for the current run."
-    : "Showing archived detections from one rollout until live perception exists.";
-  document.getElementById("perc-sam3-grid").innerHTML = sam3.frames.map((s) => `
-    <div class="sam3-item">
-      <img src="${s.src}" loading="lazy" title="${esc(s.name)}" alt="SAM 3: ${esc(s.label || "")}">
-      <div class="cap">${esc(s.label || "?")}${s.score != null ? " " + s.score : ""}</div>
-    </div>`).join("") || `<div class="empty">no frames found</div>`;
+  // -- SAM 3 grounding gallery; starts on the archive --
+  renderSrcBadge("perc-sam3-badge", false, sam3.frames.length ? true : null,
+    `From ${sam3.source} — run with --backend cap_harness for live detections during the rollout.`);
+  document.getElementById("perc-sam3-note").textContent = sam3.frames.length
+    ? "Showing archived detections; switches to live the moment a real rollout starts."
+    : "No archived example found either.";
+  percSam3Frames = sam3.frames;
+  percRenderSam3();
 
-  // -- cuRobo trajectory & collision view, embedded (not linked out) --
-  renderSrcBadge("perc-curobo-badge", planViewer.live, planViewer.available,
-    "From data/runs/curobo/exp10 (exp09-11, the held-bowl-attached work) — this console's loop doesn't call cuRobo, so there is no live trajectory to show.");
+  // -- cuRobo trajectory & collision view, embedded (not linked out); no live path exists --
+  renderSrcBadge("perc-curobo-badge", false, planViewer.available,
+    "From data/runs/curobo/exp10 (exp09-11, the held-bowl-attached work). Its plan_viewer.html is " +
+    "built by a separate offline script (dev/curobo/make_viewer.py), not produced by an ordinary " +
+    "rollout, so this stays archived even with --backend cap_harness -- there is no live path for it.");
   if (planViewer.available) {
     document.getElementById("perc-curobo-frame").src = "/perception/planviewer";
-    document.getElementById("perc-curobo-note").textContent = planViewer.live
-      ? "Live trajectory and collision spheres for the current run."
-      : "Archived plan viewer (exp10) embedded as-is, not rebuilt.";
+    document.getElementById("perc-curobo-note").textContent = "Archived plan viewer (exp10) embedded as-is, not rebuilt; no live trajectory source exists yet.";
   } else {
     document.getElementById("perc-curobo-frame").remove();
     document.getElementById("perc-curobo-note").textContent = "No archived cuRobo plan viewer found.";
@@ -823,6 +877,9 @@ function openStream() {
     if (data.kind === "muse_event") handleMuseEvent(data.event);
     else if (data.kind === "loop_event") handleLoopEvent(data.row);
     else if (data.kind === "attack_event") handleAttackEvent(data);
+    else if (data.kind === "perception_run") percGoLive(data.run_id);
+    else if (data.kind === "perception_keyframe") percPushKeyframe(data);
+    else if (data.kind === "perception_sam3") percPushSam3(data);
     else if (data.kind === "done") { handleDone(data); es.close(); }
     else if (data.kind === "error") { handleError(data); es.close(); }
     saveUiState();
@@ -831,12 +888,16 @@ function openStream() {
 }
 
 runBtn.addEventListener("click", () => {
+  const realBackend = DATA.loop_config && DATA.loop_config.backend === "cap_harness";
   const gateMsg = DATA.mode === "loop"
     ? "Ready to run the policy development phase?\n\n" +
-      "This runs the real closed loop: System 2 attacks (mock backend, free) and System 1 " +
-      "rewrites for real via muse exec (Muse Code), up to " + (DATA.loop_config ? DATA.loop_config.cycles : "N") +
+      "This runs the real closed loop: System 2 attacks (" +
+      (realBackend ? "real ASPIRE/LIBERO rollouts, ~40s+ and real GPU time each" : "mock backend, free") +
+      ") and System 1 rewrites for real via muse exec (Muse Code), up to " +
+      (DATA.loop_config ? DATA.loop_config.cycles : "N") +
       " cycles. Each rewrite spends Muse tokens (observed ~$0.5 per rewrite); the loop stops " +
-      "earlier if it becomes robust, stalls, or hits the token budget."
+      "earlier if it becomes robust, stalls, or hits the token budget." +
+      (realBackend ? "\n\nThe Perception tab will switch to live frames from this rollout as it runs." : "")
     : "Ready to run the policy development phase?\n\n" +
       "This sends one real request to muse exec (Muse Code) and spends Muse tokens " +
       "(observed ~$0.5 per repair step). It runs one Phase A repair step against the incumbent " +
