@@ -269,8 +269,8 @@ Removed: the question-by-question wizard (`policy_wizard.py`), `/policy-dev setu
 
 `POST /run`, `--mode`, and the flags the dialog overrides (`--backend`, `--cycles`, `--eta`,
 `--adversary-model`, `--stall-window`, `--nominal-seeds`, `--synth-token-budget`, `--scene-repair`)
-are gone; older sections above that mention them are history. `--scene` now defaults to none, since
-`/policy-dev` sends no scene text. The browser snapshot and flow state are tied to the session id.
+are gone; older sections above that mention them are history. `--scene` now defaults to the stock scene
+`/policy-dev` sends (see "Scene context" below). The browser snapshot and flow state are tied to the session id.
 ## Live simulator panel (`live_view.py`, `static/live.js`, `tools/ants_live_hook/sitecustomize.py`)
 
 While a rollout of a run this console started is in progress, a panel above both views shows
@@ -290,3 +290,20 @@ The label comes only from the last started pipeline stage and the rollout's own 
 attack's severity is logged only after it ends, so the label shows its parameters instead. Frames
 are polled, never a held connection, because of the browser's six-per-site limit. Rollouts need
 `--no-videos` unset; with it there are no frames.
+
+## Scene context in `/policy-dev` (2026-11-04)
+
+`/policy-dev` now sends the same kind of context as the `demo_e3_s4_sim` experiments: the S4 scene
+description in the first prompt and every repair, and e3 contact evidence in repairs. It does NOT
+send `data/scene_text/S4_L1.txt`, which describes the scaled scene (bowl 6.7 cm, plate 13.6 cm
+radius); these runs simulate the stock scene (5.4 cm, 7.4 cm). `ants.studio.stock_scene` measures it
+once with a no-op rollout on seed 51 (`data/scene_text/stock_seed51_S4.txt`,
+`data/scenes/stock/contacts_scene.json`, no tokens); the pipeline does this itself if the text is
+missing and stops without spending if it cannot. The text is simulator truth for seed 51 only, so
+other seeds and attacks differ from it, as in the experiments. cuRobo is still off.
+
+Measured: first prompt 23,935 -> 26,270 characters on clip 233859. e3 needs contact logging, which
+goes through the launcher, so `demo_vs_nodemo` now uses the launcher for a stock scene when
+`--contacts` is set (it raised before). Same program, seed 51, direct vs launcher with contacts: 357
+vs 357 steps in `episode/steps.jsonl`, 0 differing lines, same 27 calls. The path is logged in
+`settings.json` and `pipeline.jsonl`; the scene panel shows this scene, labelled as sent.

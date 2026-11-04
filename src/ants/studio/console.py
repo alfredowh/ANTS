@@ -47,7 +47,7 @@ def main() -> None:
         type=Path,
         default=None,
         help="scene file (contacts_scene.json) to show in the scene panel, labelled with its path "
-        "(default: none, because /policy-dev sends no scene text in its prompt)",
+        "(default: the stock scene /policy-dev sends in its prompt)",
     )
     parser.add_argument(
         "--session",

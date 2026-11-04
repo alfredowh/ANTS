@@ -753,14 +753,17 @@ def make_handler(
             return state.session.runs_dir
         return loop_cfg.out_dir if loop_cfg else None
 
+    # what /policy-dev sends; --scene shows some other file, for reference only
+    sent_scene = REPO_ROOT / policy_dev.load_skill()["scene_context"]["dump"]
     data = {
         "incumbent_name": incumbent.name,
         "incumbent_code": incumbent.read_text(encoding="utf-8"),
         "tools_left": TOOLS_LEFT,
         "tools_right": TOOLS_RIGHT,
         "scene2d": {
-            "generation": _scene2d_or_none(scene_generation_path),
-            "source": str(scene_generation_path) if scene_generation_path else None,
+            "generation": _scene2d_or_none(scene_generation_path or sent_scene),
+            "source": str(scene_generation_path or sent_scene.relative_to(REPO_ROOT)),
+            "sent": scene_generation_path is None,
         },
         "loop_config": (
             {

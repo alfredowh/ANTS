@@ -355,7 +355,8 @@ def main(argv: list[str] | None = None) -> int:
     harnesses = {}
     for scene in args.scenes.split(","):
         if scene == "stock":
-            harnesses[scene] = CapHarness(args.aspire)
+            # contacts go through the launcher; a stock debug run with evidence needs it too
+            harnesses[scene] = CapHarness(args.aspire, launcher=launcher if args.contacts else None)
         elif scene == "scaled":
             harnesses[scene] = CapHarness(
                 args.aspire,
