@@ -1,0 +1,19 @@
+/* ANTS Studio only: never present in a standalone studio.html */
+.ants-switch{display:inline-flex;border:1px solid var(--line)}
+.ants-switch button{background:none;border:0;padding:5px 12px;font:inherit;color:var(--muted);cursor:pointer}
+.ants-switch button+button{border-left:1px solid var(--line)}
+.ants-switch button[aria-pressed="true"]{background:var(--raise);color:var(--hi);font-weight:500}
+.ants-run{display:inline-flex;align-items:center;gap:8px}
+.ants-stop{background:#d9342b;border:1px solid #d9342b;color:#fff;padding:3px 12px;cursor:pointer;font:inherit}
+.ants-empty{padding:40px 20px;color:var(--muted);max-width:640px}
+:root[data-theme="light"]{
+  --bg:#FFFFFF;--panel:#F5F6F8;--raise:#EEF1F5;--line:#DFE3E8;--line2:#D2D7DE;
+  --fg:#14171A;--hi:#000000;--soft:#3C4248;--muted:#636B74;--dim:#899199;--faint:#C7CCD2;
+  --accent:#1877F2;--fail:#D92D20;--pass:#D7DAE0;--meta:#3E63DD;color-scheme:light}
+:root[data-theme="light"] header svg{fill:#1877F2!important}
+:root[data-theme="light"] .banner,:root[data-theme="light"] .agent.chosen{background:#EEF4FE}
+:root[data-theme="light"] .code div.add{background:#E6F4EA}
+:root[data-theme="light"] .code div.del{background:#FBE9E7;color:#8A1C12}
+:root[data-theme="light"] .log td{border-bottom-color:var(--line)}
+:root[data-theme="light"] .tctl button{color:#fff}
+.ants-run[hidden],.ants-stop[hidden]{display:none}

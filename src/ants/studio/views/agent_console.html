@@ -1,0 +1,72 @@
+<div id="tab-console" class="on">
+<main id="console-main">
+  <div class="col" id="col-left">
+    <div class="h">Tools</div>
+    <div class="tool-list" id="tools-left-wrap"></div>
+    <div class="scene2d">
+      <div class="h">Scene prompt</div>
+      <div class="scene2d-head">
+        <button class="btn sm" id="scene-graph-btn" title="The scene graph: objects (nodes) and their spatial relations (edges, gap in mm) from the same scene file the prompt is built from">scene graph</button>
+        <span class="asof" id="scene-asof"></span>
+      </div>
+      <div class="scene2d-layers">
+        <label class="perc-toggle"><input type="checkbox" id="layer-position">position</label>
+        <label class="perc-toggle"><input type="checkbox" id="layer-size" checked>size</label>
+        <label class="perc-toggle"><input type="checkbox" id="layer-relationship" checked>relationships</label>
+      </div>
+      <div class="scene2d-canvas"><svg id="scene2d-svg" viewBox="0 0 240 240"></svg></div>
+      <div id="scene-graph" style="display:none;font-size:13.7px"></div>
+      <div class="scene2d-note" id="scene2d-note"></div>
+    </div>
+  </div>
+  <div class="resize-handle" id="handle-left"></div>
+
+  <div class="col" id="col-center">
+    <button class="edge-tab left" id="toggle-left" type="button" title="Show context panel (primitives, scene prompt)" aria-label="Show context panel (primitives, scene prompt)">&#9656;</button>
+    <button class="edge-tab right" id="toggle-right" type="button" title="Show run details (usage, reply, settings)" aria-label="Show run details (usage, reply, settings)">&#9666;</button>
+    <div class="flowline" id="flowline">
+      <span class="flow-loop" title="the loop repeats: Adversary attacks, a failure goes to Synthesizer, the gate decides, repeat">&#8634;</span>
+      <div class="sys" id="sys2-badge" title="selector &rarr; proposer &rarr; rollout &rarr; diagnoser, all inside one call -- Loop only reports when the whole attack is done, not each inner step"><span class="dot"></span><span class="who">Adversary</span><span class="stage" id="sys2-stage">idle</span></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="sys" id="sys1-badge" title="muse_orchestrator.py -&gt; muse exec, one blocking call per repair"><span class="dot"></span><span class="who">Synthesizer</span><span class="stage" id="sys1-stage">idle</span></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="sys" id="orch-badge" title="orchestrator/gate.py: no worse on every case seen, better on at least one"><span class="dot"></span><span class="who">Orchestrator</span><span class="stage" id="orch-stage">idle</span></div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="sys" id="escalate-badge" title="W stalled cycles on one signature, or the token budget runs out"><span class="dot"></span><span class="who">Escalation</span><span class="stage" id="escalate-stage">none</span></div>
+    </div>
+    <div class="flow-panel" id="flow-panel"></div>
+    <div class="center-top">
+      <span class="incumbent" id="incumbent-name"></span>
+      <span style="flex:1"></span>
+    </div>
+    <div class="banner" id="banner"></div>
+    <div class="turns" id="turns"><div class="empty">No run yet.</div></div>
+    <div class="idle-tagline" id="idle-tagline">What do you want to work on?</div>
+    <div class="chatbar" id="chatbar">
+      <button class="chat-icon" id="chat-attach" type="button" title="Click /policy-dev first to attach a demo video" disabled>+</button>
+      <input type="text" id="chat-input" class="chat-input" placeholder="Message the agent..." autocomplete="off">
+      <button class="chat-icon" id="chat-mic" type="button" title="Voice input" aria-pressed="false" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
+      <button class="btn sm" id="chat-send" type="button">Send</button>
+    </div>
+    <div class="chat-status" id="chat-status"></div>
+  </div>
+  <div class="resize-handle" id="handle-right"></div>
+
+  <div class="col" id="col-right">
+    <button class="btn sm" id="run-settings-btn" style="width:100%;margin-bottom:12px" type="button">Run settings &amp; tools &rarr;</button>
+    <div class="h">Usage</div>
+    <div class="tiles" id="usage-tiles"></div>
+    <div class="h">Reply / summary (output text)</div>
+    <div class="reply" id="reply-box">(waiting)</div>
+  </div>
+</main>
+</div>
+
+<template id="run-settings-template">
+  <h3>Run settings &amp; tools</h3>
+  <div class="sub">Static for this server session &mdash; set by the CLI flags it was started with, not changed by any run.</div>
+  <div class="section"><div class="h">Loop config</div><div class="tiles" id="config-tiles"></div></div>
+  <div class="section"><div class="h">Orchestrator / Adversary</div><div class="tool-list" id="tools-right"></div></div>
+</template>
+
+

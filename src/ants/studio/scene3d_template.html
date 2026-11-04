@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ANTS Scene 3D</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+:root{
+  --bg:#000000; --panel:#0A0A0A; --raise:#111111; --line:#262626;
+  --fg:#EDEDED; --hi:#FFFFFF; --soft:#B5B5B5; --muted:#8A8A8A; --dim:#6E6E6E;
+  --accent:#F59342; --rack:#E8A553; --task:#6fb2e0; --other:#8A8A8A; --gripper:#FF4D4D;
+  --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono','SF Mono',Menlo,Consolas,monospace;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);height:100%}
+body{font:13px/1.45 var(--sans)}
+header{display:flex;align-items:center;gap:14px;min-height:52px;border-bottom:1px solid var(--line);padding:0 20px;flex-wrap:wrap}
+header .title{font-weight:600}
+.tab{font:500 13px var(--sans);background:var(--raise);border:1px solid var(--line);color:var(--muted);padding:6px 12px;cursor:pointer}
+.tab.on{color:var(--hi);border-color:var(--hi)}
+.btn{font:500 13px var(--sans);background:var(--raise);border:1px solid var(--line);color:var(--fg);padding:6px 12px;cursor:pointer}
+.btn.on{color:var(--accent);border-color:var(--accent)}
+main{display:grid;grid-template-columns:minmax(0,1fr) 260px;height:calc(100vh - 53px)}
+#canvas-wrap{position:relative;overflow:hidden;cursor:grab}
+#canvas-wrap.dragging{cursor:grabbing}
+#canvas-wrap canvas{display:block}
+.side{background:var(--panel);border-left:1px solid var(--line);padding:16px;overflow-y:auto}
+.h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500;margin:0 0 8px}
+.desc{font-size:12.5px;color:var(--soft);margin:0 0 16px}
+.leg{display:flex;flex-direction:column;gap:6px;font-size:12.5px;margin-bottom:16px}
+.leg span{display:flex;align-items:center;gap:8px}
+.leg i{width:11px;height:11px;border-radius:3px;display:inline-block}
+.hint{font-size:11.5px;color:var(--dim);line-height:1.5}
+</style>
+</head>
+<body>
+<header>
+  <span class="title">Scene 3D &mdash; what System 1 reads</span>
+  <div id="tabs"></div>
+  <span style="flex:1"></span>
+  <button class="btn on" id="spin-btn">spin: on</button>
+</header>
+<main>
+  <div id="canvas-wrap"></div>
+  <div class="side">
+    <div class="h" id="lvl-title"></div>
+    <p class="desc" id="lvl-desc"></p>
+    <div class="h">Legend</div>
+    <div class="leg">
+      <span><i style="background:var(--task)"></i>task object (bowl, plate)</span>
+      <span><i style="background:var(--rack)"></i>wine rack</span>
+      <span><i style="background:var(--other)"></i>other object</span>
+      <span><i style="background:var(--gripper)"></i>gripper</span>
+    </div>
+    <div class="h">Controls</div>
+    <p class="hint">Drag to orbit, scroll to zoom. "spin" auto-rotates the scene; it pauses while you drag and resumes after.</p>
+  </div>
+</main>
+
+<script>
+const DATA = /*__DATA__*/null;
+
+/* ---------- scene setup ---------- */
+const wrap = document.getElementById("canvas-wrap");
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 50);
+camera.up.set(0, 0, 1);
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  wrap.appendChild(renderer.domElement);
+} catch (e) {
+  renderer = { render() {}, setSize() {} };
+  const msg = document.createElement("div");
+  msg.style.cssText = "padding:24px;color:#8A8A8A;font:13px/1.5 sans-serif;max-width:46ch";
+  msg.textContent = "This browser could not create a WebGL context, so the 3D view can't render here. The level tabs and description still work.";
+  wrap.appendChild(msg);
+}
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.55));
+const dir = new THREE.DirectionalLight(0xffffff, 0.8);
+dir.position.set(1.2, -1.0, 1.8);
+scene.add(dir);
+
+const grid = new THREE.GridHelper(2.4, 24, 0x333333, 0x1a1a1a);
+grid.rotation.x = Math.PI / 2; // lie flat on the x-y plane (z is up here)
+scene.add(grid);
+
+const group = new THREE.Group();
+scene.add(group);
+
+function resize() {
+  const w = wrap.clientWidth, h = wrap.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+}
+addEventListener("resize", resize);
+
+/* ---------- orbit (drag to rotate, scroll to zoom) ---------- */
+let az = Math.PI * 0.8, el = 1.1, dist = 1.6;
+const TARGET = new THREE.Vector3(0, 0, 0);
+function frameScene(scene) {
+  TARGET.set(scene.center[0], scene.center[1], scene.center[2]);
+  dist = scene.radius * 5.0;
+}
+function applyCam() {
+  const x = TARGET.x + dist * Math.cos(el) * Math.cos(az);
+  const y = TARGET.y + dist * Math.cos(el) * Math.sin(az);
+  const z = TARGET.z + dist * Math.sin(el);
+  camera.position.set(x, y, z);
+  camera.lookAt(TARGET);
+}
+let dragging = false, lastX = 0, lastY = 0;
+wrap.addEventListener("pointerdown", (e) => {
+  dragging = true; lastX = e.clientX; lastY = e.clientY;
+  wrap.classList.add("dragging"); wrap.setPointerCapture(e.pointerId);
+});
+wrap.addEventListener("pointermove", (e) => {
+  if (!dragging) return;
+  az -= (e.clientX - lastX) * 0.006;
+  el = Math.max(-1.3, Math.min(1.3, el + (e.clientY - lastY) * 0.006));
+  lastX = e.clientX; lastY = e.clientY;
+  applyCam();
+});
+["pointerup", "pointercancel", "pointerleave"].forEach(ev =>
+  wrap.addEventListener(ev, () => { dragging = false; wrap.classList.remove("dragging"); }));
+wrap.addEventListener("wheel", (e) => {
+  e.preventDefault();
+  dist = Math.max(0.3, Math.min(6, dist * (1 + e.deltaY * 0.001)));
+  applyCam();
+}, { passive: false });
+
+/* ---------- shapes ---------- */
+const COLOR = { task: 0x6fb2e0, rack: 0xe8a553, other: 0x8a8a8a, table: 0x444444 };
+const geomCache = {
+  box: new THREE.BoxGeometry(1, 1, 1),
+  sphere: new THREE.SphereGeometry(1, 16, 12),
+  cylinder: new THREE.CylinderGeometry(1, 1, 1, 16).rotateX(Math.PI / 2), // MuJoCo cylinders run along local z
+  capsule: new THREE.CylinderGeometry(1, 1, 1, 16).rotateX(Math.PI / 2),
+};
+
+function setPose(mesh, pos, xmat) {
+  const m = new THREE.Matrix4();
+  m.set(
+    xmat[0], xmat[1], xmat[2], 0,
+    xmat[3], xmat[4], xmat[5], 0,
+    xmat[6], xmat[7], xmat[8], 0,
+    0, 0, 0, 1
+  );
+  mesh.matrixAutoUpdate = false;
+  mesh.matrix.copy(m);
+  mesh.matrix.setPosition(pos[0], pos[1], pos[2]);
+}
+
+function buildShape(s) {
+  let mesh;
+  const color = COLOR[s.cat] ?? 0x888888;
+  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.75, metalness: 0.05 });
+  if (s.type === "box") {
+    mesh = new THREE.Mesh(geomCache.box, mat);
+    mesh.scale.set(s.size[0] * 2, s.size[1] * 2, s.size[2] * 2);
+  } else if (s.type === "sphere") {
+    mesh = new THREE.Mesh(geomCache.sphere, mat);
+    mesh.scale.setScalar(s.size[0]);
+  } else if (s.type === "cylinder" || s.type === "capsule") {
+    mesh = new THREE.Mesh(geomCache.cylinder, mat);
+    const r = s.size[0], h = (s.size[1] || s.size[0]) * 2;
+    mesh.scale.set(r, h, r); // cylinder geometry's own axis is y before the baked rotateX
+  } else {
+    return null;
+  }
+  setPose(mesh, s.pos, s.xmat);
+  return mesh;
+}
+
+function loadLevel(level) {
+  while (group.children.length) group.remove(group.children[0]);
+  for (const s of level.scene.shapes) {
+    const mesh = buildShape(s);
+    if (mesh) group.add(mesh);
+  }
+  const g = level.scene.gripper;
+  if (g) {
+    const marker = new THREE.Mesh(
+      new THREE.SphereGeometry(0.025, 12, 10),
+      new THREE.MeshStandardMaterial({ color: 0xff4d4d, emissive: 0x330000 })
+    );
+    marker.position.set(g.pos[0], g.pos[1], g.pos[2]);
+    group.add(marker);
+  }
+  document.getElementById("lvl-title").textContent = level.title;
+  document.getElementById("lvl-desc").textContent = level.desc;
+  frameScene(level.scene);
+  applyCam();
+}
+
+/* ---------- tabs ---------- */
+const tabsEl = document.getElementById("tabs");
+let current = 0;
+function renderTabs() {
+  tabsEl.innerHTML = "";
+  DATA.levels.forEach((lvl, i) => {
+    const b = document.createElement("button");
+    b.className = "tab" + (i === current ? " on" : "");
+    b.textContent = lvl.id;
+    b.addEventListener("click", () => { current = i; renderTabs(); loadLevel(lvl); });
+    tabsEl.appendChild(b);
+  });
+}
+
+/* ---------- spin + render loop ---------- */
+let spin = true;
+document.getElementById("spin-btn").addEventListener("click", (e) => {
+  spin = !spin;
+  e.target.textContent = "spin: " + (spin ? "on" : "off");
+  e.target.classList.toggle("on", spin);
+});
+function tick() {
+  if (spin && !dragging) { az += 0.0035; applyCam(); }
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+
+resize();
+applyCam();
+renderTabs();
+if (DATA.levels.length) loadLevel(DATA.levels[0]);
+tick();
+</script>
+</body>
+</html>

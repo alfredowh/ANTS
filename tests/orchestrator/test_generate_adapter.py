@@ -106,3 +106,60 @@ def test_summary_adds_system_2_tokens_and_cost_per_cycle(tmp_path):
     s = json.loads(path.read_text(encoding="utf-8"))
     assert s["total_tokens"] == 100_000 and s["total_cost_usd"] == 1.35
     assert s["adversary_cost_usd"] == 0.81 and s["cost_per_cycle_usd"] == 0.3375
+
+
+class FakeApiSynth:
+    """Stands in for default_synthesizer()'s MuseSynthesizer: same rewrite() shape and metadata."""
+
+    def __init__(self, tokens: int = 2000):
+        self.tokens, self.calls = tokens, 0
+
+    def rewrite(self, incumbent, feedback, constraints):
+        import dataclasses
+
+        self.calls += 1
+        code = incumbent.code
+        for fb in feedback:
+            patch = MOCK_WORLD_PATCHES.get(fb.case.category)
+            code = patch(code) if patch else code
+        return dataclasses.replace(
+            incumbent, version=incumbent.version + 1, code=code,
+            parent_version=incumbent.version,
+            metadata={**incumbent.metadata, "synthesizer": "muse", "tokens": self.tokens},
+        )  # fmt: skip
+
+
+def test_cli_muse_api_runs_the_loop_through_default_synthesizer(tmp_path, monkeypatch):
+    import ants.synthesizer.muse_synthesizer as ms
+
+    seen = {}
+
+    def fake_builder(task, *, token_budget, run_dir):
+        seen.update(task=task, token_budget=token_budget, run_dir=run_dir)
+        return FakeApiSynth()
+
+    monkeypatch.setattr(ms, "default_synthesizer", fake_builder)
+    out = tmp_path / "run"
+    argv = ["--synthesizer", "muse-api", "--synth-token-budget", "50000", "--cycles", "20",
+            "--categories", "physics", "--min-severity", "0.6", "--out", str(out)]  # fmt: skip
+    assert run_main(argv) == 0
+    assert seen == {"task": "put the bowl on the plate", "token_budget": 50000,
+                    "run_dir": out / "muse_api"}  # fmt: skip
+    summary = json.loads((out / "summary.json").read_text(encoding="utf-8"))
+    assert summary["accepted_versions"] == [1] and summary["rewrite_tokens"] == 2000
+    assert summary["cost_per_cycle_usd"] > 0
+
+
+def test_cli_muse_api_needs_a_budget_and_the_aspire_checkout(tmp_path, monkeypatch):
+    import ants.synthesizer.muse_synthesizer as ms
+
+    with pytest.raises(SystemExit):
+        run_main(["--synthesizer", "muse-api", "--out", str(tmp_path / "a")])
+
+    def missing(task, *, token_budget, run_dir):
+        raise FileNotFoundError("ASPIRE/docs/api-reference.md")
+
+    monkeypatch.setattr(ms, "default_synthesizer", missing)
+    with pytest.raises(SystemExit, match="submodule update --init ASPIRE"):
+        run_main(["--synthesizer", "muse-api", "--synth-token-budget", "1000",
+                  "--out", str(tmp_path / "b")])  # fmt: skip

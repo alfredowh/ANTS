@@ -54,7 +54,33 @@ def test_cap_harness_rollouts_land_in_the_run_directory(tmp_path, monkeypatch):
     seen = {}
     monkeypatch.setattr(avu, "run", lambda out, policy, attacks, seeds, base: seen.update(
         out=out, aspire=base.aspire) or [])  # fmt: skip
-    monkeypatch.setattr(avu, "summarize", lambda runs, backend: "")
+    monkeypatch.setattr(avu, "summarize", lambda *a, **k: "")
     out = tmp_path / "h1a"
     avu.main(["--backend", "cap_harness", "--aspire", str(tmp_path), "--out", str(out)])
     assert seen["aspire"].output_root == out / "aspire" and seen["aspire"].root == tmp_path
+
+
+def test_severity_range_is_explicit_logged_and_matches_the_loop(tmp_path):
+    import json
+
+    assert main(["--attacks", "3", "--seeds", "0", "--out", str(tmp_path)]) == 0
+    cfg = json.loads((tmp_path / "results.json").read_text(encoding="utf-8"))["config"]
+    assert cfg["min_severity"] == 0.3 and "0.8" in str(cfg["bounds"])
+    assert "Severity 0.3 to 0.8." in (tmp_path / "summary.md").read_text(encoding="utf-8")
+    out = tmp_path / "narrow"
+    main(["--attacks", "3", "--seeds", "0", "--severity-bound", "0.6", "--out", str(out)])
+    for row in json.loads((out / "results.json").read_text(encoding="utf-8"))["runs"]:
+        assert row["attacks"] == 3
+    assert "0.6" in str(json.loads((out / "results.json").read_text(encoding="utf-8"))["config"])
+
+
+def test_summary_reports_pooled_rates_with_a_wilson_interval_and_paired_seeds(tmp_path):
+    from ants.adversary.experiments.adaptive_vs_uniform import wilson
+
+    lo, hi = wilson(0, 120)
+    assert lo == 0.0 and 0.02 < hi < 0.04  # zero of 120 still allows up to about 3%
+    lo, hi = wilson(6, 100)
+    assert lo < 0.06 < hi
+    main(["--attacks", "4", "--seeds", "0", "1", "--out", str(tmp_path)])
+    text = (tmp_path / "summary.md").read_text(encoding="utf-8")
+    assert "95% CI (Wilson)" in text and "Paired by seed" in text

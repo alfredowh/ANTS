@@ -80,10 +80,11 @@ version it hit and, for failures, the rewrite and its verdict. Read-only: it nev
 
 ## Next
 
-- System 1 has two plugs, both merged: `MuseOrchestrator` (Muse Code CLI, through
-  `GenerateSynthesizer`; `run.py --synthesizer muse-code --synth-token-budget N`; about 43k tokens
-  per rewrite observed) and `synthesizer/muse_synthesizer.py` (Meta API through System 1's prompt
-  builder, implements `Synthesizer` directly; it does not send `phases.md` yet).
+- System 1 has two real plugs, both sending `phases.md`, both selected in `run.py` with an explicit
+  `--synth-token-budget N`: `--synthesizer muse-code` (`MuseOrchestrator`, Muse Code via the `muse`
+  CLI, through `GenerateSynthesizer`; about 43k tokens per rewrite observed) and `--synthesizer
+  muse-api` (`default_synthesizer()`, Muse Wonder via the Meta API; needs `META_API_KEY` and the
+  ASPIRE checkout, no `muse` CLI). Tokens and $ per rewrite are logged either way.
 - Grow `phases.md` step by step (deployment loop with human approval, recovery skills) as each
   step gets code behind it.
 - Several rollouts per case for `Policy.deterministic=False`.

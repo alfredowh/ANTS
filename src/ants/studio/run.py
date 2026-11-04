@@ -46,6 +46,7 @@ def nominal_events(adv: Adversary, policy: Policy, seed: int) -> dict:
     return {
         "outcome": nominal.outcome.value,
         "events": [{"kind": e.kind, **dict(e.detail)} for e in nominal.events],
+        "video_path": nominal.video_path,
     }
 
 
@@ -62,7 +63,7 @@ def run(
     task: str = "put the bowl on the plate",
     seed: int = 0,
     eta: float = 0.2,
-    severity_bound: float = 0.6,
+    severity_bound: float = 0.8,
     token_budget: int | None = None,
     backend: str = "mock",
     aspire_root: Path | None = None,
@@ -138,7 +139,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--aspire", type=Path, default=None, help="ASPIRE checkout (cap_harness)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--eta", type=float, default=0.2, help="1.0 = uniform baseline")
-    ap.add_argument("--severity-bound", type=float, default=0.6)
+    ap.add_argument("--severity-bound", type=float, default=0.8, help="rho; as the loop")
     ap.add_argument(
         "--token-budget",
         type=int,

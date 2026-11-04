@@ -94,3 +94,30 @@ def test_a_loop_run_has_versions_gate_verdicts_and_diffs(tmp_path):
 def test_a_system2_run_has_no_loop_section(tmp_path):
     run(tmp_path / "r", attacks=2, policy_path=POLICY)
     assert collect(tmp_path / "r")["loop"] is None
+
+
+def test_videos_link_relative_to_the_run_folder_even_when_recorded_elsewhere(tmp_path):
+    # A run made on the GPU machine and copied here: logged paths point at /workspace/...
+    run_dir = tmp_path / "libero_studio"
+    run(run_dir, attacks=2, policy_path=POLICY)
+    attack_vid = run_dir / "aspire" / "20261104_0002_s52_abc" / "x" / "media" / "videos" / "a.mp4"
+    nominal_vid = (
+        run_dir / "aspire" / "20261104_0001_s51_nominal" / "y" / "media" / "videos" / "n.mp4"
+    )
+    for v in (attack_vid, nominal_vid):
+        v.parent.mkdir(parents=True)
+        v.write_bytes(b"")
+    rows = (run_dir / "attacks.jsonl").read_text(encoding="utf-8").splitlines()
+    first = json.loads(rows[0])
+    gpu_path = (
+        "/workspace/ANTS/data/runs/libero_studio/" + attack_vid.relative_to(run_dir).as_posix()
+    )
+    first["report"]["result"]["video_path"] = gpu_path
+    rows[0] = json.dumps(first)
+    (run_dir / "attacks.jsonl").write_text("\n".join(rows) + "\n", encoding="utf-8")
+
+    data = collect(run_dir)
+    assert data["attacks"][0]["video"] == attack_vid.relative_to(run_dir).as_posix()
+    assert data["attacks"][1]["video"] is None  # the mock world records no video
+    # Older runs did not log the nominal video: it is found by its folder name.
+    assert data["nominal_video"] == nominal_vid.relative_to(run_dir).as_posix()
