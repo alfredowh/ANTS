@@ -243,3 +243,6 @@ body[data-view="adversary"] #adversary-view{display:block}
 .scene2d.no-scene .scene2d-head,.scene2d.no-scene .scene2d-layers,.scene2d.no-scene .scene2d-canvas{display:none}
 .scene2d.no-scene .scene2d-note{font-size:13.7px;cursor:default;margin-top:0}
 .token-pill{font-family:var(--mono);font-size:13px;color:var(--muted);border:1px solid var(--line);padding:3px 8px;margin-left:8px;white-space:nowrap}
+.token-pill.in-flight{color:var(--fg);border-color:var(--accent);animation:token-pulse 1.6s ease-in-out infinite}
+@keyframes token-pulse{50%{border-color:var(--line)}}
+@media (prefers-reduced-motion:reduce){.token-pill.in-flight{animation:none}}
