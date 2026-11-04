@@ -1,7 +1,7 @@
 """Experiment: does one demonstration help the generator write a working program?
 
 Arms differ only in the demonstration section of the prompt (Q1 in
-docs/synthesizer/discussion.md). Per arm and sample: write a program, run it on a debug seed,
+the project discussion). Per arm and sample: write a program, run it on a debug seed,
 repair it from text feedback up to N times, then evaluate the final program unchanged on the
 acceptance seeds (no model calls at evaluation time).
 

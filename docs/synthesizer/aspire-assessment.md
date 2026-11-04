@@ -7,14 +7,13 @@ Status: research note, 2026-10-31. Nothing here is decided. Every number is quot
 **Detailed appendices** (full evidence, repo paths, tables):
 - [research/aspire-deep-read.md](research/aspire-deep-read.md): ASPIRE paper v1/v2 and repo at commit `fa00f0e`. The repo was read, not run.
 - [research/output-format.md](research/output-format.md): primitives vs program vs hybrids, the evidence and a decisive experiment.
-- [research/module-radar.md](research/module-radar.md): 79 recent works across 11 System 1 building blocks.
 - The [Robot Research Radar](https://claude.ai/artifact/3epiiPPS6AcpPoVyWfRfS5) artifact lists labs and works with metrics and ANTS reviews. It is private; share it from its Share menu. Its skill is in `.claude/skills/robot-research-radar/`.
 
 ---
 
 ## 0. Short answer
 
-1. **Yes, base System 1's execution layer on ASPIRE, but not its agent layer.** Reuse `cap-harness`: the typed primitive API, the AST sandbox, the per-call trace, the run-directory artifacts and the seed protocol. ASPIRE contains **no LLM client**. Its "agent" is Claude Code or Codex reading markdown skills [read]. So plugging in Muse is not a configuration change, contrary to [discussion.md](discussion.md) §5.1. Instead, our own Muse client writes `program.py` and calls `cap-harness run` / `run-batch` as a subprocess (§5.1 below).
+1. **Yes, base System 1's execution layer on ASPIRE, but not its agent layer.** Reuse `cap-harness`: the typed primitive API, the AST sandbox, the per-call trace, the run-directory artifacts and the seed protocol. ASPIRE contains **no LLM client**. Its "agent" is Claude Code or Codex reading markdown skills [read]. So plugging in Muse is not a configuration change, contrary to discussion.md §5.1. Instead, our own Muse client writes `program.py` and calls `cap-harness run` / `run-batch` as a subprocess (§5.1 below).
 2. **For System 1's *method*, the closest precedent is RAPID, not ASPIRE.** RAPID (MIT LIS and NUS, with UPenn and NVIDIA, [arXiv 2609.30249](https://arxiv.org/abs/2609.30249), Sept 2026) takes **one human demonstration** to a coding agent. The agent writes primitives with per-phase success predicates, rebuilds the scene in MuJoCo and verifies on sampled scene variants with a feasibility filter [read, abstract and HTML; parts summary]. It has no adaptive adversary, no gate over all seen cases, and no escalation to a human. Code release is not stated. **The ANTS novelty claim must now be stated against RAPID and ASPIRE together** (§2.3).
 3. **Output format: write a function (program) that calls primitives.** Keep the model out of the run-time loop. Per-step primitive calls cost 31–120 model calls and $0.20–0.50 per episode in published measurements [read]. They are not deterministic, which breaks the regression gate. They do not score better on LIBERO-Pro once model strength is controlled for (§3).
 4. **The laptop GPU (RTX A5500, 16 GB) is enough for System 1 on LIBERO**, if every LLM/VLM stays on the API and the GPU runs SAM 3 + 1–2 LIBERO workers, with PyRoki on the CPU [est from repo numbers]. It needs a new `sm_86` profile, because ASPIRE ships only sm_89/sm_120 and errors on other GPU architectures [read]. Skip BEHAVIOR/Isaac and SAM 3D Objects, which do not fit (§5).
@@ -236,7 +235,7 @@ Setup: one **RTX A5500 Laptop, 16 GB, Ampere sm_86**, 62 GB RAM, Linux; LLMs/VLM
 
 ## 7. Recent work worth adding (by block)
 
-Picked from the [module radar](research/module-radar.md) for fit with this architecture and for traction (big lab, citations, stars). Lab-level lists with reviews are in the Robot Research Radar artifact.
+Picked from the module radar for fit with this architecture and for traction (big lab, citations, stars). Lab-level lists with reviews are in the Robot Research Radar artifact.
 
 | Rank | Add | Block | Why | Tier |
 |---|---|---|---|---|

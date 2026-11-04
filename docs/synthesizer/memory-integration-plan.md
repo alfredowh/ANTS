@@ -2,7 +2,7 @@
 
 Status: plan, 2026-11-01. Nothing here is decided or built. It extends [memory-and-cache.md](memory-and-cache.md) (the synthesis) and uses the six reports in [research/](research/). Every number is quoted from our logs or from a report, with its tag. A number marked **guess** has no source.
 
-Tags: [R3] [memory-audit-codebase](research/memory-audit-codebase.md), [R4] [skill libraries](research/memory-skill-libraries-llm-agents.md), [R5] [correction libraries](research/memory-correction-and-failure-libraries.md), [R6] [memory management and caching](research/memory-management-and-caching.md), [R7] [radar shortlist](research/memory-radar-shortlist.md), [code] read in `src/ants` on 2026-11-01.
+Tags: [R3] [memory-audit-codebase](research/memory-audit-codebase.md), [R4] [skill libraries](research/memory-skill-libraries-llm-agents.md), [R5] [correction libraries](research/memory-correction-and-failure-libraries.md), [R6] [memory management and caching](research/memory-management-and-caching.md), [R7] radar shortlist, [code] read in `src/ants` on 2026-11-01.
 
 ---
 

@@ -2,7 +2,7 @@
   "version": 1,
   "updated": "2026-11-01",
   "artifact_url": "https://claude.ai/artifact/AimCCqfBF2ooHEqZwiFVMS",
-  "about": "Single source of truth for every command that runs an ANTS experiment or tool. Edit this file, then run `uv run python -m ants.evalkit.runbook build` to regenerate docs/runbook.html, docs/runbook/commands-full.md, docs/synthesizer/experiment-commands.md and the Run book block in docs/todo.md.",
+  "about": "Single source of truth for every command that runs an ANTS experiment or tool. Edit this file, then run `uv run python -m ants.evalkit.runbook build` to regenerate docs/runbook.html, docs/runbook/commands-full.md, docs/synthesizer/experiment-commands.md.",
   "repo_url": "https://github.com/alfredowh/ANTS/blob/synthesizer/",
   "runners": {
     "ants": {
@@ -60,7 +60,7 @@
       "out": [
         "states"
       ],
-      "doc": "docs/HANDOFF.md"
+      "doc": "docs/architecture.md"
     },
     {
       "id": "demospec_tools",
@@ -84,7 +84,7 @@
       "role": "Shared dataclasses: DemoSpec, Policy, Constraint, Perturbation, CaseSpec, EpisodeTrace, Skill.",
       "in": [],
       "out": [],
-      "doc": "docs/synthesizer/discussion.md"
+      "doc": "docs/synthesizer/experiment-commands.md"
     },
     {
       "id": "generator",
@@ -101,7 +101,7 @@
       "out": [
         "program.py"
       ],
-      "doc": "docs/synthesizer/discussion.md"
+      "doc": "docs/synthesizer/experiment-commands.md"
     },
     {
       "id": "llm",
@@ -320,21 +320,7 @@
       "out": [
         "program + reasoning tokens"
       ],
-      "doc": "docs/HANDOFF.md"
-    },
-    {
-      "id": "radar",
-      "name": "research radar",
-      "group": "tools",
-      "path": ".claude/skills/robot-research-radar/",
-      "role": "Scripts that merge and enrich the Robot Research Radar artifact database.",
-      "in": [
-        "JSON sources"
-      ],
-      "out": [
-        "radar documents"
-      ],
-      "doc": ".claude/skills/robot-research-radar/SKILL.md"
+      "doc": "docs/architecture.md"
     }
   ],
   "flow": [
@@ -718,30 +704,6 @@
       "result": "6 configurations compared; only the scene-aware ones (5, 6) had 0 forbidden-contact steps. One scene, one seed."
     },
     {
-      "id": "radar",
-      "title": "Research radar maintenance",
-      "status": "tooling",
-      "kind": "tool",
-      "question": "Keep the Robot Research Radar artifact in sync.",
-      "doc": ".claude/skills/robot-research-radar/SKILL.md",
-      "run_dir": null,
-      "modules": [
-        "radar"
-      ],
-      "commands": [
-        "radar.build",
-        "radar.pending",
-        "radar.metrics"
-      ],
-      "inputs": [
-        "JSON sources"
-      ],
-      "outputs": [
-        "documents for the artifact db"
-      ],
-      "result": "Usually driven by the robot-research-radar skill, not by hand."
-    },
-    {
       "id": "agent-skills",
       "title": "Agent skills (slash commands)",
       "status": "reference",
@@ -749,14 +711,8 @@
       "question": "Prompts that write into the ANTS To-do artifact.",
       "doc": "docs/runbook/agent-access.md",
       "run_dir": null,
-      "modules": [
-        "radar"
-      ],
-      "commands": [
-        "skill.idea",
-        "skill.storyline",
-        "skill.radar"
-      ],
+      "modules": [],
+      "commands": [],
       "inputs": [
         "free text"
       ],
@@ -898,6 +854,40 @@
         "data/runs/mapper_probe/reconstructed_view_*.png"
       ],
       "result": "Logged run, 2026-11-03: 16 orbit frames fused into a mesh (23,441 vertices, 44,253 faces); rendered views match the real scene layout. Virtual orbiting camera, not yet the real arm; not wired into any owned package. See the doc for caveats and next steps."
+    },
+    {
+      "id": "exp12",
+      "title": "Exp 12: demo vs no demo on cuRobo (simulator robot mask, attached bowl)",
+      "status": "final (submission experiment, tag submission-experiment)",
+      "kind": "experiment",
+      "question": "With cuRobo planning and the held bowl attached, does one human demonstration (plus S4 scene text and E3 repair evidence) beat task text only?",
+      "doc": "docs/synthesizer/exp12/results_summary.json",
+      "run_dir": "data/runs/demo_e3_s4_sim | data/runs/nodemo_task_only_sim",
+      "modules": [
+        "orch_exp",
+        "generator",
+        "llm",
+        "muse",
+        "rollout",
+        "launcher",
+        "aspire",
+        "services",
+        "evalkit"
+      ],
+      "commands": [
+        "exp12.demo",
+        "exp12.nodemo",
+        "report.run"
+      ],
+      "inputs": [
+        "data/demospecs/hurobo_233859.json",
+        "data/scene_text/S4_L1.txt"
+      ],
+      "outputs": [
+        "data/runs/demo_e3_s4_sim/",
+        "data/runs/nodemo_task_only_sim/"
+      ],
+      "result": "Held-out seeds 1 to 5, two samples (T 0.2, 0.7) per arm. Demo: debug seed solved in 2 and 2 attempts; scaled 5/5 and 2/5, stock 4/5 and 3/5. No-demo: solved in 5 (no) and 3 attempts; scaled 4/5 and 4/5, stock 0/5 and 0/5. The arms also differ in scene text and evidence. Source: events.jsonl of each run. Ran before the attach frame fix: spheres 9.65 cm too high, see docs/synthesizer/handoff-curobo-debug.md."
     }
   ],
   "commands": [
@@ -2822,190 +2812,6 @@
       "doc": "dev/curobo/README.md"
     },
     {
-      "id": "radar.build",
-      "title": "Radar: merge JSON sources into documents",
-      "group": "tools",
-      "runner": "ants",
-      "base": ".claude/skills/robot-research-radar/scripts/radar.py build",
-      "args": [
-        {
-          "flag": "--in",
-          "value": "scratch/orgs.json scratch/works.json",
-          "kind": "value",
-          "on": true,
-          "required": true,
-          "desc": "One or more JSON sources to merge.",
-          "raw": true
-        },
-        {
-          "flag": "--out",
-          "value": "scratch/radar_docs.json",
-          "kind": "value",
-          "on": true,
-          "required": true,
-          "desc": "Documents for the radar artifact database."
-        }
-      ],
-      "description": "Merges research-radar JSON sources into documents for the artifact db. Normally driven by the robot-research-radar skill.",
-      "examples": [],
-      "modules": [
-        "radar"
-      ],
-      "in": [
-        "JSON sources"
-      ],
-      "out": [
-        "radar documents"
-      ],
-      "cost": "free",
-      "minutes": 0,
-      "doc": ".claude/skills/robot-research-radar/SKILL.md"
-    },
-    {
-      "id": "radar.pending",
-      "title": "Radar: dump works still pending",
-      "group": "tools",
-      "runner": "ants",
-      "base": ".claude/skills/robot-research-radar/scripts/radar.py pending",
-      "args": [
-        {
-          "flag": "--dump",
-          "value": "scratch/pending.json",
-          "kind": "value",
-          "on": true,
-          "required": true,
-          "desc": "Where to write the pending works."
-        }
-      ],
-      "description": "Lists queued/draft works so the skill can verify them from Claude Code.",
-      "examples": [],
-      "modules": [
-        "radar"
-      ],
-      "in": [
-        "radar db export"
-      ],
-      "out": [
-        "pending.json"
-      ],
-      "cost": "free",
-      "minutes": 0,
-      "doc": ".claude/skills/robot-research-radar/SKILL.md"
-    },
-    {
-      "id": "radar.metrics",
-      "title": "Radar: citations and GitHub stars",
-      "group": "tools",
-      "runner": "ants",
-      "base": ".claude/skills/robot-research-radar/scripts/metrics.py",
-      "args": [
-        {
-          "flag": "--arxiv",
-          "value": "2609.30249",
-          "kind": "value",
-          "on": true,
-          "desc": "arXiv ids (batch endpoint; single lookups get rate-limited)."
-        },
-        {
-          "flag": "--github",
-          "value": "owner/repo",
-          "kind": "value",
-          "on": false,
-          "desc": "GitHub repos (stars via gh api graphql)."
-        },
-        {
-          "flag": "--title",
-          "value": "TITLE",
-          "kind": "value",
-          "on": false,
-          "desc": "Titles."
-        },
-        {
-          "flag": "--file",
-          "value": "works.json",
-          "kind": "value",
-          "on": false,
-          "desc": "Batch file."
-        }
-      ],
-      "description": "Semantic Scholar unauthenticated; the old gh lacks auth token.",
-      "examples": [],
-      "modules": [
-        "radar"
-      ],
-      "in": [
-        "ids"
-      ],
-      "out": [
-        "metrics JSON"
-      ],
-      "cost": "free",
-      "minutes": 0,
-      "doc": ".claude/skills/robot-research-radar/SKILL.md"
-    },
-    {
-      "id": "skill.idea",
-      "title": "/idea-judge <idea>",
-      "group": "agent-skills",
-      "runner": "shell",
-      "base": "/idea-judge  # then your raw idea text",
-      "args": [],
-      "description": "Reviews a raw idea with Judge A (supportive) and Judge B (strict) and writes it to the Ideas tab of the ANTS To-do artifact. Instructions: .claude/skills/idea-judge/SKILL.md.",
-      "examples": [],
-      "modules": [],
-      "in": [
-        "idea text"
-      ],
-      "out": [
-        "artifact db: ideas"
-      ],
-      "cost": "agent time",
-      "minutes": 5,
-      "doc": ".claude/skills/idea-judge/SKILL.md"
-    },
-    {
-      "id": "skill.storyline",
-      "title": "/storyline-judge <storyline>",
-      "group": "agent-skills",
-      "runner": "shell",
-      "base": "/storyline-judge  # then the storyline text or a storyline_id",
-      "args": [],
-      "description": "Reviews a hackathon storyline against the current code and runs. Writes to the Storyline tab. Instructions: .claude/skills/storyline-judge/SKILL.md.",
-      "examples": [],
-      "modules": [],
-      "in": [
-        "storyline text"
-      ],
-      "out": [
-        "artifact db: storyline"
-      ],
-      "cost": "agent time",
-      "minutes": 5,
-      "doc": ".claude/skills/storyline-judge/SKILL.md"
-    },
-    {
-      "id": "skill.radar",
-      "title": "/robot-research-radar (refresh, extend, sync)",
-      "group": "agent-skills",
-      "runner": "shell",
-      "base": "/robot-research-radar  # refresh | extend | sync | re-rank",
-      "args": [],
-      "description": "Maintains the Robot Research Radar artifact. Instructions: .claude/skills/robot-research-radar/SKILL.md.",
-      "examples": [],
-      "modules": [
-        "radar"
-      ],
-      "in": [
-        "links queued on the page"
-      ],
-      "out": [
-        "artifact db: orgs, works"
-      ],
-      "cost": "agent time",
-      "minutes": 20,
-      "doc": ".claude/skills/robot-research-radar/SKILL.md"
-    },
-    {
       "id": "exp05.probe",
       "title": "Exp 05 step 1: perceive the L1 start state (SAM 3, two arm poses)",
       "group": "exp05",
@@ -3515,6 +3321,294 @@
       "cost": "free",
       "minutes": 2,
       "doc": "docs/perception/scene-reconstruction-probe.md"
+    },
+    {
+      "id": "exp12.demo",
+      "title": "Exp 12 demo arm: demo + S4 + E3 on cuRobo",
+      "group": "experiments",
+      "runner": "ants",
+      "paid": true,
+      "base": "-m ants.orchestrator.demo_vs_nodemo",
+      "args": [
+        {
+          "flag": "--aspire",
+          "value": "ASPIRE",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "desc": "ASPIRE checkout."
+        },
+        {
+          "flag": "--out",
+          "value": "data/runs/demo_e3_s4_sim",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "desc": "Run folder. Repeat the same --out to resume."
+        },
+        {
+          "flag": "--demospec",
+          "value": "data/demospecs/hurobo_233859.json",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "desc": "DemoSpec of clip 233859 (the no-demo arm ignores its content but the flag is required)."
+        },
+        {
+          "flag": "--arms",
+          "value": "demo",
+          "kind": "value",
+          "on": true,
+          "desc": "demo or nodemo."
+        },
+        {
+          "flag": "--temperatures",
+          "value": "0.2,0.7",
+          "kind": "value",
+          "on": true,
+          "desc": "One sample per temperature."
+        },
+        {
+          "flag": "--explain",
+          "kind": "switch",
+          "on": true,
+          "desc": "Repair replies start with WHY."
+        },
+        {
+          "flag": "--repairs",
+          "value": "4",
+          "kind": "value",
+          "on": true,
+          "desc": "Max repairs per sample (5 attempts)."
+        },
+        {
+          "flag": "--planner",
+          "value": "curobo-sim",
+          "kind": "value",
+          "on": true,
+          "desc": "cuRobo with the robot mask from the simulator (privileged)."
+        },
+        {
+          "flag": "--attach-known",
+          "kind": "switch",
+          "on": true,
+          "desc": "Attach the held bowl with its known size (privileged). Needs the dev cuRobo service with ANTS_ATTACH_FILE=data/runs/curobo/attach.json; do not run two such commands at once (one shared attach file)."
+        },
+        {
+          "flag": "--save-clouds",
+          "kind": "switch",
+          "on": true,
+          "desc": "Keep every planning cloud for dev/curobo/make_viewer.py."
+        },
+        {
+          "flag": "--debug-scene",
+          "value": "scaled",
+          "kind": "value",
+          "on": true,
+          "desc": "Debug and repair in the scaled scene."
+        },
+        {
+          "flag": "--scenes",
+          "value": "scaled",
+          "kind": "value",
+          "on": true,
+          "desc": "As run on 2026-11-04. The run also logged stock-scene evaluation."
+        },
+        {
+          "flag": "--eval-seeds",
+          "value": "1,2,3,4,5",
+          "kind": "value",
+          "on": true,
+          "desc": "Held-out seeds, reporting only."
+        },
+        {
+          "flag": "--token-budget",
+          "value": "300000",
+          "kind": "value",
+          "on": true,
+          "desc": "Hard cap on new tokens per command. Observed: demo 204,933, no-demo 247,243 (about 2.8 and 3.3 USD)."
+        },
+        {
+          "flag": "--evidence",
+          "value": "e3",
+          "kind": "value",
+          "on": true,
+          "desc": "Repair adds the contact log, the scene text and stall readings."
+        },
+        {
+          "flag": "--contacts",
+          "kind": "switch",
+          "on": true,
+          "desc": "Log simulator contacts per attempt."
+        },
+        {
+          "flag": "--scene-text-file",
+          "value": "data/scene_text/S4_L1.txt",
+          "kind": "value",
+          "on": true,
+          "desc": "S4 scene text (regenerate with g_scene_text('S4','L1') in ants.orchestrator.scene_context_exp)."
+        }
+      ],
+      "description": "Needs the SAM 3 and PyRoki services and the dev cuRobo service on port 8118 (runbook entries services.start and curobo.service). Settings saved in docs/synthesizer/demo-vs-nodemo-config.json. Run the demo and no-demo commands one after the other, not in parallel.",
+      "examples": [
+        {
+          "title": "Exp 12 demo arm: demo + S4 + E3 on cuRobo",
+          "cmd": "uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --temperatures 0.2,0.7 --explain --repairs 4 --planner curobo-sim --attach-known --save-clouds --debug-scene scaled --scenes scaled --eval-seeds 1,2,3,4,5 --token-budget 300000 --demospec data/demospecs/hurobo_233859.json --out data/runs/demo_e3_s4_sim --arms demo --evidence e3 --contacts --scene-text-file data/scene_text/S4_L1.txt"
+        }
+      ],
+      "modules": [
+        "orch_exp",
+        "generator",
+        "llm",
+        "muse",
+        "rollout",
+        "launcher",
+        "aspire",
+        "services",
+        "evalkit"
+      ],
+      "in": [
+        "data/demospecs/hurobo_233859.json",
+        "data/scene_text/S4_L1.txt",
+        "data/scenes/L1/contacts_scene.json"
+      ],
+      "out": [
+        "data/runs/demo_e3_s4_sim"
+      ]
+    },
+    {
+      "id": "exp12.nodemo",
+      "title": "Exp 12 no-demo arm: task text only on cuRobo",
+      "group": "experiments",
+      "runner": "ants",
+      "paid": true,
+      "base": "-m ants.orchestrator.demo_vs_nodemo",
+      "args": [
+        {
+          "flag": "--aspire",
+          "value": "ASPIRE",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "desc": "ASPIRE checkout."
+        },
+        {
+          "flag": "--out",
+          "value": "data/runs/nodemo_task_only_sim",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "desc": "Run folder. Repeat the same --out to resume."
+        },
+        {
+          "flag": "--demospec",
+          "value": "data/demospecs/hurobo_233859.json",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "desc": "DemoSpec of clip 233859 (the no-demo arm ignores its content but the flag is required)."
+        },
+        {
+          "flag": "--arms",
+          "value": "nodemo",
+          "kind": "value",
+          "on": true,
+          "desc": "demo or nodemo."
+        },
+        {
+          "flag": "--temperatures",
+          "value": "0.2,0.7",
+          "kind": "value",
+          "on": true,
+          "desc": "One sample per temperature."
+        },
+        {
+          "flag": "--explain",
+          "kind": "switch",
+          "on": true,
+          "desc": "Repair replies start with WHY."
+        },
+        {
+          "flag": "--repairs",
+          "value": "4",
+          "kind": "value",
+          "on": true,
+          "desc": "Max repairs per sample (5 attempts)."
+        },
+        {
+          "flag": "--planner",
+          "value": "curobo-sim",
+          "kind": "value",
+          "on": true,
+          "desc": "cuRobo with the robot mask from the simulator (privileged)."
+        },
+        {
+          "flag": "--attach-known",
+          "kind": "switch",
+          "on": true,
+          "desc": "Attach the held bowl with its known size (privileged). Needs the dev cuRobo service with ANTS_ATTACH_FILE=data/runs/curobo/attach.json; do not run two such commands at once (one shared attach file)."
+        },
+        {
+          "flag": "--save-clouds",
+          "kind": "switch",
+          "on": true,
+          "desc": "Keep every planning cloud for dev/curobo/make_viewer.py."
+        },
+        {
+          "flag": "--debug-scene",
+          "value": "scaled",
+          "kind": "value",
+          "on": true,
+          "desc": "Debug and repair in the scaled scene."
+        },
+        {
+          "flag": "--scenes",
+          "value": "scaled",
+          "kind": "value",
+          "on": true,
+          "desc": "As run on 2026-11-04. The run also logged stock-scene evaluation."
+        },
+        {
+          "flag": "--eval-seeds",
+          "value": "1,2,3,4,5",
+          "kind": "value",
+          "on": true,
+          "desc": "Held-out seeds, reporting only."
+        },
+        {
+          "flag": "--token-budget",
+          "value": "300000",
+          "kind": "value",
+          "on": true,
+          "desc": "Hard cap on new tokens per command. Observed: demo 204,933, no-demo 247,243 (about 2.8 and 3.3 USD)."
+        }
+      ],
+      "description": "Needs the SAM 3 and PyRoki services and the dev cuRobo service on port 8118 (runbook entries services.start and curobo.service). Settings saved in docs/synthesizer/demo-vs-nodemo-config.json. Run the demo and no-demo commands one after the other, not in parallel.",
+      "examples": [
+        {
+          "title": "Exp 12 no-demo arm: task text only on cuRobo",
+          "cmd": "uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --temperatures 0.2,0.7 --explain --repairs 4 --planner curobo-sim --attach-known --save-clouds --debug-scene scaled --scenes scaled --eval-seeds 1,2,3,4,5 --token-budget 300000 --demospec data/demospecs/hurobo_233859.json --out data/runs/nodemo_task_only_sim --arms nodemo"
+        }
+      ],
+      "modules": [
+        "orch_exp",
+        "generator",
+        "llm",
+        "muse",
+        "rollout",
+        "launcher",
+        "aspire",
+        "services",
+        "evalkit"
+      ],
+      "in": [
+        "data/demospecs/hurobo_233859.json",
+        "data/scene_text/S4_L1.txt",
+        "data/scenes/L1/contacts_scene.json"
+      ],
+      "out": [
+        "data/runs/nodemo_task_only_sim"
+      ]
     }
   ]
 }

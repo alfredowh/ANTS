@@ -205,40 +205,9 @@ cd ASPIRE && ANTS_CARVE_MARGIN_M=0.0 ANTS_ATTACH_FILE=$PWD/../data/runs/curobo/a
 cd ASPIRE && ANTS_CONTACT_LOG=../data/evidence/out.jsonl LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../dev/curobo/contact_launch.py scene.json -- run --benchmark libero-pro --suite libero_goal_swap --task-id 8 --seed 51 --init-mode seeded --program ../dev/curobo/programs/exp3_a2_orbit.py
 ```
 
-## Research radar maintenance
-
-Keep the Robot Research Radar artifact in sync. Details: `.claude/skills/robot-research-radar/SKILL.md`.
-
-**Radar: merge JSON sources into documents**
-
-```bash
-uv run python .claude/skills/robot-research-radar/scripts/radar.py build \
-    --in scratch/orgs.json scratch/works.json \
-    --out scratch/radar_docs.json
-```
-
-**Radar: dump works still pending**
-
-```bash
-uv run python .claude/skills/robot-research-radar/scripts/radar.py pending \
-    --dump scratch/pending.json
-```
-
 ## Agent skills (slash commands)
 
 Prompts that write into the ANTS To-do artifact. Details: `docs/runbook/agent-access.md`.
-
-**/idea-judge <idea>**
-
-```bash
-/idea-judge  # then your raw idea text
-```
-
-**/storyline-judge <storyline>**
-
-```bash
-/storyline-judge  # then the storyline text or a storyline_id
-```
 
 ## Exp 05: perceived scene vs oracle
 
@@ -311,4 +280,51 @@ LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl
 
 ```bash
 LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
+```
+
+## Exp 12: demo vs no demo on cuRobo (simulator robot mask, attached bowl)
+
+With cuRobo planning and the held bowl attached, does one human demonstration (plus S4 scene text and E3 repair evidence) beat task text only? Details: `docs/synthesizer/exp12/results_summary.json`.
+
+**Exp 12 demo arm: demo + S4 + E3 on cuRobo** (spends Muse tokens)
+
+```bash
+uv run python -m ants.orchestrator.demo_vs_nodemo \
+    --aspire ASPIRE \
+    --out data/runs/demo_e3_s4_sim \
+    --demospec data/demospecs/hurobo_233859.json \
+    --arms demo \
+    --temperatures 0.2,0.7 \
+    --explain \
+    --repairs 4 \
+    --planner curobo-sim \
+    --attach-known \
+    --save-clouds \
+    --debug-scene scaled \
+    --scenes scaled \
+    --eval-seeds 1,2,3,4,5 \
+    --token-budget 300000 \
+    --evidence e3 \
+    --contacts \
+    --scene-text-file data/scene_text/S4_L1.txt
+```
+
+**Exp 12 no-demo arm: task text only on cuRobo** (spends Muse tokens)
+
+```bash
+uv run python -m ants.orchestrator.demo_vs_nodemo \
+    --aspire ASPIRE \
+    --out data/runs/nodemo_task_only_sim \
+    --demospec data/demospecs/hurobo_233859.json \
+    --arms nodemo \
+    --temperatures 0.2,0.7 \
+    --explain \
+    --repairs 4 \
+    --planner curobo-sim \
+    --attach-known \
+    --save-clouds \
+    --debug-scene scaled \
+    --scenes scaled \
+    --eval-seeds 1,2,3,4,5 \
+    --token-budget 300000
 ```

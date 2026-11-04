@@ -1,6 +1,6 @@
 # What should the System 1 action model emit: primitives, a program, or a hybrid?
 
-Status: research note, 2026-10-31. It builds on `docs/synthesizer/discussion.md` §2 (levels L0–L8) and does not repeat that table. Every number below is quoted from a paper. None comes from our own runs.
+Status: research note, 2026-10-31. It builds on an earlier internal discussion (levels L0–L8) and does not repeat that table. Every number below is quoted from a paper. None comes from our own runs.
 
 **Evidence tags.** **[read]** means the paper's text (HTML) was read for that number. **[summary]** means a model-extracted summary of the full text. **[abstract]** means only the abstract or listing. Some numbers sit only in figures; those are marked "figure only, not extracted". Citation and star counts were **not refreshed**: the radar `metrics.py` timed out on every query today (it is probably rate-limited). The counts in the discussion doc §4.1 (2026-10-28) still apply.
 

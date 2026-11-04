@@ -114,7 +114,7 @@ Licences: ASPIRE Apache-2.0 and CaP-X MIT [repo]. RoboFAC, Guardian, RESETTLE, R
 | Validation | Replay beats judgement. Getafix: same detector. Skill-V: replay. ASPIRE: fresh verifier | A VLM or LLM as the validator is unreliable on contact tasks (FailBench) and optimistic (Xiong et al.: quality labels from later outcomes are "free") |
 | Quality control of what enters | Strict admission beats add-all (Xiong et al.; Sentry: no recovery verification costs about 20%; Library Drift) | Rejected attempts: Sentry stores only verified recoveries; RESKILL carries failed retests forward. These are compatible if rejected attempts live in a separate log |
 | Forgetting | Retire by outcome with a cap (Library Drift), keep pivotal cases (Smyth and Keane) | Premature retirement hurts (Library Drift: -0.019); no robotics evidence |
-| Scale | Hundreds to tens of thousands of records (RCACopilot: a year of incidents; Getafix: thousands of changes; Memento: K plateaus at 4) | Robotics memories in the survey are tiny (DROC: 5 + 7 tasks). A flat-retrieval degradation beyond about 64-128 skills is quoted in [module-radar.md](module-radar.md) [repo, second-hand] |
+| Scale | Hundreds to tens of thousands of records (RCACopilot: a year of incidents; Getafix: thousands of changes; Memento: K plateaus at 4) | Robotics memories in the survey are tiny (DROC: 5 + 7 tasks). A flat-retrieval degradation beyond about 64-128 skills is quoted in module-radar.md [repo, second-hand] |
 
 ---
 
@@ -241,7 +241,7 @@ Below about 50 records, flat signature retrieval is enough; add embeddings when 
 
 V2 is what rejects a correction that only fixes one seed. The neighbours are new acceptance-side cases and join the corpus; they are never held-out cases. ASPIRE states its verifier checks that a skill transmits on its source task, not that it transfers [repo]; V2 plus leave-one-task-out transfer tests (4.8) are the cheapest way to start measuring transfer.
 
-**Run-time recovery.** Keep the generated program frozen at test time (the stance of RHO and the TAMP coding-agent paper in [module-radar.md](module-radar.md) [repo]). The library supplies the recovery routine at write time; the run time only dispatches it.
+**Run-time recovery.** Keep the generated program frozen at test time (the stance of RHO and the TAMP coding-agent paper in module-radar.md [repo]). The library supplies the recovery routine at write time; the run time only dispatches it.
 
 ```
 program step -> monitor(check_code) -> flag + signature -> dispatch table (signature -> recovery routine)
@@ -302,7 +302,7 @@ An adversarially chosen corpus is **not** a robustness estimate. The headline nu
 
 ### 4.8 Minimal ablation design
 
-The arms differ in one thing each, share the frozen generator, simulator, budget and acceptance/held-out split, and are run with at least 3 independent generator runs per arm, since the generated program is deterministic per seed but the generator is not (a program kind needs one rollout per case; the generator variance is across runs). Choose a task where the no-demo arm does not already saturate (Q1, [discussion.md](../discussion.md)), start on the mock backend to test retrieval and conflict logic with known ground-truth fixes, then move to LIBERO-Pro.
+The arms differ in one thing each, share the frozen generator, simulator, budget and acceptance/held-out split, and are run with at least 3 independent generator runs per arm, since the generated program is deterministic per seed but the generator is not (a program kind needs one rollout per case; the generator variance is across runs). Choose a task where the no-demo arm does not already saturate (Q1, discussion.md), start on the mock backend to test retrieval and conflict logic with known ground-truth fixes, then move to LIBERO-Pro.
 
 | Arm | Memory | Tests |
 |---|---|---|
@@ -340,7 +340,7 @@ Metrics, all from logged runs: held-out success with Wilson intervals over at le
 - [read] sources were read only in the parts quoted: REFLECT, DROC, Code-as-Monitor, AHA, Sentry, BASM, SWE-Exp, Getafix, RCACopilot, LIBERO-Recover, AutoManual, Voyager, RAPID, AgentSpec, RETECS.
 - `[memory]` items not checked today: Aamodt and Plaza's four-step cycle, Minton's utility problem, coverage-guided fuzzing corpora.
 - `[summary]` items: Google's 1.5% flaky-run figure comes from a search summary of a 2016 blog; Smyth and Keane and Zhu and Yang from search summaries; Waymo Carcraft, Applied Intuition, VerifAI/Scenic details, Feng et al.'s speed-up from search summaries. Vendor blogs are not primary evidence.
-- LIBERO-Recover's scenario count differs between the arXiv listing and the PDF text (version drift). The "flat retrieval degrades beyond about 64-128 skills" figure is quoted second-hand from [module-radar.md](module-radar.md).
+- LIBERO-Recover's scenario count differs between the arXiv listing and the PDF text (version drift). The "flat retrieval degrades beyond about 64-128 skills" figure is quoted second-hand from module-radar.md.
 - Licences were not checked except for ASPIRE and CaP-X.
 - Nothing here was run on ANTS data. Every threshold in section 4 (neighbour count and pass fraction, gamma, retrieval k, record-count threshold for embeddings, grace period) is a starting value to tune on the acceptance set only.
 

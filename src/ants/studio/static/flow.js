@@ -2,7 +2,7 @@
    Blocks come from docs/studio/process-flow-blocks.json. window.flowEvent is called by console.js
    for every event on the shared /events connection.
 
-   Honesty rules (docs/studio/process-flow-design.md):
+   Honesty rules:
    - a block lights up only when an event proves it; the one inference (the next attack after a
      cycle row) is drawn dashed and says so;
    - inner steps of one call (Adversary.attack()) share the parent's grouped state;

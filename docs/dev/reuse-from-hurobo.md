@@ -6,7 +6,7 @@ Source: `hurobo` ("phone video of a human hand to a robot policy in LIBERO"). Wr
 
 ## 0. Verdict in five lines
 
-1. **hurobo is the better half of ANTS's perception input.** `HumanDemo` (metric hand path, pinch aperture, grasp/release events, object poses, all in a named table frame) is most of ANTS's `DemoSpec`, and ANTS's own discussion already says so (`synthesizer/discussion.md` §3.4).
+1. **hurobo is the better half of ANTS's perception input.** `HumanDemo` (metric hand path, pinch aperture, grasp/release events, object poses, all in a named table frame) is most of ANTS's `DemoSpec`, and ANTS's own discussion already says so (an earlier internal discussion).
 2. **Do not import its environment.** Linux, CUDA 12.6 wheels, Python 3.12 only, `lerobot[libero]`, MediaPipe, gsplat, COLMAP, open3d. ANTS must stay pure-Python in `contracts` and cross-platform in CI. Port the NumPy pieces or call hurobo as a separate tool that writes JSON.
 3. **Everything that trains a policy is out of scope** (SmolVLA fine-tune, LeRobot export, ACT). ANTS trains nothing.
 4. **Its strongest transferable asset is the scientific standard**, not a module: the review that says "no control without human data, so the claim is not isolated" is exactly the review ANTS will get.

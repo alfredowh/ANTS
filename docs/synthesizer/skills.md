@@ -1,6 +1,6 @@
 # Skills: definition, storage and autonomous mode
 
-Status: proposal, 2026-10-31, for review (see [../todo.md](../todo.md), item "Skills definition"). Nothing is built yet. Sources for the parts borrowed: ASPIRE skill entries (Trigger / Code / Evidence / Limits, runnable precondition, verifier admission), Voyager and CaP-X skill libraries (functions extracted from successful code), RAPID (per-phase success predicates), Skill-V (admission without regression), SkillForge (re-verification before reuse). See [aspire-assessment.md](aspire-assessment.md).
+Status: proposal, 2026-10-31, for review (see ../todo.md, item "Skills definition"). Nothing is built yet. Sources for the parts borrowed: ASPIRE skill entries (Trigger / Code / Evidence / Limits, runnable precondition, verifier admission), Voyager and CaP-X skill libraries (functions extracted from successful code), RAPID (per-phase success predicates), Skill-V (admission without regression), SkillForge (re-verification before reuse). See [aspire-assessment.md](aspire-assessment.md).
 
 ## 1. What a skill is
 

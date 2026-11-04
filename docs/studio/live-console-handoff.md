@@ -228,7 +228,7 @@ Three big pieces were identified; built in this order **C → B → A** (confirm
   becomes concrete (where uploads are stored, how DemoSpec extraction is triggered/awaited inside a
   live server request, what "budget" maps to in `LoopRunConfig`/`MuseOrchestrator` terms, etc.).
 
-Also still open from the earlier TODO pass, lower priority (`docs/studio/dashboard-todo.md`):
+Also still open, lower priority:
 Synthesizer/Adversary tabs are still just stub iframes onto copied templates, not built out with
 real content (constraint history, Thompson posteriors, attack history table, etc.).
 
@@ -242,8 +242,7 @@ real content (constraint history, Thompson posteriors, attack history table, etc
    see restart command above.
 5. `uv run ruff check . && uv run pytest -q` in the worktree before trusting anything is clean.
 6. Start item A, or ask the user what's next — everything here was built turn-by-turn from live
-   feedback, there is no separate plan document beyond `docs/studio/dashboard-todo.md` and
-   `docs/studio/chat-field-design.md`.
+   feedback, there is no separate plan document beyond `docs/studio/chat-field-design.md`.
 
 ## `/policy-dev`: the full pipeline
 
