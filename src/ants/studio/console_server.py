@@ -339,6 +339,14 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
         stop_tail.set()
 
 
+def _scene2d_or_none(scene_path: Path | None) -> dict | None:
+    if scene_path is None or not scene_path.exists():
+        return None
+    from ants.studio.scene2d import project_2d
+
+    return project_2d(scene_path)
+
+
 def make_handler(
     state: RunState,
     incumbent: Path,
@@ -347,6 +355,8 @@ def make_handler(
     reasoning_effort: str = "high",
     max_model_steps: int = 20,
     loop_cfg: LoopRunConfig | None = None,
+    scene_generation_path: Path | None = None,
+    scene_repair_path: Path | None = None,
 ):
     tools_right = (
         TOOLS_RIGHT if mode == "loop" else [t for t in TOOLS_RIGHT if t["role"] != "System 2"]
@@ -357,6 +367,11 @@ def make_handler(
         "tools_left": TOOLS_LEFT,
         "tools_right": tools_right,
         "mode": mode,
+        "scene2d": {
+            "generation": _scene2d_or_none(scene_generation_path),
+            "repair": _scene2d_or_none(scene_repair_path or scene_generation_path),
+            "same_source": scene_repair_path is None,
+        },
         "phases_summary": (
             "Phase A, full closed loop (mock System 2, real Muse Code rewrites)."
             if mode == "loop"
@@ -485,6 +500,12 @@ def serve(
     reasoning_effort: str = "high",
     max_model_steps: int = 20,
     loop_cfg: LoopRunConfig | None = None,
+    scene_generation_path: Path | None = REPO_ROOT
+    / "data"
+    / "scenes"
+    / "L1"
+    / "contacts_scene.json",
+    scene_repair_path: Path | None = None,
 ) -> None:
     state = RunState()
     handler = make_handler(
@@ -494,6 +515,8 @@ def serve(
         reasoning_effort=reasoning_effort,
         max_model_steps=max_model_steps,
         loop_cfg=loop_cfg if mode == "loop" else None,
+        scene_generation_path=scene_generation_path,
+        scene_repair_path=scene_repair_path,
     )
     httpd = ThreadingHTTPServer((host, port), handler)
     print(f"ANTS live console ({mode}): http://{host}:{port}  (incumbent: {incumbent})")

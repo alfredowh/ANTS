@@ -29,8 +29,21 @@ header .phase{color:var(--muted);font-size:12px}
 .btn{display:inline-block;background:var(--raise);border:1px solid var(--line);color:var(--fg);padding:7px 16px;cursor:pointer;font:inherit;font-weight:500}
 .btn:hover{border-color:var(--soft)}
 .btn:disabled{opacity:.4;cursor:default}
-main{display:grid;grid-template-columns:260px minmax(0,1fr) 300px;gap:1px;background:var(--line);height:calc(100vh - 53px)}
-.col{background:var(--bg);overflow-y:auto;padding:16px}
+.btn.sm{padding:4px 10px;font-size:12px}
+.btn.on{color:var(--accent);border-color:var(--accent)}
+main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px var(--rw,300px);background:var(--bg);height:calc(100vh - 53px)}
+.col{background:var(--bg);overflow-y:auto;padding:16px;border-left:1px solid var(--line);border-right:1px solid var(--line)}
+.resize-handle{cursor:col-resize;background:var(--line)}
+.resize-handle:hover,.resize-handle.dragging{background:var(--accent)}
+.scene2d{margin-bottom:18px}
+.scene2d-head{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
+.scene2d-head .asof{font-size:10.5px;color:var(--dim);margin-left:auto}
+.scene2d svg{width:100%;height:auto;background:var(--panel);border:1px solid var(--line)}
+.scene2d svg text{font:500 9px var(--mono);fill:var(--soft)}
+.scene2d svg text.m{fill:var(--dim);font-size:8px}
+.scene2d-legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:10.5px;color:var(--muted);margin-top:6px}
+.scene2d-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.scene2d-note{font-size:10.5px;color:var(--dim);margin-top:6px;line-height:1.5}
 .h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500;margin-bottom:10px}
 .tool{border:1px solid var(--line);background:var(--panel);padding:8px 10px;margin-bottom:8px;border-left:3px solid var(--faint)}
 .tool .name{font-family:var(--mono);font-size:12px}
@@ -66,7 +79,26 @@ main{display:grid;grid-template-columns:260px minmax(0,1fr) 300px;gap:1px;backgr
 </header>
 
 <main>
-  <div class="col" id="col-left"></div>
+  <div class="col" id="col-left">
+    <div class="scene2d">
+      <div class="h">Scene (what System 1 reads)</div>
+      <div class="scene2d-head">
+        <button class="btn sm on" id="scene-gen-btn">generation</button>
+        <button class="btn sm" id="scene-repair-btn">repair</button>
+        <span class="asof" id="scene-asof"></span>
+      </div>
+      <svg id="scene2d-svg" viewBox="0 0 240 240"></svg>
+      <div class="scene2d-legend">
+        <span><i style="background:#6fb2e0"></i>task object</span>
+        <span><i style="background:#e8a553"></i>wine rack</span>
+        <span><i style="background:#8a8a8a"></i>other object</span>
+        <span><i style="background:#ff4d4d"></i>gripper</span>
+      </div>
+      <div class="scene2d-note" id="scene2d-note"></div>
+    </div>
+    <div id="tools-left-wrap"></div>
+  </div>
+  <div class="resize-handle" id="handle-left"></div>
 
   <div class="col" id="col-center">
     <div class="center-top">
@@ -74,6 +106,7 @@ main{display:grid;grid-template-columns:260px minmax(0,1fr) 300px;gap:1px;backgr
     </div>
     <div class="turns" id="turns"><div class="empty">No run yet. Click "Run policy development step" to start one Phase A repair cycle.</div></div>
   </div>
+  <div class="resize-handle" id="handle-right"></div>
 
   <div class="col" id="col-right">
     <div class="h">Loop config</div>
@@ -105,11 +138,111 @@ function renderToolList(el, tools) {
 
 document.getElementById("phase-summary").textContent = DATA.phases_summary;
 document.getElementById("incumbent-name").textContent = "incumbent: " + DATA.incumbent_name;
-document.getElementById("col-left").innerHTML = `<div class="h">System 1 / primitives</div>`;
+document.getElementById("tools-left-wrap").innerHTML = `<div class="h">System 1 / primitives</div>`;
 const leftWrap = document.createElement("div");
 renderToolList(leftWrap, DATA.tools_left);
-document.getElementById("col-left").appendChild(leftWrap);
+document.getElementById("tools-left-wrap").appendChild(leftWrap);
 renderToolList(document.getElementById("tools-right"), DATA.tools_right);
+
+/* ---------- resizable columns ---------- */
+(function () {
+  const root = document.documentElement;
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem("ants-console-cols") || "{}"); } catch (e) {}
+  if (saved.lw) root.style.setProperty("--lw", saved.lw + "px");
+  if (saved.rw) root.style.setProperty("--rw", saved.rw + "px");
+
+  function setupHandle(handle, varName, min, max, fromRight) {
+    handle.addEventListener("pointerdown", (e) => {
+      handle.classList.add("dragging");
+      handle.setPointerCapture(e.pointerId);
+      const onMove = (ev) => {
+        const px = fromRight ? window.innerWidth - ev.clientX : ev.clientX;
+        const clamped = Math.max(min, Math.min(max, px));
+        root.style.setProperty(varName, clamped + "px");
+      };
+      const onUp = () => {
+        handle.classList.remove("dragging");
+        handle.removeEventListener("pointermove", onMove);
+        handle.removeEventListener("pointerup", onUp);
+        try {
+          const lw = parseInt(getComputedStyle(root).getPropertyValue("--lw")) || 280;
+          const rw = parseInt(getComputedStyle(root).getPropertyValue("--rw")) || 300;
+          localStorage.setItem("ants-console-cols", JSON.stringify({ lw, rw }));
+        } catch (err) {}
+      };
+      handle.addEventListener("pointermove", onMove);
+      handle.addEventListener("pointerup", onUp);
+    });
+  }
+  setupHandle(document.getElementById("handle-left"), "--lw", 200, 520, false);
+  setupHandle(document.getElementById("handle-right"), "--rw", 220, 520, true);
+})();
+
+/* ---------- 2D scene illustration ---------- */
+const SCENE_COLOR = { task: "#6fb2e0", rack: "#e8a553", other: "#8a8a8a" };
+let sceneKind = "generation";
+function renderScene2D(kind) {
+  sceneKind = kind;
+  document.getElementById("scene-gen-btn").classList.toggle("on", kind === "generation");
+  document.getElementById("scene-repair-btn").classList.toggle("on", kind === "repair");
+  const svg = document.getElementById("scene2d-svg");
+  const noteEl = document.getElementById("scene2d-note");
+  const asofEl = document.getElementById("scene-asof");
+  const s2d = DATA.scene2d || {};
+  const scene = s2d[kind];
+  if (!scene) {
+    svg.innerHTML = "";
+    asofEl.textContent = "";
+    noteEl.textContent = "no scene data (pass --scene / --scene-repair to the console)";
+    return;
+  }
+  asofEl.textContent = "as of " + scene.as_of;
+  noteEl.textContent = kind === "generation"
+    ? "S4-style scene text given to System 1 for the first program (oracle geometry, no robot trajectory)."
+    : "Scene given to the repair step" + (s2d.same_source ? " -- same data as generation; E3-style contact/stall evidence isn't wired into this console yet." : ".");
+
+  const pad = 14;
+  let xs = [], ys = [];
+  for (const o of scene.objects) { xs.push(o.x0, o.x1); ys.push(o.y0, o.y1); }
+  if (scene.gripper) { xs.push(scene.gripper.x); ys.push(scene.gripper.y); }
+  const xMin = Math.min(...xs), xMax = Math.max(...xs), yMin = Math.min(...ys), yMax = Math.max(...ys);
+  const scale = 1000; // metres -> mm -> px (1 px per mm)
+  const w = (yMax - yMin) * scale + pad * 2;
+  const h = (xMax - xMin) * scale + pad * 2;
+  // screen x = -y (left is left on screen), screen y = -x (forward/+x is up on screen)
+  const toX = (y) => (yMax - y) * scale + pad;
+  const toY = (x) => (xMax - x) * scale + pad;
+  const cx = (o) => toX((o.y0 + o.y1) / 2), cy = (o) => toY((o.x0 + o.x1) / 2);
+  const byLabel = {};
+  for (const o of scene.objects) byLabel[o.label] = o;
+
+  let parts = [];
+  for (const r of scene.relations) {
+    const a = byLabel[r.a], b = byLabel[r.b];
+    if (!a || !b) continue;
+    const x1 = cx(a), y1 = cy(a), x2 = cx(b), y2 = cy(b);
+    parts.push(`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#444" stroke-dasharray="2,2" stroke-width="0.6"/>`);
+    parts.push(`<text class="m" x="${((x1+x2)/2).toFixed(1)}" y="${((y1+y2)/2).toFixed(1)}">${r.mm} mm</text>`);
+  }
+  for (const o of scene.objects) {
+    const x = toX(o.y1), y = toY(o.x1); // y1/x1 give the top-left corner under this axis mapping
+    const bw = (o.y1 - o.y0) * scale, bh = (o.x1 - o.x0) * scale;
+    const color = SCENE_COLOR[o.cat] || "#8a8a8a";
+    parts.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${color}" fill-opacity="0.35" stroke="${color}" stroke-width="1"/>`);
+    parts.push(`<text x="${(x + 2).toFixed(1)}" y="${(y + 9).toFixed(1)}">${esc(o.label)}</text>`);
+  }
+  if (scene.gripper) {
+    const gx = toX(scene.gripper.y), gy = toY(scene.gripper.x);
+    parts.push(`<circle cx="${gx.toFixed(1)}" cy="${gy.toFixed(1)}" r="3" fill="none" stroke="#ff4d4d" stroke-width="1.4" stroke-dasharray="2,1.5"/>`);
+    parts.push(`<text x="${(gx + 5).toFixed(1)}" y="${(gy + 3).toFixed(1)}">gripper</text>`);
+  }
+  svg.setAttribute("viewBox", `0 0 ${Math.max(1, w).toFixed(1)} ${Math.max(1, h).toFixed(1)}`);
+  svg.innerHTML = parts.join("");
+}
+document.getElementById("scene-gen-btn").addEventListener("click", () => renderScene2D("generation"));
+document.getElementById("scene-repair-btn").addEventListener("click", () => renderScene2D("repair"));
+renderScene2D("generation");
 
 if (DATA.mode === "loop" && DATA.loop_config) {
   const c = DATA.loop_config;

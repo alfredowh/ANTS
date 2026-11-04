@@ -70,6 +70,20 @@ def main() -> None:
         default=200_000,
         help="hard cap on total Muse tokens across every rewrite in the loop",
     )
+    parser.add_argument(
+        "--scene",
+        type=Path,
+        default=REPO_ROOT / "data" / "scenes" / "L1" / "contacts_scene.json",
+        help="oracle scene (contacts_scene.json) shown as the 2D illustration; omit by passing a "
+        "missing path -- the panel then just says no scene data",
+    )
+    parser.add_argument(
+        "--scene-repair",
+        type=Path,
+        default=None,
+        help="separate scene to show under the 'repair' toggle; defaults to --scene (same data, "
+        "E3-style evidence over it is not wired into this console yet)",
+    )
     args = parser.parse_args()
 
     loop_cfg = LoopRunConfig(
@@ -96,6 +110,8 @@ def main() -> None:
         reasoning_effort=args.reasoning_effort,
         max_model_steps=args.max_model_steps,
         loop_cfg=loop_cfg,
+        scene_generation_path=args.scene,
+        scene_repair_path=args.scene_repair,
     )
 
 
