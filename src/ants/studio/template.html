@@ -79,11 +79,11 @@ table.log{width:100%;border-collapse:collapse;min-width:640px}
 .vids{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
 .vid{background:var(--panel);padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
 .vid video{width:100%;background:#000;display:block}
-.player{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--line);background:var(--panel)}
-.player button{background:var(--accent);color:#000;border:0;min-width:40px;height:28px;font:600 12px var(--mono);cursor:pointer}
-.player input[type=range]{flex:1;min-width:80px;accent-color:var(--accent);cursor:pointer}
-.player select{background:var(--panel);color:var(--fg);border:1px solid var(--line);font:12px var(--mono);padding:3px 4px}
+.tctl{display:flex;align-items:center;gap:10px}
+.tctl button{background:var(--accent);color:#000;border:0;min-width:36px;height:26px;font:600 12px var(--mono);cursor:pointer}
+.tctl select{background:var(--panel);color:var(--fg);border:1px solid var(--line);font:12px var(--mono);padding:2px 4px}
 .playhead{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--hi);pointer-events:none;z-index:3;box-shadow:0 0 0 1px #000}
+.playhead::before{content:"";position:absolute;top:0;left:-5px;width:12px;height:12px;background:var(--hi);clip-path:polygon(0 0,100% 0,50% 100%)}
 .tlarea.seek{cursor:col-resize}
 .tlhead{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:8px 12px;border-bottom:1px solid var(--line);color:var(--muted);font-size:11.5px}
 .tlbody{display:grid;grid-template-columns:92px minmax(0,1fr)}
@@ -304,8 +304,12 @@ function timeline(a){
     return `<div class="flag" style="left:${(at*100).toFixed(2)}%;background:${color}"><span style="background:${color};${side}">${label}</span></div>`; };
   const fIdx = a.first_fail ?? (failed(a) ? n - 0.5 : null);
   return `<section class="tl" aria-label="Timeline">
-    <div class="tlhead"><span class="mono" style="color:var(--hi);font-size:14px">${a.calls.length} primitive calls</span><div style="flex:1"></div>
-      <span class="mono">P perturbation applied at reset</span><span class="mono">D first call that differs from the nominal run</span><span class="mono">F first failed call</span>${a.video ? '<span class="mono" style="color:var(--hi)">| playhead · click or drag to seek</span>' : ""}</div>
+    <div class="tlhead">${a.video ? `<div class="tctl" role="group" aria-label="Video player">
+        <button id="pp" aria-label="Play or pause">▶</button>
+        <span class="mono" id="tm" style="color:var(--hi);min-width:104px">0:00.0 / 0:00.0</span>
+        <select id="spd" aria-label="Playback speed">${[0.25, 0.5, 1, 1.5, 2, 4].map(v => `<option value="${v}"${v === 1 ? " selected" : ""}>${v}×</option>`).join("")}</select></div>` : ""}
+      <span class="mono" style="color:var(--hi);font-size:14px">${a.calls.length} primitive calls</span><div style="flex:1"></div>
+      <span class="mono">P perturbation applied at reset</span><span class="mono">D first call that differs from the nominal run</span><span class="mono">F first failed call</span>${a.video ? '<span class="mono" style="color:var(--hi)">▼ drag to seek · space · ← →</span>' : ""}</div>
     <div class="tlbody">
       <div class="tlnames"><div style="height:30px"></div><div style="height:34px">Phase</div><div style="height:30px">Calls</div><div style="height:30px">Events</div></div>
       <div class="tlarea" id="tlarea">${a.video ? '<div class="playhead" id="ph" hidden></div>' : ""}
@@ -320,20 +324,15 @@ function timeline(a){
     </div></section>`;
 }
 function videos(a){
+  /* With an attack video, the timeline drives both; a lone nominal video keeps native controls. */
   const clip = (src, label, color, id) => `<div class="vid"><span class="mono" style="color:${color}">${label}</span>
-    <video id="${id}" src="${esc(src)}" muted playsinline preload="auto"></video></div>`;
+    <video id="${id}" src="${esc(src)}" muted playsinline preload="auto"${a.video ? "" : " controls"}></video></div>`;
   if (!a.video && !D.nominal_video) return `<div class="empty">No video for this attack: the test world records none; on the simulator, videos sit next to studio.html in the run folder.</div>`;
   return `<section style="display:flex;flex-direction:column;gap:10px"><span class="h">Rollout video</span><div class="vids">
     ${a.video ? clip(a.video, "Attack #" + a.n + " · " + esc(a.category) + " · " + (failed(a) ? "failed" : a.outcome === "error" ? "program error" : "passed"), failed(a) ? "var(--fail)" : "var(--hi)", "vA") : '<div class="vid empty">No video recorded for this attack.</div>'}
     ${D.nominal_video ? clip(D.nominal_video, "Nominal run · no perturbation", "var(--muted)", "vN") : ""}
   </div>
-  <div class="player" role="group" aria-label="Video player">
-    <button id="pp" aria-label="Play or pause">▶</button>
-    <span class="mono" id="tm" style="min-width:110px">0:00.0 / 0:00.0</span>
-    <input type="range" id="scrub" min="0" max="1000" step="1" value="0" aria-label="Seek">
-    <label class="mono note" style="display:flex;align-items:center;gap:6px">speed <select id="spd" aria-label="Playback speed">${[0.25, 0.5, 1, 1.5, 2, 4].map(v => `<option value="${v}"${v === 1 ? " selected" : ""}>${v}×</option>`).join("")}</select></label>
-  </div>
-  <span class="note">Both videos play in sync. Space play/pause · ← → 1 s · drag the slider or the call timeline to seek. Videos load from the run folder: keep studio.html next to its aspire/ folder when copying.</span></section>`;
+  <span class="note">Both videos play in sync, driven by the timeline below. Videos load from the run folder: keep studio.html next to its aspire/ folder when copying.</span></section>`;
 }
 function why(a){
   const draws = Object.entries(a.draws || {}).sort((x, y) => y[1] - x[1]);
@@ -427,17 +426,16 @@ function initPlayer(){
   PLAYER = null;
   const vA = document.getElementById("vA"), vN = document.getElementById("vN");
   const vids = [vA, vN].filter(Boolean);
-  if (!vids.length) return;
-  const master = vA || vN, pp = document.getElementById("pp"), scrub = document.getElementById("scrub");
+  if (!vA) return;  /* the timeline controls exist only when the attack has a video */
+  const master = vA || vN, pp = document.getElementById("pp");
   const tm = document.getElementById("tm"), spd = document.getElementById("spd");
   const ph = document.getElementById("ph"), area = vA ? document.getElementById("tlarea") : null;
-  let raf = 0, dragging = false;
+  let raf = 0;
   const dur = () => (isFinite(master.duration) ? master.duration : 0);
   const clock = t => { t = Math.max(0, t || 0); return Math.floor(t / 60) + ":" + (t % 60).toFixed(1).padStart(4, "0"); };
   const paint = () => {
     const d = dur(), t = master.currentTime;
     tm.textContent = clock(t) + " / " + clock(d);
-    if (!dragging) scrub.value = d ? Math.round(t / d * 1000) : 0;
     if (ph && d) { ph.hidden = false; ph.style.left = (Math.min(t / d, 1) * 100).toFixed(3) + "%"; }
     pp.textContent = master.paused ? "▶" : "❚❚";
   };
@@ -455,8 +453,6 @@ function initPlayer(){
     raf = requestAnimationFrame(tick);
   };
   pp.onclick = () => (master.paused ? play() : pause());
-  scrub.oninput = () => { dragging = true; seek(scrub.value / 1000 * dur()); };
-  scrub.onchange = () => { dragging = false; };
   spd.onchange = () => { for (const v of vids) v.playbackRate = +spd.value; };
   master.addEventListener("ended", () => { pause(); paint(); });
   if (area) {
