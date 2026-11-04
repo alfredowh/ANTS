@@ -454,3 +454,15 @@ def test_native_env_drops_snap_library_paths():
     )  # fmt: skip
     assert "LD_LIBRARY_PATH" not in env and "GTK_PATH" not in env
     assert env["DISPLAY"] == ":1" and env["XDG_DATA_DIRS"] == "/usr/share"
+
+
+def test_other_simulator_jobs_ignores_shells_that_only_mention_a_marker(tmp_path):
+    marker = pd.SIMULATOR_MARKERS[0]
+    for pid, argv in {
+        "11": ["/bin/bash", "-c", f"ps | grep {marker}"],
+        "12": ["python", marker],
+    }.items():
+        (tmp_path / pid).mkdir()
+        (tmp_path / pid / "cmdline").write_bytes("\0".join(argv).encode())
+    found = pd.other_simulator_jobs(proc=tmp_path, own=1)
+    assert len(found) == 1 and found[0].startswith("pid 12")

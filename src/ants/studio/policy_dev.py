@@ -416,6 +416,10 @@ def other_simulator_jobs(proc: Path = Path("/proc"), own: int | None = None) -> 
             cmd = (entry / "cmdline").read_bytes().decode("utf-8", "replace")
         except OSError:
             continue
+        # A shell or a search whose command text merely mentions a marker is not a simulator; a real
+        # job always has its own python process under the shell.
+        if Path(cmd.split("\0", 1)[0]).name in ("sh", "bash", "dash", "zsh", "grep", "pgrep"):
+            continue
         if any(m in cmd for m in SIMULATOR_MARKERS):
             found.append(f"pid {entry.name}: {cmd.replace(chr(0), ' ').strip()[:160]}")
     return found
