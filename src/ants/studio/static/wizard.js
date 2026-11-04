@@ -70,9 +70,9 @@
   /* ---------- the + button: native dialog on the server, browser picker as a fallback ---------- */
   function syncAttach() {
     const on = input.value.trimStart().toLowerCase().startsWith("/policy-dev");
-    attach.disabled = !on;
+    attach.disabled = false; // always clickable: choosing a video starts a /policy-dev message
     attach.classList.toggle("wizard-ask", on && !video);
-    attach.title = on ? "Choose the human demo video" : "Click /policy-dev first to attach a demo video";
+    attach.title = "Choose the human demo video for /policy-dev";
   }
   input.addEventListener("input", syncAttach);
   syncAttach();
@@ -99,7 +99,10 @@
       .catch(() => { setChatStatus(""); agentTurn("cannot attach", "Upload failed.", "needs"); });
   });
   attach.addEventListener("click", () => {
-    if (attach.disabled) return;
+    if (!input.value.trimStart().toLowerCase().startsWith("/policy-dev")) {
+      input.value = "/policy-dev " + input.value.trimStart();
+      syncAttach();
+    }
     setChatStatus("Choose the video in the file dialog...", true);
     post("/pick-video", {}).then((r) => {
       setChatStatus("");
