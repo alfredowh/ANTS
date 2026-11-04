@@ -857,11 +857,11 @@
     },
     {
       "id": "exp12",
-      "title": "Exp 12: demo vs no demo on cuRobo (simulator robot mask, attached bowl)",
+      "title": "Demo vs no demo on cuRobo (simulator robot mask, attached bowl)",
       "status": "final (submission experiment, tag submission-experiment)",
       "kind": "experiment",
       "question": "With cuRobo planning and the held bowl attached, does one human demonstration (plus S4 scene text and E3 repair evidence) beat task text only?",
-      "doc": "docs/synthesizer/exp12/results_summary.json",
+      "doc": "docs/synthesizer/show-once-vs-task-only/demo_vs_no_demo_analysis.ipynb",
       "run_dir": "data/runs/demo_e3_s4_sim | data/runs/nodemo_task_only_sim",
       "modules": [
         "orch_exp",
@@ -887,7 +887,7 @@
         "data/runs/demo_e3_s4_sim/",
         "data/runs/nodemo_task_only_sim/"
       ],
-      "result": "Held-out seeds 1 to 5, two samples (T 0.2, 0.7) per arm. Demo: debug seed solved in 2 and 2 attempts; scaled 5/5 and 2/5, stock 4/5 and 3/5. No-demo: solved in 5 (no) and 3 attempts; scaled 4/5 and 4/5, stock 0/5 and 0/5. The arms also differ in scene text and evidence. Source: events.jsonl of each run. Ran before the attach frame fix: spheres 9.65 cm too high, see docs/synthesizer/handoff-curobo-debug.md."
+      "result": "Held-out seeds 1 to 5, two samples (T 0.2, 0.7) per arm. Demo: debug seed solved in 2 and 2 attempts; scaled 5/5 and 2/5, stock 4/5 and 3/5. No-demo: solved in 5 (no) and 3 attempts; scaled 4/5 and 4/5, stock 0/5 and 0/5. The arms also differ in scene text and evidence. Source: events.jsonl of each run. Ran before the attach frame fix: spheres 9.65 cm too high."
     }
   ],
   "commands": [
@@ -3324,7 +3324,7 @@
     },
     {
       "id": "exp12.demo",
-      "title": "Exp 12 demo arm: demo + S4 + E3 on cuRobo",
+      "title": "Demo vs no demo, demo arm: demo + S4 + E3 on cuRobo",
       "group": "experiments",
       "runner": "ants",
       "paid": true,
@@ -3452,7 +3452,7 @@
       "description": "Needs the SAM 3 and PyRoki services and the dev cuRobo service on port 8118 (runbook entries services.start and curobo.service). Settings saved in docs/synthesizer/demo-vs-nodemo-config.json. Run the demo and no-demo commands one after the other, not in parallel.",
       "examples": [
         {
-          "title": "Exp 12 demo arm: demo + S4 + E3 on cuRobo",
+          "title": "Demo vs no demo, demo arm: demo + S4 + E3 on cuRobo",
           "cmd": "uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --temperatures 0.2,0.7 --explain --repairs 4 --planner curobo-sim --attach-known --save-clouds --debug-scene scaled --scenes scaled --eval-seeds 1,2,3,4,5 --token-budget 300000 --demospec data/demospecs/hurobo_233859.json --out data/runs/demo_e3_s4_sim --arms demo --evidence e3 --contacts --scene-text-file data/scene_text/S4_L1.txt"
         }
       ],
@@ -3478,7 +3478,7 @@
     },
     {
       "id": "exp12.nodemo",
-      "title": "Exp 12 no-demo arm: task text only on cuRobo",
+      "title": "Demo vs no demo, no-demo arm: task text only on cuRobo",
       "group": "experiments",
       "runner": "ants",
       "paid": true,
@@ -3586,7 +3586,7 @@
       "description": "Needs the SAM 3 and PyRoki services and the dev cuRobo service on port 8118 (runbook entries services.start and curobo.service). Settings saved in docs/synthesizer/demo-vs-nodemo-config.json. Run the demo and no-demo commands one after the other, not in parallel.",
       "examples": [
         {
-          "title": "Exp 12 no-demo arm: task text only on cuRobo",
+          "title": "Demo vs no demo, no-demo arm: task text only on cuRobo",
           "cmd": "uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --temperatures 0.2,0.7 --explain --repairs 4 --planner curobo-sim --attach-known --save-clouds --debug-scene scaled --scenes scaled --eval-seeds 1,2,3,4,5 --token-budget 300000 --demospec data/demospecs/hurobo_233859.json --out data/runs/nodemo_task_only_sim --arms nodemo"
         }
       ],

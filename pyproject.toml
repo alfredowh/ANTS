@@ -47,3 +47,5 @@ testpaths = ["tests"]
 "src/ants/orchestrator/a0_replay.py" = ["E501"]
 "tools/aspire_launch.py" = ["E501"]
 "dev/curobo/*.py" = ["E501"]
+# Analysis notebooks: wide table prints and one-line helpers read better than wrapped code.
+"*.ipynb" = ["E401", "E501", "E702", "E741", "B905", "I001"]

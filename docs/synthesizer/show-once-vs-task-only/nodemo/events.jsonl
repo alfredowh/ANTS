@@ -1,0 +1,48 @@
+{"time": "2026-11-04T19:13:29", "kind": "run_start", "token_budget": 300000, "usd_per_mtok": 13.5, "model": "muse-wonder-1.0", "ledger_spent_at_start": 6510713, "sam_model": "sam3"}
+{"time": "2026-11-04T19:13:29", "kind": "sample_start", "arm": "nodemo", "sample": 0, "temperature": 0.2}
+{"time": "2026-11-04T19:15:04", "kind": "program", "arm": "nodemo", "sample": 0, "attempt": 0, "role": "initial", "tokens": 17407, "reasoning_tokens": 8612, "from_cache": false, "cache_kind": "miss", "lines": 229, "diff_lines": 0}
+{"time": "2026-11-04T19:15:27", "kind": "rollout", "arm": "nodemo", "sample": 0, "attempt": 0, "seed": 51, "success": false, "reason": "program_completed", "wall_s": 23.2}
+{"time": "2026-11-04T19:15:27", "kind": "feedback", "arm": "nodemo", "sample": 0, "attempt": 0, "keys": ["failed_calls", "final_gripper", "program_result", "stdout_tail", "termination_reason"]}
+{"time": "2026-11-04T19:17:28", "kind": "program", "arm": "nodemo", "sample": 0, "attempt": 1, "role": "repair", "tokens": 22779, "reasoning_tokens": 8749, "from_cache": false, "cache_kind": "miss", "lines": 366, "diff_lines": 390}
+{"time": "2026-11-04T19:17:43", "kind": "rollout", "arm": "nodemo", "sample": 0, "attempt": 1, "seed": 51, "success": false, "reason": "program_error", "wall_s": 14.4}
+{"time": "2026-11-04T19:17:43", "kind": "feedback", "arm": "nodemo", "sample": 0, "attempt": 1, "keys": ["error", "failed_calls", "program_result", "stdout_tail", "termination_reason"]}
+{"time": "2026-11-04T19:20:19", "kind": "program", "arm": "nodemo", "sample": 0, "attempt": 2, "role": "repair", "tokens": 31749, "reasoning_tokens": 12318, "from_cache": false, "cache_kind": "miss", "lines": 401, "diff_lines": 210}
+{"time": "2026-11-04T19:22:43", "kind": "rollout", "arm": "nodemo", "sample": 0, "attempt": 2, "seed": 51, "success": false, "reason": "program_completed", "wall_s": 144.1}
+{"time": "2026-11-04T19:22:43", "kind": "feedback", "arm": "nodemo", "sample": 0, "attempt": 2, "keys": ["failed_calls", "final_gripper", "program_result", "stdout_tail", "termination_reason"]}
+{"time": "2026-11-04T19:25:07", "kind": "program", "arm": "nodemo", "sample": 0, "attempt": 3, "role": "repair", "tokens": 38413, "reasoning_tokens": 12543, "from_cache": false, "cache_kind": "miss", "lines": 415, "diff_lines": 631}
+{"time": "2026-11-04T19:26:25", "kind": "rollout", "arm": "nodemo", "sample": 0, "attempt": 3, "seed": 51, "success": false, "reason": "program_completed", "wall_s": 77.8}
+{"time": "2026-11-04T19:26:25", "kind": "feedback", "arm": "nodemo", "sample": 0, "attempt": 3, "keys": ["failed_calls", "final_gripper", "program_result", "stdout_tail", "termination_reason"]}
+{"time": "2026-11-04T19:29:11", "kind": "program", "arm": "nodemo", "sample": 0, "attempt": 4, "role": "repair", "tokens": 48689, "reasoning_tokens": 15753, "from_cache": false, "cache_kind": "miss", "lines": 453, "diff_lines": 325}
+{"time": "2026-11-04T19:31:16", "kind": "rollout", "arm": "nodemo", "sample": 0, "attempt": 4, "seed": 51, "success": false, "reason": "program_completed", "wall_s": 124.4}
+{"time": "2026-11-04T19:33:05", "kind": "eval", "arm": "nodemo", "sample": 0, "scene": "scaled", "seed": 1, "success": true, "reason": "task_succeeded"}
+{"time": "2026-11-04T19:35:04", "kind": "eval", "arm": "nodemo", "sample": 0, "scene": "scaled", "seed": 2, "success": true, "reason": "task_succeeded"}
+{"time": "2026-11-04T19:37:32", "kind": "eval", "arm": "nodemo", "sample": 0, "scene": "scaled", "seed": 3, "success": true, "reason": "task_succeeded"}
+{"time": "2026-11-04T19:41:17", "kind": "eval", "arm": "nodemo", "sample": 0, "scene": "scaled", "seed": 4, "success": false, "reason": "program_completed"}
+{"time": "2026-11-04T19:43:14", "kind": "eval", "arm": "nodemo", "sample": 0, "scene": "scaled", "seed": 5, "success": true, "reason": "task_succeeded"}
+{"time": "2026-11-04T19:44:09", "kind": "eval", "arm": "nodemo", "sample": 0, "scene": "stock", "seed": 1, "success": false, "reason": "program_completed"}
+{"time": "2026-11-04T19:45:07", "kind": "eval", "arm": "nodemo", "sample": 0, "scene": "stock", "seed": 2, "success": false, "reason": "program_completed"}
+{"time": "2026-11-04T19:46:13", "kind": "eval", "arm": "nodemo", "sample": 0, "scene": "stock", "seed": 3, "success": false, "reason": "program_completed"}
+{"time": "2026-11-04T19:47:07", "kind": "eval", "arm": "nodemo", "sample": 0, "scene": "stock", "seed": 4, "success": false, "reason": "program_completed"}
+{"time": "2026-11-04T19:48:01", "kind": "eval", "arm": "nodemo", "sample": 0, "scene": "stock", "seed": 5, "success": false, "reason": "program_completed"}
+{"time": "2026-11-04T19:48:01", "kind": "sample_end", "arm": "nodemo", "sample": 0, "spent_total": 6669750}
+{"time": "2026-11-04T19:48:01", "kind": "sample_start", "arm": "nodemo", "sample": 1, "temperature": 0.7}
+{"time": "2026-11-04T19:51:36", "kind": "program", "arm": "nodemo", "sample": 1, "attempt": 0, "role": "initial", "tokens": 31969, "reasoning_tokens": 22364, "from_cache": false, "cache_kind": "miss", "lines": 277, "diff_lines": 0}
+{"time": "2026-11-04T19:52:26", "kind": "rollout", "arm": "nodemo", "sample": 1, "attempt": 0, "seed": 51, "success": false, "reason": "program_completed", "wall_s": 49.8}
+{"time": "2026-11-04T19:52:26", "kind": "feedback", "arm": "nodemo", "sample": 1, "attempt": 0, "keys": ["failed_calls", "final_gripper", "program_result", "stdout_tail", "termination_reason"]}
+{"time": "2026-11-04T19:54:46", "kind": "program", "arm": "nodemo", "sample": 1, "attempt": 1, "role": "repair", "tokens": 28360, "reasoning_tokens": 11725, "from_cache": false, "cache_kind": "miss", "lines": 455, "diff_lines": 475}
+{"time": "2026-11-04T19:55:02", "kind": "rollout", "arm": "nodemo", "sample": 1, "attempt": 1, "seed": 51, "success": false, "reason": "program_error", "wall_s": 15.1}
+{"time": "2026-11-04T19:55:02", "kind": "feedback", "arm": "nodemo", "sample": 1, "attempt": 1, "keys": ["error", "failed_calls", "program_result", "stdout_tail", "termination_reason"]}
+{"time": "2026-11-04T19:56:00", "kind": "program", "arm": "nodemo", "sample": 1, "attempt": 2, "role": "repair", "tokens": 27877, "reasoning_tokens": 4731, "from_cache": false, "cache_kind": "miss", "lines": 458, "diff_lines": 83}
+{"time": "2026-11-04T19:58:13", "kind": "rollout", "arm": "nodemo", "sample": 1, "attempt": 2, "seed": 51, "success": true, "reason": "task_succeeded", "wall_s": 132.5}
+{"time": "2026-11-04T19:59:35", "kind": "eval", "arm": "nodemo", "sample": 1, "scene": "scaled", "seed": 1, "success": false, "reason": "program_completed"}
+{"time": "2026-11-04T20:01:58", "kind": "eval", "arm": "nodemo", "sample": 1, "scene": "scaled", "seed": 2, "success": true, "reason": "task_succeeded"}
+{"time": "2026-11-04T20:04:02", "kind": "eval", "arm": "nodemo", "sample": 1, "scene": "scaled", "seed": 3, "success": true, "reason": "task_succeeded"}
+{"time": "2026-11-04T20:06:11", "kind": "eval", "arm": "nodemo", "sample": 1, "scene": "scaled", "seed": 4, "success": true, "reason": "task_succeeded"}
+{"time": "2026-11-04T20:08:09", "kind": "eval", "arm": "nodemo", "sample": 1, "scene": "scaled", "seed": 5, "success": true, "reason": "task_succeeded"}
+{"time": "2026-11-04T20:09:09", "kind": "eval", "arm": "nodemo", "sample": 1, "scene": "stock", "seed": 1, "success": false, "reason": "program_completed"}
+{"time": "2026-11-04T20:10:10", "kind": "eval", "arm": "nodemo", "sample": 1, "scene": "stock", "seed": 2, "success": false, "reason": "program_completed"}
+{"time": "2026-11-04T20:11:10", "kind": "eval", "arm": "nodemo", "sample": 1, "scene": "stock", "seed": 3, "success": false, "reason": "program_completed"}
+{"time": "2026-11-04T20:12:14", "kind": "eval", "arm": "nodemo", "sample": 1, "scene": "stock", "seed": 4, "success": false, "reason": "program_completed"}
+{"time": "2026-11-04T20:13:16", "kind": "eval", "arm": "nodemo", "sample": 1, "scene": "stock", "seed": 5, "success": false, "reason": "program_completed"}
+{"time": "2026-11-04T20:13:16", "kind": "sample_end", "arm": "nodemo", "sample": 1, "spent_total": 6757956}
+{"time": "2026-11-04T20:13:16", "kind": "run_end", "new_tokens": 247243, "usd_est": 3.34}
