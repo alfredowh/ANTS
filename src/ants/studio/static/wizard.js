@@ -57,7 +57,7 @@
     input.value = "/policy-dev";
     input.focus(); // press Enter to start
   });
-  bar.insertBefore(chip, bar.firstChild);
+  bar.insertAdjacentElement("afterend", chip); // below the chat field
 
   const picker = document.createElement("input");
   picker.type = "file";
