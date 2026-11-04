@@ -53,7 +53,38 @@ def _divergence(calls: list[dict], nominal: list[dict]) -> int | None:
     return len(calls) if len(calls) != len(nominal) else None
 
 
-def _attack(row: dict, index: int, nominal_calls: list[dict]) -> dict[str, Any]:
+def _media(path: str | None, run_dir: Path) -> str | None:
+    """A rollout video as a path relative to the run directory, so the page keeps working when
+    the run folder is copied (e.g. from the GPU machine to a laptop). None if it is elsewhere."""
+    if not path:
+        return None
+    p, base = Path(path), run_dir.resolve()
+    try:
+        return p.resolve().relative_to(base).as_posix()
+    except ValueError:
+        pass
+    # Recorded on another machine: keep what follows the run folder's own name.
+    parts = p.parts
+    if run_dir.name in parts:
+        i = len(parts) - 1 - parts[::-1].index(run_dir.name)
+        rel = Path(*parts[i + 1 :])
+        return rel.as_posix() if (run_dir / rel).exists() else None
+    return None
+
+
+def _nominal_video(meta: dict, run_dir: Path) -> str | None:
+    """The nominal rollout's video: logged in run.json by newer runs, else found by folder name."""
+    logged = _media(meta.get("nominal", {}).get("video_path"), run_dir)
+    if logged:
+        return logged
+    for d in sorted(run_dir.glob("aspire*/*_nominal")):
+        videos = sorted(d.rglob("media/videos/*.mp4"))
+        if videos:
+            return videos[0].relative_to(run_dir).as_posix()
+    return None
+
+
+def _attack(row: dict, index: int, nominal_calls: list[dict], run_dir: Path) -> dict[str, Any]:
     rep, notes = row["report"], row.get("notes", {})
     p, res = rep["perturbation"], rep["result"]
     events = [{"kind": e["kind"], **e.get("detail", {})} for e in res.get("events", [])]
@@ -94,6 +125,7 @@ def _attack(row: dict, index: int, nominal_calls: list[dict]) -> dict[str, Any]:
                 "phase": phases[i],
                 "query": c.get("query"),
                 "error_m": c.get("error_m"),
+                "steps": c.get("steps"),
             }
             for i, c in enumerate(calls)
         ],  # fmt: skip
@@ -115,6 +147,7 @@ def _attack(row: dict, index: int, nominal_calls: list[dict]) -> dict[str, Any]:
         "explanation_source": row.get("explanation_source", "none"),
         "status": row.get("status_after", {}),
         "tokens": tokens,
+        "video": _media(res.get("video_path"), run_dir),
     }
 
 
@@ -212,7 +245,7 @@ def collect(run_dir: Path) -> dict[str, Any]:
     rows = _jsonl(run_dir / "attacks.jsonl")
     loop = collect_loop(run_dir)
     nominal_calls = [e for e in meta.get("nominal", {}).get("events", []) if e["kind"] == "call"]
-    attacks = [_attack(r, i, nominal_calls) for i, r in enumerate(rows)]
+    attacks = [_attack(r, i, nominal_calls, run_dir) for i, r in enumerate(rows)]
     for a in attacks:
         a["version"] = meta["policy"]["version"]
         if loop and a["id"] in loop["by_attack"]:
@@ -225,6 +258,7 @@ def collect(run_dir: Path) -> dict[str, Any]:
         "program": program,
         "attacks": attacks,
         "loop": loop,
+        "nominal_video": _nominal_video(meta, run_dir),
         "status": attacks[-1]["status"] if attacks else {},
         "usage": {
             "rollouts": len(attacks) + 1,
