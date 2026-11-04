@@ -20,6 +20,11 @@ from pathlib import Path
 HOOK_DIR = Path(__file__).resolve().parents[3] / "tools" / "ants_live_hook"
 _CAMERA = re.compile(r"^[A-Za-z0-9_]+$")
 LABEL_STAGES = {"nominal", "generate", "attack", "rewrite", "gate"}
+MIRROR_FILES = {
+    "model.json": "mirror_model.json",
+    "model.bin": "mirror_model.bin",
+    "state.bin": "mirror_state.bin",
+}
 
 
 def _alive(pid: object) -> bool:
@@ -65,6 +70,7 @@ class LiveView:
             "seed": s.get("seed"),
             "program": Path(s["program"]).name if s.get("program") else None,
             "perturbation": s.get("perturbation") or {},
+            "mirror": s.get("mirror"),
         }
 
     def frame(self, camera: str) -> bytes | None:
@@ -72,6 +78,16 @@ class LiveView:
             return None
         try:
             return (self.dir / f"{camera}.jpg").read_bytes()
+        except OSError:
+            return None
+
+    def mirror(self, name: str) -> bytes | None:
+        """The 3D Live mirror's files (see tools/ants_live_hook/ants_live_mirror.py)."""
+        file = MIRROR_FILES.get(name)
+        if file is None:
+            return None
+        try:
+            return (self.dir / file).read_bytes()
         except OSError:
             return None
 

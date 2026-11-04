@@ -4,6 +4,9 @@ Written 2026-11-04 for the Studio owners. Research only; nothing here was built 
 rollout and no Muse tokens were used. **Measured** means taken from a logged run named here.
 **Read** means read in the code. **Estimate** is my judgement and has not been run.
 
+> **Built since this was written: the Live mirror** (robot, simulator scene, contacts). See
+> [Live mirror: what was built and measured](#live-mirror-what-was-built-and-measured).
+
 ## Verdict
 
 | Layer | Verdict | Effort (estimate) | Live rate (estimate) | Risk to results |
@@ -236,6 +239,26 @@ Do not call b1 "reconstructed", and do not call the whole view a "digital twin" 
 from simulator state. "Live mirror" is accurate. Do not animate planning between request and result,
 since nothing observes it. In a recorded demo video, state the speed if it is sped up past the
 planning pauses.
+
+## Live mirror: what was built and measured
+
+`tools/ants_live_hook/ants_live_mirror.py` writes, from the live hook, in the frame tee's call:
+visible geoms and meshes once per simulator, then poses and contacts per written frame. Browser:
+`static/live_mirror.js`, a pane in the live panel (toggle `3D`, layer checkboxes, orbit, reset view),
+badged "LIVE MIRROR · SIMULATOR TRUTH".
+
+**One deviation from section 2 (a).** The robot does not use a URDF plus a `steps.jsonl` tail. The
+hook already reads the simulator, so robot geoms come the same way as the scene's: the meshes MuJoCo
+itself renders, at the poses it computed. That removes the MJCF-against-URDF alignment risk, gets
+the gripper without a mapping, and pairs each pose with the frame written in the same call. It only
+applies to rollouts this console starts.
+
+**Measured** (seed 51, `--init-mode seeded`, one program; logs were in a scratch folder, not kept):
+`episode/steps.jsonl` compared line by line, 0 of 357 lines differ nominal (hook vs no hook, and
+baseline vs baseline), 0 of 342 under actuation noise. Object poses are not in that file; objects
+were compared only through task success. Wall time 32.2 s to 33.5 s nominal, 30.8 s to 33.4 s
+perturbed, one run each. Model export 9.5 MB per simulator. Alignment checked by eye against a real
+agentview frame at step 356, one frame. Frames and mirror freeze during perception and planning.
 
 ## Sim-to-real relevance
 

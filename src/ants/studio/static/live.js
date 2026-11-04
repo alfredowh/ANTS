@@ -86,6 +86,7 @@
       if (s.pid !== status.pid) clear(); // another rollout: its first frame replaces nothing old
       status = s;
       render();
+      window.dispatchEvent(new CustomEvent("live-status", {detail: {status, shown: !panel.hidden}}));
     }).catch(() => { status = {active: false}; render(); });
   }
 
