@@ -95,10 +95,8 @@
     return true;
   };
 
-  /* generation progress arrives on its own SSE connection (wizard_* kinds only) */
-  const es = new EventSource("/events");
-  es.onmessage = (ev) => {
-    const d = JSON.parse(ev.data);
+  /* generation progress arrives via the console's shared SSE connection (wizard_* kinds only) */
+  window.wizardEvent = (d) => {
     if (!d.kind || !d.kind.startsWith("wizard_")) return;
     if (d.kind === "wizard_needs") agentTurn(d.message, "needs");
     else if (d.kind === "wizard_launch") {

@@ -883,6 +883,7 @@ function openStream() {
   const es = new EventSource("/events");
   es.onmessage = (ev) => {
     const data = JSON.parse(ev.data);
+    if (window.wizardEvent) window.wizardEvent(data); // one shared connection (browsers allow only ~6 per site)
     if (data.kind === "muse_event") handleMuseEvent(data.event);
     else if (data.kind === "loop_event") handleLoopEvent(data.row);
     else if (data.kind === "attack_event") handleAttackEvent(data);
