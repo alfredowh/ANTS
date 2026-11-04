@@ -122,17 +122,48 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
 .modal .sub{font-size:11px;color:var(--muted);margin-bottom:12px;font-family:var(--mono)}
 .modal .section{margin-bottom:14px}
 .modal .section .h{margin-bottom:6px}
+.tabbar{display:flex;gap:4px;margin-left:4px}
+.tabbtn{background:none;border:1px solid transparent;color:var(--muted);padding:6px 12px;cursor:pointer;font:inherit;font-weight:500}
+.tabbtn:hover{color:var(--fg)}
+.tabbtn.on{color:var(--hi);border-color:var(--line);background:var(--raise)}
+#tab-perception{display:none}
+#tab-perception.on{display:block}
+#tab-console{display:none}
+#tab-console.on{display:block}
+.perc-bar{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--line);font-size:12.5px}
+.perc-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--soft)}
+.perc-toggle input{accent-color:var(--accent)}
+.perc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:1px;background:var(--line);height:calc(100vh - 146px)}
+.perc-panel{background:var(--bg);padding:14px 16px;overflow-y:auto;display:flex;flex-direction:column;min-height:0}
+.perc-panel.off{display:none}
+.perc-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.perc-head .h{margin-bottom:0}
+.src-badge{font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border:1px solid var(--line);color:var(--dim)}
+.src-badge.live{color:var(--built);border-color:var(--built);animation:pulse-badge 1.3s ease-in-out infinite}
+.src-badge.missing{color:var(--fail);border-color:var(--fail)}
+@keyframes pulse-badge{0%,100%{opacity:1}50%{opacity:.5}}
+@media (prefers-reduced-motion: reduce){.src-badge.live{animation:none}}
+.perc-player .player-frame{min-height:320px}
+.perc-sam3-grid{display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start}
+.perc-sam3-grid .sam3-item{width:120px}
+.perc-curobo-frame{flex:1;width:100%;min-height:420px;background:#fff;border:1px solid var(--line)}
+.perc-note{font-size:11px;color:var(--dim);margin-top:8px}
 </style>
 </head>
 <body>
 <header>
   <span class="title">ANTS Live Console</span>
+  <nav class="tabbar">
+    <button class="tabbtn on" id="tabbtn-console" type="button">Console</button>
+    <button class="tabbtn" id="tabbtn-perception" type="button">Perception</button>
+  </nav>
   <span class="phase" id="phase-summary"></span>
   <span style="flex:1"></span>
   <span class="status-pill" id="status-pill">idle</span>
   <button class="btn" id="run-btn">Run policy development step</button>
 </header>
 
+<div id="tab-console" class="on">
 <div class="sysbar">
   <span class="flow-loop" title="the loop repeats: System 2 attacks, a failure goes to System 1, the gate decides, repeat">&#8634;</span>
   <div class="sys" id="sys2-badge" title="selector &rarr; proposer &rarr; rollout &rarr; diagnoser, all inside one call -- Loop only reports when the whole attack is done, not each inner step"><span class="dot"></span><span class="who">System 2</span><span class="stage" id="sys2-stage">idle</span></div>
@@ -173,7 +204,7 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
       <div class="h">Agentview frames</div>
       <div class="agentview-note" id="agentview-note"></div>
       <div class="agentview-grid" id="agentview-grid"></div>
-      <button class="btn sm" id="perception-btn" style="margin-top:8px">Open perception replay</button>
+      <button class="btn sm" id="perception-btn" style="margin-top:8px">Open Perception tab</button>
     </div>
   </div>
   <div class="resize-handle" id="handle-left"></div>
@@ -198,6 +229,44 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
     <div class="reply" id="reply-box">(waiting)</div>
   </div>
 </main>
+</div>
+
+<div id="tab-perception">
+  <div class="perc-bar">
+    <label class="perc-toggle"><input type="checkbox" id="perc-toggle-agentview" checked> Agentview</label>
+    <label class="perc-toggle"><input type="checkbox" id="perc-toggle-sam3" checked> SAM 3 grounding</label>
+    <label class="perc-toggle"><input type="checkbox" id="perc-toggle-curobo" checked> cuRobo trajectory &amp; collision</label>
+    <span style="flex:1"></span>
+    <span class="perc-note">Toggle layers on/off for a cleaner or more informative view.</span>
+  </div>
+  <div class="perc-grid">
+    <section class="perc-panel perc-player" id="perc-panel-agentview">
+      <div class="perc-head"><span class="h">Agentview</span><span class="src-badge" id="perc-agentview-badge"></span></div>
+      <div class="player-frame"><img id="perc-player-img" alt=""></div>
+      <div class="player-caption">
+        <span>frame <b id="perc-player-pos">0</b> / <span id="perc-player-total">0</span></span>
+        <span><b id="perc-player-call"></b> <span style="color:var(--dim)" id="perc-player-index"></span></span>
+      </div>
+      <div class="player-controls">
+        <button class="btn sm" id="perc-player-play">play</button>
+        <button class="btn sm" id="perc-player-prev">&larr;</button>
+        <input type="range" id="perc-player-slider" min="0" max="0" value="0">
+        <button class="btn sm" id="perc-player-next">&rarr;</button>
+      </div>
+      <div class="perc-note" id="perc-agentview-note"></div>
+    </section>
+    <section class="perc-panel" id="perc-panel-sam3">
+      <div class="perc-head"><span class="h">SAM 3 grounding</span><span class="src-badge" id="perc-sam3-badge"></span></div>
+      <div class="perc-sam3-grid" id="perc-sam3-grid"></div>
+      <div class="perc-note" id="perc-sam3-note"></div>
+    </section>
+    <section class="perc-panel" id="perc-panel-curobo">
+      <div class="perc-head"><span class="h">cuRobo trajectory &amp; collision</span><span class="src-badge" id="perc-curobo-badge"></span></div>
+      <iframe class="perc-curobo-frame" id="perc-curobo-frame" title="cuRobo trajectory and collision-sphere plan viewer"></iframe>
+      <div class="perc-note" id="perc-curobo-note"></div>
+    </section>
+  </div>
+</div>
 
 <div class="modal-backdrop" id="modal-backdrop">
   <div class="modal" id="modal">
@@ -382,86 +451,113 @@ renderScene2D("generation");
     </div>`).join("") || `<div class="empty">no frames found</div>`;
 })();
 
-/* ---------- perception replay (archived scrubber + SAM 3 reference + cuRobo link-out) ---------- */
+/* ---------- top-level tabs: Console / Perception ---------- */
+const TAB_KEY = "ants-console-active-tab";
+function switchTab(name) {
+  document.getElementById("tab-console").classList.toggle("on", name === "console");
+  document.getElementById("tab-perception").classList.toggle("on", name === "perception");
+  document.getElementById("tabbtn-console").classList.toggle("on", name === "console");
+  document.getElementById("tabbtn-perception").classList.toggle("on", name === "perception");
+  try { localStorage.setItem(TAB_KEY, name); } catch (e) {}
+}
+document.getElementById("tabbtn-console").addEventListener("click", () => switchTab("console"));
+document.getElementById("tabbtn-perception").addEventListener("click", () => switchTab("perception"));
+document.getElementById("perception-btn").addEventListener("click", () => switchTab("perception"));
+
+/* ---------- source badge: LIVE (green, pulsing) or ARCHIVED (muted) or MISSING ---------- */
+function renderSrcBadge(elId, live, available, archivedLabel) {
+  const el = document.getElementById(elId);
+  if (available === false) { el.textContent = "missing"; el.className = "src-badge missing"; return; }
+  el.textContent = live ? "live" : "archived";
+  el.className = "src-badge" + (live ? " live" : "");
+  el.title = live ? "" : archivedLabel;
+}
+
+/* ---------- Perception tab: agentview scrubber + SAM 3 grounding + cuRobo view, each togglable ---------- */
 (function () {
-  const frames = (DATA.agentview_archive || { frames: [] }).frames;
-  const sam3Frames = (DATA.sam3_archive || { frames: [] }).frames;
-  const btn = document.getElementById("perception-btn");
-  if (!frames.length) { btn.disabled = true; btn.title = "no archived frames found"; return; }
+  const agentview = DATA.agentview_archive || { frames: [], live: false };
+  const sam3 = DATA.sam3_archive || { frames: [], live: false };
+  const planViewer = DATA.plan_viewer || { available: false, live: false };
+  const frames = agentview.frames;
 
-  let idx = 0, playing = false, timer = null;
-
-  function frameHtml() {
-    const f = frames[idx];
-    const sam3Ref = sam3Frames.map((s) => `
-      <div class="sam3-item">
-        <img src="${s.src}" loading="lazy" title="${esc(s.name)}" alt="SAM 3: ${esc(s.label || "")}">
-        <div class="cap">${esc(s.label || "?")}${s.score != null ? " " + s.score : ""}</div>
-      </div>`).join("");
-    return `
-      <h3>Perception replay</h3>
-      <div class="sub">archived, not live &mdash; exp04_scene/E-E3/sample0 (this console's loop uses the mock System 2 backend, no simulator or camera)</div>
-      <div class="player-frame"><img id="player-img" src="${f.src}" alt="${esc(f.call)}"></div>
-      <div class="player-caption">
-        <span>frame <b id="player-pos">${idx + 1}</b> / ${frames.length}</span>
-        <span><b id="player-call">${esc(f.phase)} ${esc(f.call)}</b> <span style="color:var(--dim)" id="player-index">#${esc(f.index)}</span></span>
-      </div>
-      <div class="player-controls">
-        <button class="btn sm" id="player-play">${playing ? "pause" : "play"}</button>
-        <button class="btn sm" id="player-prev">&larr;</button>
-        <input type="range" id="player-slider" min="0" max="${frames.length - 1}" value="${idx}">
-        <button class="btn sm" id="player-next">&rarr;</button>
-      </div>
-      <div class="section">
-        <div class="h">SAM 3 detections seen during this rollout (reference, not aligned to this exact frame)</div>
-        <div class="player-ref-grid">${sam3Ref}</div>
-      </div>
-      ${DATA.plan_viewer_available
-        ? `<a class="btn sm" href="/perception/planviewer" target="_blank" rel="noopener">Open cuRobo trajectory &amp; collision view &#8599;</a>`
-        : `<div class="scene2d-note">No archived cuRobo plan viewer found.</div>`}
-    `;
+  // -- layer toggles, persisted --
+  const TOGGLE_KEY = "ants-perception-toggles";
+  const panels = { agentview: "perc-panel-agentview", sam3: "perc-panel-sam3", curobo: "perc-panel-curobo" };
+  let toggles = { agentview: true, sam3: true, curobo: true };
+  try { toggles = { ...toggles, ...JSON.parse(localStorage.getItem(TOGGLE_KEY) || "{}") }; } catch (e) {}
+  function applyToggles() {
+    for (const [k, panelId] of Object.entries(panels)) {
+      document.getElementById(panelId).classList.toggle("off", !toggles[k]);
+      document.getElementById("perc-toggle-" + k).checked = toggles[k];
+    }
   }
-
-  function renderFrame() {
-    document.getElementById("player-img").src = frames[idx].src;
-    document.getElementById("player-pos").textContent = idx + 1;
-    document.getElementById("player-call").textContent = frames[idx].phase + " " + frames[idx].call;
-    document.getElementById("player-index").textContent = "#" + frames[idx].index;
-    document.getElementById("player-slider").value = idx;
-  }
-
-  function wire() {
-    document.getElementById("player-prev").addEventListener("click", () => { idx = Math.max(0, idx - 1); renderFrame(); });
-    document.getElementById("player-next").addEventListener("click", () => { idx = Math.min(frames.length - 1, idx + 1); renderFrame(); });
-    document.getElementById("player-slider").addEventListener("input", (e) => { idx = +e.target.value; renderFrame(); });
-    document.getElementById("player-play").addEventListener("click", (e) => {
-      playing = !playing;
-      e.target.textContent = playing ? "pause" : "play";
-      if (playing) {
-        timer = setInterval(() => {
-          idx = idx + 1 >= frames.length ? 0 : idx + 1;
-          renderFrame();
-        }, 500);
-      } else {
-        clearInterval(timer);
-      }
+  for (const k of Object.keys(panels)) {
+    document.getElementById("perc-toggle-" + k).addEventListener("change", (e) => {
+      toggles[k] = e.target.checked;
+      applyToggles();
+      try { localStorage.setItem(TOGGLE_KEY, JSON.stringify(toggles)); } catch (err) {}
     });
   }
+  applyToggles();
 
-  btn.addEventListener("click", () => {
-    idx = 0; playing = false; clearInterval(timer);
-    document.getElementById("modal").classList.add("wide");
-    openModal(frameHtml());
-    wire();
-  });
-  document.getElementById("modal-close").addEventListener("click", () => {
-    clearInterval(timer); playing = false;
-    document.getElementById("modal").classList.remove("wide");
-  });
-  document.getElementById("modal-backdrop").addEventListener("click", (e) => {
-    if (e.target.id === "modal-backdrop") { clearInterval(timer); playing = false; document.getElementById("modal").classList.remove("wide"); }
-  });
+  // -- agentview player, mounted directly in the tab (not a modal) --
+  renderSrcBadge("perc-agentview-badge", agentview.live, frames.length ? true : null,
+    `From ${agentview.source} — this console's loop uses the mock System 2 backend (no simulator or camera), so real frames aren't available yet.`);
+  document.getElementById("perc-agentview-note").textContent = agentview.live
+    ? "Streaming the current run."
+    : "Showing an archived rollout until a live camera feed exists (keeps something informative on screen instead of a blank panel).";
+  if (frames.length) {
+    let idx = 0, playing = false, timer = null;
+    document.getElementById("perc-player-total").textContent = frames.length;
+    function renderFrame() {
+      document.getElementById("perc-player-img").src = frames[idx].src;
+      document.getElementById("perc-player-pos").textContent = idx + 1;
+      document.getElementById("perc-player-call").textContent = frames[idx].phase + " " + frames[idx].call;
+      document.getElementById("perc-player-index").textContent = "#" + frames[idx].index;
+      document.getElementById("perc-player-slider").value = idx;
+    }
+    document.getElementById("perc-player-slider").max = frames.length - 1;
+    renderFrame();
+    document.getElementById("perc-player-prev").addEventListener("click", () => { idx = Math.max(0, idx - 1); renderFrame(); });
+    document.getElementById("perc-player-next").addEventListener("click", () => { idx = Math.min(frames.length - 1, idx + 1); renderFrame(); });
+    document.getElementById("perc-player-slider").addEventListener("input", (e) => { idx = +e.target.value; renderFrame(); });
+    document.getElementById("perc-player-play").addEventListener("click", (e) => {
+      playing = !playing;
+      e.target.textContent = playing ? "pause" : "play";
+      if (playing) { timer = setInterval(() => { idx = idx + 1 >= frames.length ? 0 : idx + 1; renderFrame(); }, 500); }
+      else { clearInterval(timer); }
+    });
+  } else {
+    document.getElementById("perc-panel-agentview").querySelector(".player-frame").innerHTML = `<div class="empty">no frames found</div>`;
+  }
+
+  // -- SAM 3 grounding gallery --
+  renderSrcBadge("perc-sam3-badge", sam3.live, sam3.frames.length ? true : null,
+    `From ${sam3.source} — segmentation candidates System 1 reads to localize objects; this console's loop doesn't run perception.`);
+  document.getElementById("perc-sam3-note").textContent = sam3.live
+    ? "Live detections for the current run."
+    : "Showing archived detections from one rollout until live perception exists.";
+  document.getElementById("perc-sam3-grid").innerHTML = sam3.frames.map((s) => `
+    <div class="sam3-item">
+      <img src="${s.src}" loading="lazy" title="${esc(s.name)}" alt="SAM 3: ${esc(s.label || "")}">
+      <div class="cap">${esc(s.label || "?")}${s.score != null ? " " + s.score : ""}</div>
+    </div>`).join("") || `<div class="empty">no frames found</div>`;
+
+  // -- cuRobo trajectory & collision view, embedded (not linked out) --
+  renderSrcBadge("perc-curobo-badge", planViewer.live, planViewer.available,
+    "From data/runs/curobo/exp10 (exp09-11, the held-bowl-attached work) — this console's loop doesn't call cuRobo, so there is no live trajectory to show.");
+  if (planViewer.available) {
+    document.getElementById("perc-curobo-frame").src = "/perception/planviewer";
+    document.getElementById("perc-curobo-note").textContent = planViewer.live
+      ? "Live trajectory and collision spheres for the current run."
+      : "Archived plan viewer (exp10) embedded as-is, not rebuilt.";
+  } else {
+    document.getElementById("perc-curobo-frame").remove();
+    document.getElementById("perc-curobo-note").textContent = "No archived cuRobo plan viewer found.";
+  }
 })();
+
+switchTab((() => { try { return localStorage.getItem(TAB_KEY) || "console"; } catch (e) { return "console"; } })());
 
 if (DATA.mode === "loop" && DATA.loop_config) {
   const c = DATA.loop_config;

@@ -508,12 +508,21 @@ def make_handler(
         "agentview_archive": {
             "frames": agentview_list,
             "source": str(AGENTVIEW_ARCHIVE_BASE.relative_to(REPO_ROOT)),
+            # No live camera feed exists yet: System 2 runs on the mock backend (no simulator, no
+            # camera). "live" stays False until a real rollout backend actually streams frames; a
+            # future live source should just flip this and add a live frame URL, not change the
+            # the shape the perception tab reads.
+            "live": False,
         },
         "sam3_archive": {
             "frames": sam3_list,
             "source": str(AGENTVIEW_ARCHIVE_BASE.relative_to(REPO_ROOT)),
+            "live": False,  # same reason: no live perception call happens in this console's loop
         },
-        "plan_viewer_available": PLAN_VIEWER_PATH is not None,
+        "plan_viewer": {
+            "available": PLAN_VIEWER_PATH is not None,
+            "live": False,  # same reason: no live cuRobo call happens in this console's loop
+        },
     }
     page = TEMPLATE.read_text(encoding="utf-8").replace("/*__DATA__*/null", json.dumps(data))
 
