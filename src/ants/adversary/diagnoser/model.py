@@ -1,6 +1,10 @@
 """Model diagnoser: Muse Spark (DELIBERATE) reasons over the evidence and the code and returns a
 failure mode, a causal sentence tied to the code, a confidence and one rule for the generator.
 
+The model sees the program's own printed log and result for the failing run and, when the
+caller passes it, for the nominal run on the same seed: a measurement that differs a lot between
+the two points at the cause, and calls that fail in both are listed as not the cause.
+
 The rule-based diagnosis is always computed first and passed in as a hint. The model's answer is
 used only when it parses and its confidence reaches the floor; otherwise the rules answer, so
 every failure gets a label. The failure signature always comes from the rules, because stall
@@ -23,6 +27,27 @@ from ants.contracts import BlameTarget, Constraint, Failure, FailureMode, Pertur
 PROMPT = Template(
     (Path(__file__).parents[1] / "prompts" / "diagnose.md").read_text(encoding="utf-8")
 )
+
+
+LOG_HEAD, LOG_TAIL = 2500, 700  # characters of the program's log, per run, in the prompt
+
+
+def program_log(fb: Mapping | None) -> str:
+    """The start and end of the program's printed log (measurements first, outcome last)."""
+    if not fb:
+        return "(not available)"
+    head, tail = str(fb.get("stdout_head") or ""), str(fb.get("stdout_tail") or "")
+    if not head and not tail:
+        return "(the program printed nothing)"
+    if head and tail and tail in head:
+        return head[: LOG_HEAD + LOG_TAIL]
+    return head[:LOG_HEAD] + ("\n[...]\n" if head and tail else "") + tail[-LOG_TAIL:]
+
+
+def program_result(fb: Mapping | None) -> str:
+    if not fb or "program_result" not in fb:
+        return "(not available)"
+    return json.dumps(fb["program_result"], default=str)[:1200]
 
 
 @dataclass(frozen=True)
@@ -49,6 +74,7 @@ class ModelDiagnoser:
         task: str,
         events: list[dict] | None = None,
         metrics: Mapping[str, float] | None = None,
+        nominal_fb: Mapping | None = None,
     ) -> Diagnosis:
         rule_failure = classify(perturbation, fb)
         rule_constraint = diagnose(perturbation, fb, index)
@@ -60,6 +86,12 @@ class ModelDiagnoser:
             failed_calls=json.dumps(fb.get("failed_calls") or [])[:1500],
             events=json.dumps(events or [])[:1500],
             metrics=json.dumps(dict(metrics or {})),
+            expected_calls=json.dumps(fb.get("expected_failed_calls") or [])[:600],
+            program_log=program_log(fb),
+            program_result=program_result(fb),
+            nominal_log=program_log(nominal_fb),
+            nominal_result=program_result(nominal_fb),
+            nominal_outcome=(nominal_fb or {}).get("outcome", "not run"),
             program=program,
             rule_mode=rule_failure.mode,
             signature=rule_constraint.failure_signature,
