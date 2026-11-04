@@ -34,6 +34,24 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 PHASES_DOC = REPO_ROOT / "docs" / "orchestrator" / "phases.md"
 TEMPLATE = Path(__file__).with_name("console_template.html")
 
+# Archived example only: a real simulator rollout's agentview keyframes (exp04_scene, E3 evidence
+# arm, sample0). This console's own loop runs System 2 on the mock backend, which has no simulator
+# or camera -- there is nothing live to show here yet. Kept as a labelled reference, not live data.
+AGENTVIEW_ARCHIVE_BASE = REPO_ROOT / "data" / "runs" / "exp04_scene" / "E-E3" / "sample0"
+
+
+def _find_agentview_keyframes() -> dict[str, Path]:
+    """name ("000001-before-open-gripper") -> its agentview.png, in one archived sample run."""
+    matches = sorted(AGENTVIEW_ARCHIVE_BASE.rglob("media/keyframes/*/agentview.png"))
+    return {m.parent.name: m for m in matches}
+
+
+def _split_keyframe_name(name: str) -> dict[str, str]:
+    """"000001-before-open-gripper" -> {index: "000001", phase: "before", call: "open gripper"}."""
+    index, _, rest = name.partition("-")
+    phase, _, call = rest.partition("-")
+    return {"index": index, "phase": phase, "call": call.replace("-", " ")}
+
 TOOLS_LEFT = [
     {
         "name": "localize_object",
@@ -295,7 +313,23 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
         nominal_seeds=cfg.nominal_seeds,
         out=run_dir,
     )
-    loop = Loop(adv, synth, loop_cfg)
+
+    def on_attack(report, attacked_policy) -> None:
+        # fires right after System 2 attacks, before System 1's rewrite call (which blocks on the
+        # real muse exec call) -- the only sub-cycle granularity Loop exposes, so the console can
+        # show "System 2 just attacked" separately from "System 1 is now writing a repair".
+        state.broadcast(
+            {
+                "kind": "attack_event",
+                "attack_id": report.attack_id,
+                "category": report.perturbation.category,
+                "severity": report.perturbation.severity,
+                "outcome": report.result.outcome.value,
+                "policy_version": attacked_policy.version,
+            }
+        )
+
+    loop = Loop(adv, synth, loop_cfg, on_attack=on_attack)
 
     log_path = run_dir / "loop.jsonl"
     stop_tail = threading.Event()
@@ -361,6 +395,11 @@ def make_handler(
     tools_right = (
         TOOLS_RIGHT if mode == "loop" else [t for t in TOOLS_RIGHT if t["role"] != "System 2"]
     )
+    agentview = _find_agentview_keyframes()
+    agentview_list = [
+        {"name": name, "src": f"/agentview/{name}", **_split_keyframe_name(name)}
+        for name in sorted(agentview)
+    ]
     data = {
         "incumbent_name": incumbent.name,
         "incumbent_code": incumbent.read_text(encoding="utf-8"),
@@ -393,6 +432,10 @@ def make_handler(
             if loop_cfg
             else None
         ),
+        "agentview_archive": {
+            "frames": agentview_list,
+            "source": str(AGENTVIEW_ARCHIVE_BASE.relative_to(REPO_ROOT)),
+        },
     }
     page = TEMPLATE.read_text(encoding="utf-8").replace("/*__DATA__*/null", json.dumps(data))
 
@@ -410,6 +453,21 @@ def make_handler(
 
         def do_GET(self) -> None:  # noqa: N802 -- stdlib handler name
             path = urlparse(self.path).path
+            if path.startswith("/agentview/"):
+                name = path[len("/agentview/") :]
+                image_path = agentview.get(name)  # whitelist: only names this run actually found
+                if image_path is None or not image_path.exists():
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                body = image_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "image/png")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if path == "/":
                 body = page.encode("utf-8")
                 self.send_response(200)

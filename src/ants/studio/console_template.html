@@ -31,7 +31,7 @@ header .phase{color:var(--muted);font-size:12px}
 .btn:disabled{opacity:.4;cursor:default}
 .btn.sm{padding:4px 10px;font-size:12px}
 .btn.on{color:var(--accent);border-color:var(--accent)}
-main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px var(--rw,300px);background:var(--bg);height:calc(100vh - 53px)}
+main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px var(--rw,300px);background:var(--bg);height:calc(100vh - 93px)}
 .col{background:var(--bg);overflow-y:auto;padding:16px;border-left:1px solid var(--line);border-right:1px solid var(--line)}
 .resize-handle{cursor:col-resize;background:var(--line)}
 .resize-handle:hover,.resize-handle.dragging{background:var(--accent)}
@@ -67,6 +67,25 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
 .tile{background:var(--panel);padding:10px 12px}
 .tile .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em} .tile .v{font-family:var(--mono);font-size:18px}
 .reply{background:var(--panel);border:1px solid var(--line);padding:10px;font-family:var(--mono);font-size:11px;white-space:pre-wrap;max-height:420px;overflow-y:auto}
+.sysbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:40px;border-bottom:1px solid var(--line);padding:0 20px;font-size:12px}
+.sys{display:flex;align-items:center;gap:7px;border:1px solid var(--line);padding:4px 10px}
+.sys .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
+.sys.active .dot{background:var(--accent);box-shadow:0 0 6px var(--accent)}
+.sys .who{font-weight:600;letter-spacing:.03em}
+.sys .stage{color:var(--muted)}
+.sys.active .stage{color:var(--fg)}
+.banner{display:none;border:1px solid var(--fail);background:#2a0f0f;color:#ffb3b0;padding:10px 14px;margin-bottom:14px;font-size:12.5px;line-height:1.5}
+.banner.on{display:block}
+.banner b{color:#ff8884}
+.agentview{margin:18px 0}
+.agentview-note{font-size:10.5px;color:var(--dim);line-height:1.5;margin-bottom:8px}
+.agentview-grid{display:flex;flex-direction:column;gap:10px;max-height:360px;overflow-y:auto}
+.agentview-pair{border:1px solid var(--line);background:var(--panel);padding:6px}
+.agentview-pair .call{font-size:11px;color:var(--muted);margin-bottom:5px;font-family:var(--mono)}
+.agentview-imgs{display:flex;gap:4px}
+.agentview-imgs figure{margin:0;flex:1;min-width:0}
+.agentview-imgs img{width:100%;display:block;border:1px solid var(--line2)}
+.agentview-imgs figcaption{font-size:9.5px;color:var(--dim);text-align:center;margin-top:2px}
 </style>
 </head>
 <body>
@@ -78,10 +97,16 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
   <button class="btn" id="run-btn">Run policy development step</button>
 </header>
 
+<div class="sysbar">
+  <div class="sys" id="sys1-badge"><span class="dot"></span><span class="who">System 1</span><span class="stage" id="sys1-stage">idle</span></div>
+  <div class="sys" id="sys2-badge"><span class="dot"></span><span class="who">System 2</span><span class="stage" id="sys2-stage">idle</span></div>
+  <div class="sys" id="orch-badge"><span class="dot"></span><span class="who">Orchestrator</span><span class="stage" id="orch-stage">idle</span></div>
+</div>
+
 <main>
   <div class="col" id="col-left">
     <div class="scene2d">
-      <div class="h">Scene (what System 1 reads)</div>
+      <div class="h">Scene prompt</div>
       <div class="scene2d-head">
         <button class="btn sm on" id="scene-gen-btn">generation</button>
         <button class="btn sm" id="scene-repair-btn">repair</button>
@@ -96,6 +121,11 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
       </div>
       <div class="scene2d-note" id="scene2d-note"></div>
     </div>
+    <div class="agentview">
+      <div class="h">Agentview frames</div>
+      <div class="agentview-note" id="agentview-note"></div>
+      <div class="agentview-grid" id="agentview-grid"></div>
+    </div>
     <div id="tools-left-wrap"></div>
   </div>
   <div class="resize-handle" id="handle-left"></div>
@@ -104,6 +134,7 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
     <div class="center-top">
       <span class="incumbent" id="incumbent-name"></span>
     </div>
+    <div class="banner" id="banner"></div>
     <div class="turns" id="turns"><div class="empty">No run yet. Click "Run policy development step" to start one Phase A repair cycle.</div></div>
   </div>
   <div class="resize-handle" id="handle-right"></div>
@@ -244,6 +275,28 @@ document.getElementById("scene-gen-btn").addEventListener("click", () => renderS
 document.getElementById("scene-repair-btn").addEventListener("click", () => renderScene2D("repair"));
 renderScene2D("generation");
 
+/* ---------- archived agentview frames (reference, not live) ---------- */
+(function () {
+  const archive = DATA.agentview_archive || { frames: [] };
+  document.getElementById("agentview-note").textContent = archive.frames.length
+    ? `Archived example (${esc(archive.source)}), not from this run — this console's loop uses the mock System 2 backend, which has no simulator or camera. Real frames need the ASPIRE/cap_harness backend.`
+    : "No archived example found (expected under " + esc(archive.source || "data/runs/exp04_scene") + ").";
+  const grid = document.getElementById("agentview-grid");
+  const frames = archive.frames;
+  const pairs = [];
+  for (let i = 0; i < frames.length; i += 2) {
+    if (frames[i + 1]) pairs.push([frames[i], frames[i + 1]]);
+  }
+  grid.innerHTML = pairs.map(([before, after]) => `
+    <div class="agentview-pair">
+      <div class="call">${esc(before.call)} <span style="color:var(--dim)">#${esc(before.index)}</span></div>
+      <div class="agentview-imgs">
+        <figure><img src="${before.src}" loading="lazy" alt="before ${esc(before.call)}"><figcaption>before</figcaption></figure>
+        <figure><img src="${after.src}" loading="lazy" alt="after ${esc(after.call)}"><figcaption>after</figcaption></figure>
+      </div>
+    </div>`).join("") || `<div class="empty">no frames found</div>`;
+})();
+
 if (DATA.mode === "loop" && DATA.loop_config) {
   const c = DATA.loop_config;
   document.getElementById("config-tiles").innerHTML = [
@@ -281,8 +334,29 @@ function addTurn(cls, html) {
   const div = document.createElement("div");
   div.className = "turn " + cls;
   div.innerHTML = html;
-  turnsEl.appendChild(div);
-  turnsEl.scrollTop = turnsEl.scrollHeight;
+  turnsEl.insertBefore(div, turnsEl.firstChild); // newest on top
+}
+
+/* ---------- System 1 / System 2 / Orchestrator status ---------- */
+function setSys(id, active, stage) {
+  const badge = document.getElementById(id + "-badge");
+  badge.classList.toggle("active", active);
+  document.getElementById(id + "-stage").textContent = stage;
+}
+function resetSys() {
+  setSys("sys1", false, "idle");
+  setSys("sys2", false, "idle");
+  setSys("orch", false, "idle");
+}
+
+/* ---------- blocking-state banner ---------- */
+function showBanner(html) {
+  const el = document.getElementById("banner");
+  el.innerHTML = html;
+  el.classList.add("on");
+}
+function hideBanner() {
+  document.getElementById("banner").classList.remove("on");
 }
 
 function handleMuseEvent(event) {
@@ -304,20 +378,36 @@ function handleMuseEvent(event) {
 function handleLoopEvent(row) {
   const event = row.event;
   if (event === "start") {
+    setSys("sys2", false, "idle (nominal check)");
+    setSys("orch", true, "checking nominal cases");
     addTurn("task started", `<div class="tk">loop</div><div class="main">started: ${esc(row.policy && row.policy.id)} v${row.policy && row.policy.version}</div>`);
   } else if (event === "cycle") {
+    setSys("sys1", false, "idle");
     const decision = row.decision || "?";
     const cls = decision === "accepted" ? "task completed" : decision === "rejected" ? "error" : "task";
+    if (decision === "no_failure") {
+      setSys("sys2", true, "selecting next attack");
+      setSys("orch", false, "idle");
+    } else if (decision === "budget_stop") {
+      setSys("sys2", false, "idle");
+      setSys("orch", true, "blocked: budget exhausted");
+      showBanner(`<b>Budget exhausted.</b> System 1's rewrite budget (${esc(String(row.cycle))} cycles in) ran out before the loop could reach a stop condition. It cannot continue on its own from here &mdash; raise <code>--synth-token-budget</code> and re-run, or treat this as a point for human review.`);
+    } else {
+      setSys("sys2", false, "idle (result logged)");
+      setSys("orch", true, decision === "accepted" ? "gate: accepted" : "gate: rejected");
+    }
     let main = `cycle ${row.cycle}: attack <b>${esc(row.category)}</b> (severity ${row.severity}) &rarr; <b>${esc(row.outcome)}</b>`;
     if (row.decision) main += ` &rarr; <b>${esc(decision)}</b>`;
     if (row.signature) main += `<br><span class="delta">signature: ${esc(row.signature)}</span>`;
     if (row.rewrite_tokens) {
       rewriteTokenTotal += row.rewrite_tokens;
       main += `<br><span class="delta">rewrite: ${row.rewrite_tokens} tokens ($${row.rewrite_cost_usd ?? "?"})</span>`;
+      const budget = DATA.loop_config ? DATA.loop_config.synth_token_budget : null;
       document.getElementById("usage-tiles").innerHTML = [
         ["Rewrites so far", row.candidate_version ? "see cycles" : "-"],
         ["Rewrite tokens (running)", rewriteTokenTotal],
-      ].map(([l, v]) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("");
+      ].concat(budget ? [["Budget remaining", Math.max(0, budget - rewriteTokenTotal)]] : [])
+        .map(([l, v]) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("");
     }
     if (row.gate) {
       main += `<br><span class="delta">gate: ${row.gate.accepted ? "accepted" : "rejected"} (${row.gate.cases} cases, +${(row.gate.improvements||[]).length})</span>`;
@@ -327,8 +417,16 @@ function handleLoopEvent(row) {
       addTurn("delta", `<div class="tk">diff v${row.policy_version || "?"} &rarr; v${row.candidate_version || "?"}</div><div class="delta">${esc(row.diff)}</div>`);
     }
   } else if (event === "escalate") {
+    setSys("sys1", false, "idle");
+    setSys("sys2", false, "idle");
+    setSys("orch", true, "blocked: escalated");
+    showBanner(`<b>Escalated &mdash; needs human intervention.</b> ${esc(row.request)}<br>signature <code>${esc(row.signature)}</code> stalled ${row.stalled_cycles} cycles in a row (W). The loop will not continue past this without a human answer.`);
     addTurn("error", `<div class="tk">escalate</div><div class="main">${esc(row.request)}<br><span class="delta">signature: ${esc(row.signature)}, stalled ${row.stalled_cycles} cycles</span></div>`);
   } else if (event === "no_working_policy") {
+    setSys("sys1", false, "idle");
+    setSys("sys2", false, "idle");
+    setSys("orch", true, "blocked: no working policy");
+    showBanner(`<b>No working policy &mdash; needs human intervention.</b> ${esc(row.request)}. v0 fails its own nominal cases, so there is nothing for System 2 to attack yet.`);
     addTurn("error", `<div class="tk">no working policy</div><div class="main">${esc(row.request)}</div>`);
   } else if (event === "end") {
     addTurn("done", `<div class="tk">loop end</div><div class="main">stopped: <b>${esc(row.stopped)}</b>, stage: ${esc(row.stage)}, final v${row.final_version}, cycles run: ${row.cycles_run}</div>`);
@@ -337,10 +435,26 @@ function handleLoopEvent(row) {
   }
 }
 
+function handleAttackEvent(a) {
+  setSys("sys2", false, "idle");
+  if (a.outcome === "failure") {
+    setSys("orch", true, "failure found, routing to System 1");
+    setSys("sys1", true, "writing repair (muse exec)");
+  } else {
+    setSys("orch", true, "replaying candidate / checking robust");
+  }
+  addTurn("task", `<div class="tk">attack ${esc(a.attack_id)}</div><div class="main">System 2 attacked with <b>${esc(a.category)}</b> (severity ${a.severity}) &rarr; <b>${esc(a.outcome)}</b></div>`);
+}
+
 function handleDone(payload) {
   setStatus("done", "done");
   runBtn.disabled = false;
+  resetSys();
   if (DATA.mode === "loop") {
+    const blocked = ["budget", "escalate", "no_working_policy"].includes(payload.stopped);
+    if (blocked && !document.getElementById("banner").classList.contains("on")) {
+      showBanner(`<b>Stopped: ${esc(payload.stopped)} &mdash; needs human intervention.</b> The loop cannot make further progress on its own.`);
+    }
     addTurn("done", `<div class="tk">run complete</div><div class="main">stopped: <b>${esc(payload.stopped)}</b>, stage: ${esc(payload.stage)}, accepted versions: ${JSON.stringify(payload.accepted_versions)}</div>`);
     document.getElementById("reply-box").textContent = JSON.stringify(payload, null, 1);
     return;
@@ -366,6 +480,7 @@ function openStream() {
     const data = JSON.parse(ev.data);
     if (data.kind === "muse_event") handleMuseEvent(data.event);
     else if (data.kind === "loop_event") handleLoopEvent(data.row);
+    else if (data.kind === "attack_event") handleAttackEvent(data);
     else if (data.kind === "done") { handleDone(data); es.close(); }
     else if (data.kind === "error") { handleError(data); es.close(); }
   };
@@ -389,6 +504,9 @@ runBtn.addEventListener("click", () => {
   runBtn.disabled = true;
   turnCount = 0;
   turnsEl.innerHTML = "";
+  hideBanner();
+  setSys("sys1", DATA.mode === "single", "active (muse exec)");
+  if (DATA.mode === "loop") { setSys("sys2", false, "idle"); setSys("orch", true, "starting"); }
   setStatus("running", "running");
   document.getElementById("reply-box").textContent = "(waiting)";
   openStream();
