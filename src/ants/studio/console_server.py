@@ -40,6 +40,7 @@ STATIC_FILES = {
     "flow.js": STATIC_DIR / "flow.js",
     "live.js": STATIC_DIR / "live.js",
     "live.css": STATIC_DIR / "live.css",
+    "live_mirror.js": STATIC_DIR / "live_mirror.js",
     "flow.css": STATIC_DIR / "flow.css",
     "flow_blocks.json": REPO_ROOT / "docs" / "studio" / "process-flow-blocks.json",
 }
@@ -908,6 +909,19 @@ def make_handler(
                 body = state.live.frame(path[len("/live/frame/") : -4]) if state.live else None
                 self.send_response(200 if body else 404)
                 self.send_header("Content-Type", "image/jpeg")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(body or b"")))
+                self.end_headers()
+                self.wfile.write(body or b"")
+                return
+            if path.startswith("/live/mirror/"):
+                name = path[len("/live/mirror/") :]
+                body = state.live.mirror(name) if state.live else None
+                self.send_response(200 if body else 404)
+                self.send_header(
+                    "Content-Type",
+                    "application/json" if name.endswith(".json") else "application/octet-stream",
+                )
                 self.send_header("Cache-Control", "no-store")
                 self.send_header("Content-Length", str(len(body or b"")))
                 self.end_headers()
