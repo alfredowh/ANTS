@@ -79,6 +79,12 @@ table.log{width:100%;border-collapse:collapse;min-width:640px}
 .vids{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
 .vid{background:var(--panel);padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
 .vid video{width:100%;background:#000;display:block}
+.tctl{display:flex;align-items:center;gap:10px}
+.tctl button{background:var(--accent);color:#000;border:0;min-width:36px;height:26px;font:600 12px var(--mono);cursor:pointer}
+.tctl select{background:var(--panel);color:var(--fg);border:1px solid var(--line);font:12px var(--mono);padding:2px 4px}
+.playhead{position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;background:var(--hi);pointer-events:none;z-index:3;box-shadow:0 0 0 1px #000}
+.playhead::before{content:"";position:absolute;top:0;left:-5px;width:12px;height:12px;background:var(--hi);clip-path:polygon(0 0,100% 0,50% 100%)}
+.tlarea.seek{cursor:col-resize}
 .tlhead{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:8px 12px;border-bottom:1px solid var(--line);color:var(--muted);font-size:11.5px}
 .tlbody{display:grid;grid-template-columns:92px minmax(0,1fr)}
 .tlnames>div{display:flex;align-items:center;padding:0 12px;border-bottom:1px solid var(--line2);font-size:11.5px;color:var(--muted)}
@@ -274,23 +280,39 @@ function versions(){
 
 /* ---------------- Replay (one attack) ---------------- */
 const PHASE = {Setup:"#3D3D3D", Locate:"#6E6E6E", Approach:"#C2611F", Grasp:"#F59342", Transport:"#A9541A", Place:"#8E4616", Retreat:"#5A3A1E"};
+/* x-axis of the call timeline. Calls that log controller steps (move_to_pose) get width in
+   proportion to them, so the axis approximates episode time and the video playhead can ride on
+   it; calls without steps get a small fixed share. Without any steps it is one slot per call. */
+function geom(a){
+  const n = Math.max(a.calls.length, 1), st = a.calls.map(c => +c.steps || 0), has = st.some(v => v > 0);
+  const pos = st.filter(v => v > 0).sort((p, q) => p - q), med = pos.length ? pos[Math.floor(pos.length / 2)] : 1;
+  const w = a.calls.length ? st.map(v => has ? (v > 0 ? v : Math.max(4, med * 0.25)) : 1) : [1];
+  const tot = w.reduce((p, q) => p + q, 0), b = [0];
+  w.forEach(v => b.push(b[b.length - 1] + v / tot));
+  const at = f => { if (f >= n) return 1; const k = Math.max(0, Math.floor(f)); return b[k] + (f - k) * (b[k + 1] - b[k]); };
+  return {n, has, at, mid: i => at(i + 0.5)};
+}
 function timeline(a){
-  const n = Math.max(a.calls.length, 1), x = i => ((i + 0.5) / n * 100).toFixed(2) + "%";
+  const G = geom(a), n = G.n, x = i => (G.mid(i) * 100).toFixed(2) + "%";
   const spans = []; a.calls.forEach((c, i) => { const last = spans[spans.length-1];
     if (last && last.p === c.phase) last.e = i; else spans.push({p: c.phase, s: i, e: i}); });
-  const phases = spans.map(s => `<div class="ph" style="left:${s.s/n*100}%;width:${(s.e-s.s+1)/n*100}%;background:${PHASE[s.p]||"#555"}" title="${s.p}">${s.p}</div>`).join("");
+  const phases = spans.map(s => `<div class="ph" style="left:${G.at(s.s)*100}%;width:${(G.at(s.e+1)-G.at(s.s))*100}%;background:${PHASE[s.p]||"#555"}" title="${s.p}">${s.p}</div>`).join("");
   const dms = a.calls.map((c, i) => `<span class="dm${c.ok?"":" f"}" style="left:${x(i)}" title="#${i+1} ${esc(c.tool)}${c.query?" ("+esc(c.query)+")":""} · ${esc(c.status)}${c.error_m!=null?" · off by "+fx(c.error_m*100,1)+" cm":""}"></span>`).join("");
-  const evs = a.events.filter(e => e.kind !== "terminated").map(e => `<span class="dm" style="left:${(Math.min(e.at, n)/n*100).toFixed(2)}%;background:${e.kind==="released"?"var(--fg)":"var(--accent)"}" title="${esc(e.kind)} ${esc(JSON.stringify(Object.fromEntries(Object.entries(e).filter(([k]) => !["kind","at"].includes(k)))))}"></span>`).join("");
+  const evs = a.events.filter(e => e.kind !== "terminated").map(e => `<span class="dm" style="left:${(G.at(Math.min(e.at, n))*100).toFixed(2)}%;background:${e.kind==="released"?"var(--fg)":"var(--accent)"}" title="${esc(e.kind)} ${esc(JSON.stringify(Object.fromEntries(Object.entries(e).filter(([k]) => !["kind","at"].includes(k)))))}"></span>`).join("");
   const flag = (i, label, color) => { if (i === null || i === undefined) return "";
-    const at = Math.min(i, n-0.5)/n, side = at > 0.7 ? "right:1px;left:auto" : "left:1px";  /* keep labels inside the timeline */
+    const at = G.at(Math.min(i, n-0.5)), side = at > 0.7 ? "right:1px;left:auto" : "left:1px";  /* keep labels inside the timeline */
     return `<div class="flag" style="left:${(at*100).toFixed(2)}%;background:${color}"><span style="background:${color};${side}">${label}</span></div>`; };
   const fIdx = a.first_fail ?? (failed(a) ? n - 0.5 : null);
   return `<section class="tl" aria-label="Timeline">
-    <div class="tlhead"><span class="mono" style="color:var(--hi);font-size:14px">${a.calls.length} primitive calls</span><div style="flex:1"></div>
-      <span class="mono">P perturbation applied at reset</span><span class="mono">D first call that differs from the nominal run</span><span class="mono">F first failed call</span></div>
+    <div class="tlhead">${a.video ? `<div class="tctl" role="group" aria-label="Video player">
+        <button id="pp" aria-label="Play or pause">▶</button>
+        <span class="mono" id="tm" style="color:var(--hi);min-width:104px">0:00.0 / 0:00.0</span>
+        <select id="spd" aria-label="Playback speed">${[0.25, 0.5, 1, 1.5, 2, 4].map(v => `<option value="${v}"${v === 1 ? " selected" : ""}>${v}×</option>`).join("")}</select></div>` : ""}
+      <span class="mono" style="color:var(--hi);font-size:14px">${a.calls.length} primitive calls</span><div style="flex:1"></div>
+      <span class="mono">P perturbation applied at reset</span><span class="mono">D first call that differs from the nominal run</span><span class="mono">F first failed call</span>${a.video ? '<span class="mono" style="color:var(--hi)">▼ drag to seek · space · ← →</span>' : ""}</div>
     <div class="tlbody">
       <div class="tlnames"><div style="height:30px"></div><div style="height:34px">Phase</div><div style="height:30px">Calls</div><div style="height:30px">Events</div></div>
-      <div class="tlarea">
+      <div class="tlarea" id="tlarea">${a.video ? '<div class="playhead" id="ph" hidden></div>' : ""}
         <div class="lane" style="height:30px"></div>
         <div class="lane" style="height:34px">${phases}</div>
         <div class="lane" style="height:30px">${dms}</div>
@@ -302,13 +324,15 @@ function timeline(a){
     </div></section>`;
 }
 function videos(a){
-  const clip = (src, label, color) => `<div class="vid"><span class="mono" style="color:${color}">${label}</span>
-    <video src="${esc(src)}" controls muted loop playsinline preload="metadata"></video></div>`;
+  /* With an attack video, the timeline drives both; a lone nominal video keeps native controls. */
+  const clip = (src, label, color, id) => `<div class="vid"><span class="mono" style="color:${color}">${label}</span>
+    <video id="${id}" src="${esc(src)}" muted playsinline preload="auto"${a.video ? "" : " controls"}></video></div>`;
   if (!a.video && !D.nominal_video) return `<div class="empty">No video for this attack: the test world records none; on the simulator, videos sit next to studio.html in the run folder.</div>`;
   return `<section style="display:flex;flex-direction:column;gap:10px"><span class="h">Rollout video</span><div class="vids">
-    ${a.video ? clip(a.video, "Attack #" + a.n + " · " + esc(a.category) + " · " + (failed(a) ? "failed" : a.outcome === "error" ? "program error" : "passed"), failed(a) ? "var(--fail)" : "var(--hi)") : '<div class="vid empty">No video recorded for this attack.</div>'}
-    ${D.nominal_video ? clip(D.nominal_video, "Nominal run · no perturbation", "var(--muted)") : ""}
-  </div><span class="note">Videos load from the run folder: keep studio.html next to its aspire/ folder when copying.</span></section>`;
+    ${a.video ? clip(a.video, "Attack #" + a.n + " · " + esc(a.category) + " · " + (failed(a) ? "failed" : a.outcome === "error" ? "program error" : "passed"), failed(a) ? "var(--fail)" : "var(--hi)", "vA") : '<div class="vid empty">No video recorded for this attack.</div>'}
+    ${D.nominal_video ? clip(D.nominal_video, "Nominal run · no perturbation", "var(--muted)", "vN") : ""}
+  </div>
+  <span class="note">Both videos play in sync, driven by the timeline below. Videos load from the run folder: keep studio.html next to its aspire/ folder when copying.</span></section>`;
 }
 function why(a){
   const draws = Object.entries(a.draws || {}).sort((x, y) => y[1] - x[1]);
@@ -395,10 +419,66 @@ function replay(id){
   </aside></div>`;
 }
 
+/* One transport for both videos: the attack video is the clock, the nominal follows it. */
+let PLAYER = null;
+function initPlayer(){
+  if (PLAYER) PLAYER.stop();
+  PLAYER = null;
+  const vA = document.getElementById("vA"), vN = document.getElementById("vN");
+  const vids = [vA, vN].filter(Boolean);
+  if (!vA) return;  /* the timeline controls exist only when the attack has a video */
+  const master = vA || vN, pp = document.getElementById("pp");
+  const tm = document.getElementById("tm"), spd = document.getElementById("spd");
+  const ph = document.getElementById("ph"), area = vA ? document.getElementById("tlarea") : null;
+  let raf = 0;
+  const dur = () => (isFinite(master.duration) ? master.duration : 0);
+  const clock = t => { t = Math.max(0, t || 0); return Math.floor(t / 60) + ":" + (t % 60).toFixed(1).padStart(4, "0"); };
+  const paint = () => {
+    const d = dur(), t = master.currentTime;
+    tm.textContent = clock(t) + " / " + clock(d);
+    if (ph && d) { ph.hidden = false; ph.style.left = (Math.min(t / d, 1) * 100).toFixed(3) + "%"; }
+    pp.textContent = master.paused ? "▶" : "❚❚";
+  };
+  const seek = t => {
+    t = Math.min(Math.max(0, t), dur());
+    for (const v of vids) if (isFinite(v.duration)) v.currentTime = Math.min(t, v.duration);
+    paint();
+  };
+  const play = () => { if (master.ended) seek(0); for (const v of vids) if (!v.ended || v === master) v.play().catch(() => {}); };
+  const pause = () => { for (const v of vids) v.pause(); };
+  const tick = () => {
+    for (const v of vids) if (v !== master && !master.paused && isFinite(v.duration) && master.currentTime < v.duration
+      && Math.abs(v.currentTime - master.currentTime) > 0.15) v.currentTime = master.currentTime;
+    paint();
+    raf = requestAnimationFrame(tick);
+  };
+  pp.onclick = () => (master.paused ? play() : pause());
+  spd.onchange = () => { for (const v of vids) v.playbackRate = +spd.value; };
+  master.addEventListener("ended", () => { pause(); paint(); });
+  if (area) {
+    area.classList.add("seek");
+    const to = e => { const r = area.getBoundingClientRect(); seek((e.clientX - r.left) / r.width * dur()); };
+    area.onpointerdown = e => { area.setPointerCapture(e.pointerId); to(e); area.onpointermove = to; };
+    area.onpointerup = area.onpointercancel = () => { area.onpointermove = null; };
+  }
+  const onKey = e => {
+    if (e.target.closest && e.target.closest("input,select,button,textarea")) return;
+    if (e.code === "Space") { e.preventDefault(); master.paused ? play() : pause(); }
+    else if (e.key === "ArrowRight") seek(master.currentTime + 1);
+    else if (e.key === "ArrowLeft") seek(master.currentTime - 1);
+  };
+  document.addEventListener("keydown", onKey);
+  raf = requestAnimationFrame(tick);
+  /* Opening an attack in Replay starts playback (muted, so browsers allow it). */
+  if (master.readyState >= 1) play(); else master.addEventListener("loadedmetadata", play, {once: true});
+  PLAYER = {stop() { cancelAnimationFrame(raf); document.removeEventListener("keydown", onKey); pause(); }};
+}
+
 function render(){
   const h = location.hash.slice(1);
   const view = h === "versions" ? "versions" : (h === "replay" || h.startsWith("a-")) ? "replay" : "harden";
   document.getElementById("app").innerHTML = view === "versions" ? versions() : view === "replay" ? replay(h.startsWith("a-") ? h.slice(2) : null) : harden();
+  initPlayer();
   for (const t of ["harden", "replay", "versions"]) {
     const el = document.getElementById("tab-" + t);
     if (t === view) el.setAttribute("aria-current", "page"); else el.removeAttribute("aria-current");

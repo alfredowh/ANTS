@@ -125,6 +125,7 @@ def _attack(row: dict, index: int, nominal_calls: list[dict], run_dir: Path) -> 
                 "phase": phases[i],
                 "query": c.get("query"),
                 "error_m": c.get("error_m"),
+                "steps": c.get("steps"),
             }
             for i, c in enumerate(calls)
         ],  # fmt: skip
