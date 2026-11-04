@@ -19,24 +19,35 @@ try {
 <body>
 <header>
   <svg class="logo" width="42" height="24" viewBox="0 0 14 8" shape-rendering="crispEdges" role="img" aria-label="ANTS" style="fill:#1877F2;display:block"><path d="M12 0h.86v.86H12zM11 1h.86v.86H11zM1 2h.86v.86H1zM2 2h.86v.86H2zM3 2h.86v.86H3zM10 2h.86v.86H10zM11 2h.86v.86H11zM12 2h.86v.86H12zM0 3h.86v.86H0zM1 3h.86v.86H1zM2 3h.86v.86H2zM3 3h.86v.86H3zM4 3h.86v.86H4zM6 3h.86v.86H6zM7 3h.86v.86H7zM8 3h.86v.86H8zM10 3h.86v.86H10zM11 3h.86v.86H11zM12 3h.86v.86H12zM13 3h.86v.86H13zM0 4h.86v.86H0zM1 4h.86v.86H1zM2 4h.86v.86H2zM3 4h.86v.86H3zM4 4h.86v.86H4zM6 4h.86v.86H6zM7 4h.86v.86H7zM8 4h.86v.86H8zM10 4h.86v.86H10zM11 4h.86v.86H11zM12 4h.86v.86H12zM1 5h.86v.86H1zM2 5h.86v.86H2zM3 5h.86v.86H3zM5 5h.86v.86H5zM7 5h.86v.86H7zM9 5h.86v.86H9zM4 6h.86v.86H4zM7 6h.86v.86H7zM10 6h.86v.86H10zM3 7h.86v.86H3zM7 7h.86v.86H7zM11 7h.86v.86H11z"/></svg>
+  <button class="icon-btn" id="nav-toggle" type="button" title="Hide navigator" aria-label="Toggle navigator"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg></button>
   <span class="title">Studio</span>
-  <nav class="tabbar">
-    <button class="tabbtn on" id="tabbtn-console" type="button">Console</button>
-    <button class="tabbtn" id="tabbtn-perception" type="button">Perception</button>
-    <button class="tabbtn" id="tabbtn-synthesizer" type="button">Synthesizer</button>
-    <button class="tabbtn" id="tabbtn-adversary" type="button">Adversary</button>
-  </nav>
   <span style="flex:1"></span>
   <span class="status-pill" id="status-pill">idle</span>
   <span class="phase" id="run-folder" title="Every run is saved to its own timestamped folder: loop.jsonl (the run log), history.jsonl, muse/cycleN/ (each repair's reply + token usage). Nothing is overwritten."></span>
+  <button class="icon-btn console-only" id="toggle-left" type="button" title="Show context panel (primitives, scene prompt)" aria-label="Toggle context panel"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/><line x1="5.5" y1="9" x2="7.5" y2="9"/><line x1="5.5" y1="12" x2="7.5" y2="12"/></svg></button>
+  <button class="icon-btn console-only" id="toggle-right" type="button" title="Show run details (usage, reply, settings)" aria-label="Toggle run details"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="15" y1="4" x2="15" y2="20"/><line x1="16.5" y1="9" x2="18.5" y2="9"/><line x1="16.5" y1="12" x2="18.5" y2="12"/></svg></button>
   <button class="theme-toggle" id="theme-toggle" type="button" title="Toggle light/dark theme">&#9789;</button>
   <button class="btn" id="run-btn">Run policy development step</button>
 </header>
 
+<div class="app" id="app">
+  <aside class="nav" id="nav" aria-label="Navigator">
+    <nav class="navtabs">
+      <button class="tabbtn on" id="tabbtn-console" type="button">Console</button>
+      <button class="tabbtn" id="tabbtn-perception" type="button">Perception</button>
+      <button class="tabbtn" id="tabbtn-synthesizer" type="button">Synthesizer</button>
+      <button class="tabbtn" id="tabbtn-adversary" type="button">Adversary</button>
+    </nav>
+    <div class="h navh">Runs</div>
+    <div class="navruns" id="navruns"><div class="navnote">loading&hellip;</div></div>
+  </aside>
+  <div class="content" id="content">
 <!--__AGENT_CONSOLE__-->
 <!--__PERCEPTION__-->
 <!--__SYNTHESIZER__-->
 <!--__ADVERSARY__-->
+  </div>
+</div>
 
 <div class="modal-backdrop" id="modal-backdrop">
   <div class="modal" id="modal">

@@ -206,6 +206,26 @@ def _live_asset_path(run_id: str, rest: str, *, overlay: bool) -> Path | None:
     return resolved if resolved.exists() else None
 
 
+def _list_runs(out_dir: Path) -> list[dict]:
+    """Stored runs under out_dir, newest first (read-only; names only plus cheap counts)."""
+    if not out_dir.is_dir():
+        return []
+    runs = []
+    for d in sorted((x for x in out_dir.iterdir() if x.is_dir()), reverse=True):
+
+        def lines(name: str, d: Path = d) -> int:
+            f = d / name
+            if not f.is_file():
+                return 0
+            with f.open(encoding="utf-8") as fh:
+                return sum(1 for _ in fh)
+
+        runs.append(
+            {"name": d.name, "cycles": lines("loop.jsonl"), "attacks": lines("attacks.jsonl")}
+        )
+    return runs
+
+
 def _attacks_jsonl_path(out_dir: Path, run_name: str) -> Path | None:
     """Resolve a /attacks/<run_name> request, refusing anything outside out_dir."""
     candidate = out_dir / run_name / "attacks.jsonl"
@@ -714,18 +734,6 @@ def make_handler(
             "live": False,  # same reason: no live cuRobo call happens in this console's loop
             "name": str(PLAN_VIEWER_PATH.relative_to(REPO_ROOT)) if PLAN_VIEWER_PATH else None,
         },
-        "scene_arms": {
-            arm: _scene2d_or_none(
-                REPO_ROOT
-                / "data"
-                / "runs"
-                / "exp04_scene"
-                / f"E-{arm}"
-                / "sample0"
-                / "contacts_scene.json"
-            )
-            for arm in ("E1", "E2", "E3")
-        },
     }
     page = _assemble_shell().replace("/*__DATA__*/null", json.dumps(data))
 
@@ -800,6 +808,9 @@ def make_handler(
                 self.send_header("Cache-Control", "no-cache")  # live: never cache a stale frame
                 self.end_headers()
                 self.wfile.write(body)
+                return
+            if path == "/runs":
+                self._send_json({"runs": _list_runs(loop_cfg.out_dir) if loop_cfg else []})
                 return
             if path.startswith("/attacks/"):
                 run_name = path[len("/attacks/") :]

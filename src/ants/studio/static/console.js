@@ -81,7 +81,8 @@ document.getElementById("run-settings-btn").addEventListener("click", renderRunS
       handle.classList.add("dragging");
       handle.setPointerCapture(e.pointerId);
       const onMove = (ev) => {
-        const px = fromRight ? window.innerWidth - ev.clientX : ev.clientX;
+        const r = document.getElementById("console-main").getBoundingClientRect();
+        const px = fromRight ? r.right - ev.clientX : ev.clientX - r.left;
         const clamped = Math.max(min, Math.min(max, px));
         root.style.setProperty(varName, clamped + "px");
       };
@@ -108,7 +109,7 @@ document.getElementById("run-settings-btn").addEventListener("click", renderRunS
    instead of an always-visible legend -- hover an object to see what it is */
 const SCENE_COLOR = { task: "#6fb2e0", rack: "#e8a553", other: "#8a8a8a" };
 const SCENE_COLOR_NAME = { task: "task object", rack: "wine rack", other: "other object" };
-let sceneKind = "generation"; // internal data source only -- no UI toggle for this; E1/E2/E3 below still switch it
+let sceneKind = "generation"; // internal data source only
 function layerOn(id) { return document.getElementById(id).checked; }
 function renderScene2D(kind) {
   sceneKind = kind;
@@ -116,7 +117,7 @@ function renderScene2D(kind) {
   const noteEl = document.getElementById("scene2d-note");
   const asofEl = document.getElementById("scene-asof");
   const s2d = DATA.scene2d || {};
-  const scene = (DATA.scene_arms && DATA.scene_arms[kind]) || s2d[kind];
+  const scene = s2d[kind];
   if (!scene) {
     svg.innerHTML = "";
     asofEl.textContent = "";
@@ -202,15 +203,7 @@ document.getElementById("scene-graph-btn").addEventListener("click", (e) => {
   el.innerHTML = `${scene.objects.length} objects (nodes), ${scene.relations.length} relations (edges, gap in mm)`;
 });
 function currentScene() {
-  if (DATA.scene_arms && DATA.scene_arms[sceneKind]) return DATA.scene_arms[sceneKind];
   return (DATA.scene2d || {})[sceneKind];
-}
-for (const arm of ["E1", "E2", "E3"]) {
-  document.getElementById("scene-arm-" + arm.toLowerCase()).addEventListener("click", () => {
-    sceneKind = arm;
-    for (const a of ["E1", "E2", "E3"]) document.getElementById("scene-arm-" + a.toLowerCase()).classList.toggle("on", a === arm);
-    renderScene2D(arm);
-  });
 }
 
 /* pan (drag) + zoom (wheel) over the scene SVG, via viewBox manipulation */
@@ -270,10 +263,55 @@ function switchTab(name) {
     document.getElementById("tab-" + t).classList.toggle("on", t === name);
     document.getElementById("tabbtn-" + t).classList.toggle("on", t === name);
   });
+  document.body.dataset.tab = name;
   try { localStorage.setItem(TAB_KEY, name); } catch (e) {}
 }
 TABS.forEach((t) => document.getElementById("tabbtn-" + t).addEventListener("click", () => switchTab(t)));
 document.getElementById("perception-btn").addEventListener("click", () => switchTab("perception"));
+document.body.dataset.tab = "console";
+
+/* ---------- navigator + side-panel visibility (claude.ai-style: only the main window by default) ---------- */
+const NAV_KEY = "ants-studio-nav", PANELS_KEY = "ants-studio-panels";
+(function () {
+  const nav = document.getElementById("nav-toggle");
+  function setNav(show) {
+    document.body.classList.toggle("nav-hidden", !show);
+    nav.title = show ? "Hide navigator" : "Show navigator";
+    try { localStorage.setItem(NAV_KEY, show ? "1" : "0"); } catch (e) {}
+  }
+  let showNav = true;
+  try { showNav = localStorage.getItem(NAV_KEY) !== "0"; } catch (e) {}
+  setNav(showNav);
+  nav.addEventListener("click", () => setNav(document.body.classList.contains("nav-hidden")));
+
+  const main = document.getElementById("console-main");
+  const btns = { left: document.getElementById("toggle-left"), right: document.getElementById("toggle-right") };
+  const labels = { left: "context panel (primitives, scene prompt)", right: "run details (usage, reply, settings)" };
+  let panels = { left: false, right: false };
+  try { panels = Object.assign(panels, JSON.parse(localStorage.getItem(PANELS_KEY) || "{}")); } catch (e) {}
+  function applyPanels() {
+    for (const side of ["left", "right"]) {
+      main.classList.toggle("show-" + side, !!panels[side]);
+      btns[side].classList.toggle("on", !!panels[side]);
+      btns[side].title = (panels[side] ? "Hide " : "Show ") + labels[side];
+    }
+    try { localStorage.setItem(PANELS_KEY, JSON.stringify(panels)); } catch (e) {}
+  }
+  for (const side of ["left", "right"]) btns[side].addEventListener("click", () => { panels[side] = !panels[side]; applyPanels(); });
+  applyPanels();
+})();
+
+/* ---------- navigator: stored runs (read-only; loading a past run into the view is not built yet) ---------- */
+function refreshRunList() {
+  fetch("/runs").then((r) => r.json()).then((d) => {
+    const el = document.getElementById("navruns");
+    const runs = d.runs || [];
+    el.innerHTML = runs.length
+      ? runs.slice(0, 30).map((r) => `<div class="navrun${r.name === currentRunName ? " cur" : ""}" title="${esc(r.name)} -- ${r.cycles} cycle(s)${r.attacks ? ", " + r.attacks + " attack(s)" : ""}. Loading a stored run into the view is not built yet.">${esc(r.name.replace(/^run-/, ""))}</div>`).join("")
+      : `<div class="navnote">no runs stored yet</div>`;
+  }).catch(() => { document.getElementById("navruns").innerHTML = `<div class="navnote">runs unavailable</div>`; });
+}
+refreshRunList();
 
 /* ---------- source badge: LIVE (green, pulsing) or ARCHIVED (muted) or MISSING ---------- */
 function renderSrcBadge(elId, live, available, archivedLabel) {
@@ -910,9 +948,9 @@ function sendChat() {
   if (!message) return;
   input.value = "";
   if (chatMode === "awaiting_answer") {
-    addTurn("chat-turn", `<div class="tk">you (answering)</div><div class="main">${esc(message)}</div>`);
+    addTurn("chat-turn you", `<div class="tk">you (answering)</div><div class="main">${esc(message)}</div>`);
   } else {
-    addTurn("chat-turn", `<div class="tk">you</div><div class="main">${esc(message)}</div>`);
+    addTurn("chat-turn you", `<div class="tk">you</div><div class="main">${esc(message)}</div>`);
     newAgentChatTurn();
   }
   fetch("/chat", {

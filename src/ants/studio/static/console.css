@@ -29,9 +29,32 @@ header .phase{color:var(--muted);font-size:12px}
 .btn:disabled{opacity:.4;cursor:default}
 .btn.sm{padding:4px 10px;font-size:12px}
 .btn.on{color:var(--accent);border-color:var(--accent)}
-main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px var(--rw,300px);background:var(--bg);height:calc(100vh - 93px)}
-.col{background:var(--bg);overflow-y:auto;padding:16px;border-left:1px solid var(--line);border-right:1px solid var(--line)}
-.resize-handle{cursor:col-resize;background:var(--line)}
+.app{display:flex;height:calc(100vh - 53px)}
+.nav{flex:none;width:220px;border-right:1px solid var(--line);padding:12px 10px;overflow-y:auto;background:var(--bg)}
+body.nav-hidden .nav{display:none}
+.navtabs{display:flex;flex-direction:column;gap:2px;margin-bottom:18px}
+.navtabs .tabbtn{text-align:left;width:100%}
+.navh{padding:0 4px}
+.navruns{display:flex;flex-direction:column;gap:1px}
+.navrun{font:11.5px var(--mono);color:var(--muted);padding:5px 8px;border-radius:6px;cursor:default;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.navrun:hover{background:var(--raise);color:var(--fg)}
+.navrun.cur{color:var(--accent)}
+.navnote{font-size:11px;color:var(--dim);padding:4px 8px}
+.content{flex:1;min-width:0;overflow:auto;position:relative}
+#tab-console.on{height:100%}
+main{display:flex;background:var(--bg);height:100%}
+.col{background:var(--bg);overflow-y:auto;padding:16px}
+#col-left{flex:none;width:var(--lw,280px);border-right:1px solid var(--line)}
+#col-right{flex:none;width:var(--rw,300px);border-left:1px solid var(--line)}
+#col-center{flex:1;min-width:0}
+#col-left,#handle-left,#col-right,#handle-right{display:none}
+main.show-left #col-left,main.show-left #handle-left,main.show-right #col-right,main.show-right #handle-right{display:block}
+.icon-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid transparent;border-radius:8px;background:none;color:var(--muted);cursor:pointer;padding:0}
+.icon-btn:hover{color:var(--fg);background:var(--raise)}
+.icon-btn.on{color:var(--accent)}
+.console-only{display:none}
+body[data-tab="console"] .console-only{display:inline-flex}
+.resize-handle{flex:none;width:6px;cursor:col-resize;background:var(--line)}
 .resize-handle:hover,.resize-handle.dragging{background:var(--accent)}
 .scene2d{margin-bottom:18px}
 .scene2d-head{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
@@ -51,8 +74,8 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
 .tool .desc{font-size:11px;color:var(--soft);margin-top:4px}
 .center-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
 .incumbent{font-family:var(--mono);font-size:12px;color:var(--muted)}
-.turns{display:flex;flex-direction:column;gap:6px;flex:1;overflow-y:auto;min-height:0}
-.turn{border:1px solid var(--line);background:var(--panel);padding:10px 12px}
+.turns{display:flex;flex-direction:column;gap:22px;padding:6px 2px 18px;flex:1;overflow-y:auto;min-height:0}
+.turn{background:transparent;border:0;padding:2px 0}
 .turn .tk{cursor:pointer}
 .turn .tk::after{content:" \25BE";color:var(--dim)}
 .turn.collapsed .tk::after{content:" \25B8"}
@@ -71,19 +94,18 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
 .tile{background:var(--panel);padding:10px 12px}
 .tile .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em} .tile .v{font-family:var(--mono);font-size:18px}
 .reply{background:var(--panel);border:1px solid var(--line);padding:10px;font-family:var(--mono);font-size:11px;white-space:pre-wrap;max-height:420px;overflow-y:auto}
-.sysbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:40px;border-bottom:1px solid var(--line);padding:0 20px;font-size:12px}
-.sys{display:flex;align-items:center;gap:7px;border:1px solid var(--line);padding:4px 10px;cursor:help;transition:border-color .15s}
-.sys .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
+.flowline{display:flex;align-items:baseline;justify-content:center;gap:8px;flex-wrap:wrap;padding:10px 0 4px;font-size:12px;color:var(--dim)}
+.sys{display:inline-flex;align-items:baseline;gap:6px;cursor:help;color:var(--dim)}
+.sys .dot{width:6px;height:6px;border-radius:50%;background:var(--faint);flex:none;align-self:center}
 .sys.active .dot{background:var(--accent);box-shadow:0 0 6px var(--accent);animation:pulse-dot 1.1s ease-in-out infinite}
-.sys.active{border-color:var(--accent)}
-.sys .who{font-weight:600;letter-spacing:.03em}
-.sys .stage{color:var(--muted)}
+.sys .who{font-weight:500}
+.sys .stage{color:var(--dim)}
+.sys.active .who{color:var(--accent);font-weight:600}
 .sys.active .stage{color:var(--fg)}
 #escalate-badge.active .dot{background:var(--fail);box-shadow:0 0 6px var(--fail)}
-#escalate-badge.active{border-color:var(--fail)}
-#escalate-badge.active .stage{color:var(--fail)}
-.flow-arrow{color:var(--dim);font-size:14px}
-.flow-loop{color:var(--dim);font-size:16px;margin-right:2px}
+#escalate-badge.active .who,#escalate-badge.active .stage{color:var(--fail)}
+.flow-arrow{color:var(--faint);font-size:13px}
+.flow-loop{color:var(--faint);font-size:14px}
 @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.35}}
 @media (prefers-reduced-motion: reduce){.sys.active .dot{animation:none}}
 .banner{display:none;border:1px solid var(--fail);background:var(--fail-bg);color:var(--fail-fg);padding:10px 14px;margin-bottom:14px;font-size:12.5px;line-height:1.5}
@@ -162,9 +184,11 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
 .perc-note{font-size:11px;color:var(--dim);margin-top:8px}
 .stub-note{font-size:11px;color:var(--dim);padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
 .stub-note code{color:var(--soft)}
-.stub-frame{width:100%;height:calc(100vh - 93px - 38px);border:0;background:#fff}
+.stub-frame{width:100%;height:calc(100vh - 53px - 38px);border:0;background:#fff}
 /* ---------- chat composer: docked under the turns feed, centered when idle ---------- */
-#col-center{display:flex;flex-direction:column;overflow-y:hidden}
+#col-center{display:flex;flex-direction:column;align-items:center;overflow-y:hidden}
+#col-center>*{width:100%;max-width:780px}
+#col-center.idle .flowline{display:none}
 .idle-tagline{display:none;text-align:center;color:var(--soft);font-size:17px;font-weight:500;margin-bottom:16px}
 #col-center.idle{justify-content:center}
 #col-center.idle .turns{display:none}
@@ -183,3 +207,8 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
 .chat-status.pending{color:var(--accent)}
 .chat-turn .tk{color:var(--meta)}
 .chat-turn.answer .tk{color:var(--built)}
+
+.chat-turn.you{align-self:flex-end;max-width:80%;background:var(--raise);border-radius:16px 16px 4px 16px;padding:10px 14px}
+.chat-turn.you .tk{display:none}
+.chat-turn.you .main{margin-top:0;font-size:13px;white-space:pre-wrap}
+.turn.task,.turn.error,.turn.done{padding-left:12px}
