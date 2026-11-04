@@ -33,7 +33,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from ants.studio import adversary_view, policy_dev
+from ants.studio import adversary_view, live_view, policy_dev
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PHASES_DOC = REPO_ROOT / "docs" / "orchestrator" / "phases.md"
@@ -47,6 +47,8 @@ STATIC_FILES = {
     "wizard.js": STATIC_DIR / "wizard.js",
     "studio_switch.js": STATIC_DIR / "studio_switch.js",
     "flow.js": STATIC_DIR / "flow.js",
+    "live.js": STATIC_DIR / "live.js",
+    "live.css": STATIC_DIR / "live.css",
     "flow.css": STATIC_DIR / "flow.css",
     "flow_blocks.json": REPO_ROOT / "docs" / "studio" / "process-flow-blocks.json",
 }
@@ -301,8 +303,11 @@ class RunState:
     awaiting_answer: queue.Queue[str] | None = None
     queued_chat: str | None = None
     session: Session | None = None
+    live: live_view.LiveView | None = None  # the rollout-in-progress panel (live_view.py)
 
     def broadcast(self, event: dict) -> None:
+        if self.live is not None:
+            self.live.observe(event)
         if self.session is not None:
             self.session.log_event(event)
         with self.lock:
@@ -898,6 +903,21 @@ def make_handler(
                     }
                 )
                 return
+            # ---- live simulator panel ----
+            if path == "/live/status":
+                live = state.live
+                self._send_json(live.status(state.running) if live else {"active": False})
+                return
+            if path.startswith("/live/frame/") and path.endswith(".jpg"):
+                body = state.live.frame(path[len("/live/frame/") : -4]) if state.live else None
+                self.send_response(200 if body else 404)
+                self.send_header("Content-Type", "image/jpeg")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", str(len(body or b"")))
+                self.end_headers()
+                self.wfile.write(body or b"")
+                return
+            # ---- end live simulator panel ----
             if path == "/session":
                 self._send_json(
                     {
@@ -1280,7 +1300,7 @@ def serve(
     session_id: str | None = None,
     sessions_dir: Path | None = SESSIONS_DIR,
 ) -> None:
-    state = RunState()
+    state = RunState(live=live_view.enable())
     if session_id and sessions_dir and not (sessions_dir / session_id).is_dir():
         raise SystemExit(f"no such session: {sessions_dir / session_id}")
     handler = make_handler(

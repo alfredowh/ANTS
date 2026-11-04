@@ -265,3 +265,22 @@ Defaults, limits and the dialog's fields: `docs/studio/skills/policy-dev.json`. 
 
 Removed: the question-by-question wizard (`policy_wizard.py`), `/policy-dev setup`, `/cancel`, `/wizard`.
 
+## Live simulator panel (`live_view.py`, `static/live.js`, `tools/ants_live_hook/sitecustomize.py`)
+
+While a rollout of a run this console started is in progress, a panel above both views shows
+`agentview` and `robot0_eye_in_hand`. `live_view.enable()` (called in `serve()`) sets `ANTS_LIVE_DIR`
+to a temporary folder and puts `tools/ants_live_hook` on `PYTHONPATH` for the server's children. The
+`sitecustomize.py` there wraps `cap_harness.artifacts.RunRecorder._encode_video_frame` on import, so
+it covers `cap-harness` run directly and through `tools/aspire_launch.py` without editing ASPIRE,
+`adversary/` or `orchestrator/`. It reuses the arrays already rendered for the video. A command
+started outside the console has no such variable and no hook.
+
+Evidence (logged by comparing `episode/steps.jsonl` line by line, program replayed on seed 51): no
+differing step between runs with and without the hook, nominal and under an actuation perturbation.
+About 6 fps while the robot moves, none during perception and planning, where the panel says WAITING
+rather than LIVE; about 0.7 s more wall time on a 27 s rollout.
+
+The label comes only from the last started pipeline stage and the rollout's own command line. An
+attack's severity is logged only after it ends, so the label shows its parameters instead. Frames
+are polled, never a held connection, because of the browser's six-per-site limit. Rollouts need
+`--no-videos` unset; with it there are no frames.

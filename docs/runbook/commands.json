@@ -987,7 +987,7 @@
           "desc": "Default of the dialog's Muse token cap for /policy-dev."
         }
       ],
-      "description": "Serves ANTS Studio: an Adversary | Synthesizer switch over Daniel's Harden/Replay/Versions page and the agent console, and drives a real Loop live. Every server start creates a session folder under data/console_sessions/ holding the chat log, every broadcast event and the per-run folders. Each rewrite spends Muse tokens (about $0.5 observed) and the loop stops at --synth-token-budget.",
+      "description": "Serves ANTS Studio: an Adversary | Synthesizer switch over Daniel's Harden/Replay/Versions page and the agent console, and drives a real Loop live. Every server start creates a session folder under data/console_sessions/ holding the chat log, every broadcast event and the per-run folders. While a rollout of a run it started is in progress, a live panel shows the agentview and wrist cameras: the console sets ANTS_LIVE_DIR and PYTHONPATH=tools/ants_live_hook for its children, which tee the frames ASPIRE already renders for its video (about 6 fps while the robot moves; no effect on results). Each rewrite spends Muse tokens (about $0.5 observed) and the loop stops at --synth-token-budget.",
       "examples": [
         {
           "title": "Default demo (mock Adversary, real Muse repairs)",
