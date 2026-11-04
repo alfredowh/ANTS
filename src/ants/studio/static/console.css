@@ -36,11 +36,13 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
 .scene2d{margin-bottom:18px}
 .scene2d-head{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
 .scene2d-head .asof{font-size:10.5px;color:var(--dim);margin-left:auto}
-.scene2d svg{width:100%;height:auto;background:var(--panel);border:1px solid var(--line)}
+.scene2d-layers{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:11px;color:var(--soft);margin-bottom:8px}
+.scene2d-layers .perc-toggle{gap:5px}
+.scene2d-canvas{overflow:hidden;background:var(--panel);border:1px solid var(--line)}
+.scene2d-canvas svg{width:100%;height:auto;display:block;cursor:grab;touch-action:none}
+.scene2d-canvas svg:active{cursor:grabbing}
 .scene2d svg text{font:600 13px var(--mono);fill:var(--soft)}
 .scene2d svg text.m{fill:var(--dim);font-size:11px}
-.scene2d-legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:10.5px;color:var(--muted);margin-top:6px}
-.scene2d-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
 .scene2d-note{font-size:10px;color:var(--dim);margin-top:5px;cursor:help}
 .h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500;margin-bottom:10px}
 .tool{border:1px solid var(--line);background:var(--panel);padding:8px 10px;margin-bottom:8px;border-left:3px solid var(--faint)}

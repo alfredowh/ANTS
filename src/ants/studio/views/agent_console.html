@@ -17,36 +17,23 @@
     <div class="scene2d">
       <div class="h">Scene prompt</div>
       <div class="scene2d-head">
-        <button class="btn sm on" id="scene-gen-btn">generation</button>
-        <button class="btn sm" id="scene-repair-btn">repair</button>
         <button class="btn sm" id="scene-graph-btn" title="The scene graph: objects (nodes) and their spatial relations (edges, gap in mm) from the same scene file the prompt is built from">scene graph</button>
         <span class="asof" id="scene-asof"></span>
       </div>
-      <svg id="scene2d-svg" viewBox="0 0 240 240"></svg>
+      <div class="scene2d-layers">
+        <label class="perc-toggle"><input type="checkbox" id="layer-position">position</label>
+        <label class="perc-toggle"><input type="checkbox" id="layer-size" checked>size</label>
+        <label class="perc-toggle"><input type="checkbox" id="layer-relationship" checked>relationships</label>
+      </div>
+      <div class="scene2d-canvas"><svg id="scene2d-svg" viewBox="0 0 240 240"></svg></div>
       <div class="scene2d-head" style="margin-top:6px">
         <button class="btn sm" id="scene-arm-e1" title="E1: repair evidence = contact log only">E1 Contact log</button>
         <button class="btn sm" id="scene-arm-e2" title="E2: contact log + scene description">E2 Scene</button>
         <button class="btn sm" id="scene-arm-e3" title="E3: contact log + scene + stall readings">E3 Stall readings</button>
       </div>
       <div id="scene-graph" style="display:none;font-size:11px"></div>
-      <div class="scene2d-legend">
-        <span><i style="background:#6fb2e0"></i>task object</span>
-        <span><i style="background:#e8a553"></i>wine rack</span>
-        <span><i style="background:#8a8a8a"></i>other object</span>
-        <span><i style="background:#ff4d4d"></i>gripper</span>
-      </div>
       <div class="scene2d-note" id="scene2d-note"></div>
-    </div>
-    <div class="sam3">
-      <div class="h">SAM 3 output</div>
-      <div class="sam3-note" id="sam3-note"></div>
-      <div class="sam3-grid" id="sam3-grid"></div>
-    </div>
-    <div class="agentview">
-      <div class="h">Agentview frames</div>
-      <div class="agentview-note" id="agentview-note"></div>
-      <div class="agentview-grid" id="agentview-grid"></div>
-      <button class="btn sm" id="perception-btn" style="margin-top:8px">Open Perception tab</button>
+      <button class="btn sm" id="perception-btn" style="margin-top:10px">Open Perception tab (SAM 3, agentview, cuRobo) &rarr;</button>
     </div>
   </div>
   <div class="resize-handle" id="handle-left"></div>

@@ -104,12 +104,14 @@ document.getElementById("run-settings-btn").addEventListener("click", renderRunS
 })();
 
 /* ---------- 2D scene illustration ---------- */
+/* object/category colors are fixed per category, shown as a <title> tooltip on each shape now
+   instead of an always-visible legend -- hover an object to see what it is */
 const SCENE_COLOR = { task: "#6fb2e0", rack: "#e8a553", other: "#8a8a8a" };
-let sceneKind = "generation";
+const SCENE_COLOR_NAME = { task: "task object", rack: "wine rack", other: "other object" };
+let sceneKind = "generation"; // internal data source only -- no UI toggle for this; E1/E2/E3 below still switch it
+function layerOn(id) { return document.getElementById(id).checked; }
 function renderScene2D(kind) {
   sceneKind = kind;
-  document.getElementById("scene-gen-btn").classList.toggle("on", kind === "generation");
-  document.getElementById("scene-repair-btn").classList.toggle("on", kind === "repair");
   const svg = document.getElementById("scene2d-svg");
   const noteEl = document.getElementById("scene2d-note");
   const asofEl = document.getElementById("scene-asof");
@@ -123,10 +125,8 @@ function renderScene2D(kind) {
     return;
   }
   asofEl.textContent = "as of " + scene.as_of;
-  noteEl.textContent = kind === "generation" ? "Given to System 1's first draft" : "Given to the repair step";
-  noteEl.title = kind === "generation"
-    ? "S4-style scene text: oracle geometry, no robot trajectory."
-    : "Same data as generation" + (s2d.same_source ? " -- E3-style contact/stall evidence isn't wired into this console yet." : ".");
+  noteEl.textContent = "Scene given to System 1";
+  noteEl.title = "S4-style scene text: oracle geometry, no robot trajectory.";
 
   const pad = 14;
   let xs = [], ys = [];
@@ -143,36 +143,51 @@ function renderScene2D(kind) {
   const byLabel = {};
   for (const o of scene.objects) byLabel[o.label] = o;
 
-  let parts = [];
+  // three independently-toggleable layers, same underlying data, split for display only
+  let relParts = [], sizeParts = [], posParts = [];
   for (const r of scene.relations) {
     const a = byLabel[r.a], b = byLabel[r.b];
     if (!a || !b) continue;
     const x1 = cx(a), y1 = cy(a), x2 = cx(b), y2 = cy(b);
-    parts.push(`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#666" stroke-dasharray="4,3" stroke-width="2"/>`);
-    parts.push(`<text class="m" x="${((x1+x2)/2).toFixed(1)}" y="${((y1+y2)/2 - 3).toFixed(1)}">${r.mm} mm</text>`);
+    relParts.push(`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#666" stroke-dasharray="4,3" stroke-width="2"><title>${esc(r.a)} ↔ ${esc(r.b)}: ${r.mm} mm</title></line>`);
+    relParts.push(`<text class="m" x="${((x1+x2)/2).toFixed(1)}" y="${((y1+y2)/2 - 3).toFixed(1)}">${r.mm} mm</text>`);
   }
   for (const o of scene.objects) {
     const color = SCENE_COLOR[o.cat] || "#8a8a8a";
+    const catName = SCENE_COLOR_NAME[o.cat] || o.cat;
+    const titleEl = `<title>${esc(o.label)} (${esc(catName)})</title>`;
     if (sceneGraphOn) {
-      parts.push(`<circle cx="${cx(o).toFixed(1)}" cy="${cy(o).toFixed(1)}" r="10" fill="${color}" fill-opacity="0.85" stroke="#222" stroke-width="2"/>`);
-      parts.push(`<text x="${(cx(o) + 13).toFixed(1)}" y="${(cy(o) + 4).toFixed(1)}">${esc(o.label)}</text>`);
+      sizeParts.push(`<circle cx="${cx(o).toFixed(1)}" cy="${cy(o).toFixed(1)}" r="10" fill="${color}" fill-opacity="0.85" stroke="#222" stroke-width="2">${titleEl}</circle>`);
+      sizeParts.push(`<text x="${(cx(o) + 13).toFixed(1)}" y="${(cy(o) + 4).toFixed(1)}">${esc(o.label)}</text>`);
       continue;
     }
     const x = toX(o.y1), y = toY(o.x1); // y1/x1 give the top-left corner under this axis mapping
     const bw = (o.y1 - o.y0) * scale, bh = (o.x1 - o.x0) * scale;
-    parts.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${color}" fill-opacity="0.35" stroke="${color}" stroke-width="2"/>`);
-    parts.push(`<text x="${(x + 3).toFixed(1)}" y="${(y + 14).toFixed(1)}">${esc(o.label)}</text>`);
+    sizeParts.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${color}" fill-opacity="0.35" stroke="${color}" stroke-width="2">${titleEl}</rect>`);
+    sizeParts.push(`<text x="${(x + 3).toFixed(1)}" y="${(y + 14).toFixed(1)}">${esc(o.label)}</text>`);
+    posParts.push(`<circle cx="${cx(o).toFixed(1)}" cy="${cy(o).toFixed(1)}" r="3.5" fill="${color}" stroke="#111" stroke-width="1">${titleEl}</circle>`);
   }
   if (scene.gripper) {
     const gx = toX(scene.gripper.y), gy = toY(scene.gripper.x);
-    parts.push(`<circle cx="${gx.toFixed(1)}" cy="${gy.toFixed(1)}" r="3" fill="none" stroke="#ff4d4d" stroke-width="1.4" stroke-dasharray="2,1.5"/>`);
-    parts.push(`<text x="${(gx + 5).toFixed(1)}" y="${(gy + 3).toFixed(1)}">gripper</text>`);
+    posParts.push(`<circle cx="${gx.toFixed(1)}" cy="${gy.toFixed(1)}" r="3" fill="none" stroke="#ff4d4d" stroke-width="1.4" stroke-dasharray="2,1.5"><title>gripper</title></circle>`);
+    posParts.push(`<text x="${(gx + 5).toFixed(1)}" y="${(gy + 3).toFixed(1)}">gripper</text>`);
   }
-  svg.setAttribute("viewBox", `0 0 ${Math.max(1, w).toFixed(1)} ${Math.max(1, h).toFixed(1)}`);
-  svg.innerHTML = parts.join("");
+  svg.innerHTML =
+    `<g id="layer-relationship-g">${relParts.join("")}</g>` +
+    `<g id="layer-size-g">${sizeParts.join("")}</g>` +
+    `<g id="layer-position-g">${posParts.join("")}</g>`;
+  applySceneLayers();
+  sceneBaseVB = { x: 0, y: 0, w: Math.max(1, w), h: Math.max(1, h) };
+  resetSceneView();
 }
-document.getElementById("scene-gen-btn").addEventListener("click", () => { renderScene2D("generation"); saveUiState(); });
-document.getElementById("scene-repair-btn").addEventListener("click", () => { renderScene2D("repair"); saveUiState(); });
+function applySceneLayers() {
+  document.getElementById("layer-relationship-g").style.display = layerOn("layer-relationship") ? "" : "none";
+  document.getElementById("layer-size-g").style.display = layerOn("layer-size") ? "" : "none";
+  document.getElementById("layer-position-g").style.display = layerOn("layer-position") ? "" : "none";
+}
+for (const id of ["layer-position", "layer-size", "layer-relationship"]) {
+  document.getElementById(id).addEventListener("change", applySceneLayers);
+}
 let sceneGraphOn = false;
 document.getElementById("scene-graph-btn").addEventListener("click", (e) => {
   sceneGraphOn = !sceneGraphOn;
@@ -184,9 +199,7 @@ document.getElementById("scene-graph-btn").addEventListener("click", (e) => {
   if (!sceneGraphOn) return;
   const scene = currentScene();
   if (!scene) { el.innerHTML = `<div class="empty">no scene data</div>`; return; }
-  el.innerHTML = `<b>Legend:</b> ${scene.objects.length} objects (nodes), ${scene.relations.length} relations (edges, gap in mm) &middot; ` +
-    scene.objects.map((o) => `${esc(o.label)} (${esc(o.cat)})`).join(", ") +
-    (scene.relations.length ? `<br>` + scene.relations.map((r) => `${esc(r.a)}&ndash;${esc(r.b)} ${r.mm} mm`).join(" &middot; ") : "");
+  el.innerHTML = `${scene.objects.length} objects (nodes), ${scene.relations.length} relations (edges, gap in mm)`;
 });
 function currentScene() {
   if (DATA.scene_arms && DATA.scene_arms[sceneKind]) return DATA.scene_arms[sceneKind];
@@ -196,51 +209,55 @@ for (const arm of ["E1", "E2", "E3"]) {
   document.getElementById("scene-arm-" + arm.toLowerCase()).addEventListener("click", () => {
     sceneKind = arm;
     for (const a of ["E1", "E2", "E3"]) document.getElementById("scene-arm-" + a.toLowerCase()).classList.toggle("on", a === arm);
-    document.getElementById("scene-gen-btn").classList.remove("on");
-    document.getElementById("scene-repair-btn").classList.remove("on");
     renderScene2D(arm);
   });
 }
-renderScene2D("generation");
 
-/* ---------- archived SAM 3 output (reference, not live) ---------- */
+/* pan (drag) + zoom (wheel) over the scene SVG, via viewBox manipulation */
+let sceneBaseVB = { x: 0, y: 0, w: 240, h: 240 };
+let sceneVB = { ...sceneBaseVB };
+function resetSceneView() {
+  sceneVB = { ...sceneBaseVB };
+  document.getElementById("scene2d-svg").setAttribute(
+    "viewBox", `${sceneVB.x.toFixed(1)} ${sceneVB.y.toFixed(1)} ${sceneVB.w.toFixed(1)} ${sceneVB.h.toFixed(1)}`
+  );
+}
 (function () {
-  const archive = DATA.sam3_archive || { frames: [] };
-  const noteEl = document.getElementById("sam3-note");
-  noteEl.textContent = archive.frames.length ? "Archived example, not live" : "No archived example found";
-  noteEl.title = archive.frames.length
-    ? `From ${archive.source} — segmentation candidates System 1 reads to localize objects; this console's loop doesn't run perception.`
-    : `Expected under ${archive.source || "data/runs/exp04_scene"}.`;
-  document.getElementById("sam3-grid").innerHTML = archive.frames.map((f) => `
-    <div class="sam3-item">
-      <img src="${f.src}" loading="lazy" title="${esc(f.name)}" alt="SAM 3: ${esc(f.label || "")}">
-      <div class="cap">${esc(f.label || "?")}${f.score != null ? " " + f.score : ""}</div>
-    </div>`).join("") || `<div class="empty">no frames found</div>`;
-})();
-
-/* ---------- archived agentview frames (reference, not live) ---------- */
-(function () {
-  const archive = DATA.agentview_archive || { frames: [] };
-  const noteEl = document.getElementById("agentview-note");
-  noteEl.textContent = archive.frames.length ? "Archived example, not live" : "No archived example found";
-  noteEl.title = archive.frames.length
-    ? `From ${archive.source} — using the offline backend (no simulator or camera), so real frames aren't available yet.`
-    : `Expected under ${archive.source || "data/runs/exp04_scene"}.`;
-  const grid = document.getElementById("agentview-grid");
-  const frames = archive.frames;
-  const pairs = [];
-  for (let i = 0; i < frames.length; i += 2) {
-    if (frames[i + 1]) pairs.push([frames[i], frames[i + 1]]);
+  const svgEl = document.getElementById("scene2d-svg");
+  let dragging = false, lastX = 0, lastY = 0;
+  function applyVB() {
+    svgEl.setAttribute("viewBox", `${sceneVB.x.toFixed(1)} ${sceneVB.y.toFixed(1)} ${sceneVB.w.toFixed(1)} ${sceneVB.h.toFixed(1)}`);
   }
-  grid.innerHTML = pairs.map(([before, after]) => `
-    <div class="agentview-pair">
-      <div class="call">${esc(before.call)} <span style="color:var(--dim)">#${esc(before.index)}</span></div>
-      <div class="agentview-imgs">
-        <figure><img src="${before.src}" loading="lazy" title="before" alt="before ${esc(before.call)}"></figure>
-        <figure><img src="${after.src}" loading="lazy" title="after" alt="after ${esc(after.call)}"></figure>
-      </div>
-    </div>`).join("") || `<div class="empty">no frames found</div>`;
+  svgEl.addEventListener("pointerdown", (e) => {
+    dragging = true; lastX = e.clientX; lastY = e.clientY;
+    svgEl.setPointerCapture(e.pointerId);
+  });
+  svgEl.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const rect = svgEl.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    sceneVB.x -= (e.clientX - lastX) * (sceneVB.w / rect.width);
+    sceneVB.y -= (e.clientY - lastY) * (sceneVB.h / rect.height);
+    lastX = e.clientX; lastY = e.clientY;
+    applyVB();
+  });
+  ["pointerup", "pointercancel", "pointerleave"].forEach((ev) => svgEl.addEventListener(ev, () => { dragging = false; }));
+  svgEl.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    const rect = svgEl.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const mx = sceneVB.x + (e.clientX - rect.left) * (sceneVB.w / rect.width);
+    const my = sceneVB.y + (e.clientY - rect.top) * (sceneVB.h / rect.height);
+    const factor = e.deltaY > 0 ? 1.12 : 1 / 1.12;
+    sceneVB.x = mx - (mx - sceneVB.x) * factor;
+    sceneVB.y = my - (my - sceneVB.y) * factor;
+    sceneVB.w *= factor; sceneVB.h *= factor;
+    applyVB();
+  }, { passive: false });
+  svgEl.addEventListener("dblclick", resetSceneView); // quick way back to the fitted view
 })();
+
+renderScene2D("generation");
 
 /* ---------- top-level tabs: data-driven, so adding a tab is one entry here + matching markup ---------- */
 const TAB_KEY = "ants-console-active-tab";
