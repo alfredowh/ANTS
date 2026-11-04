@@ -294,6 +294,7 @@ const NAV_KEY = "ants-studio-nav", PANELS_KEY = "ants-studio-panels";
       main.classList.toggle("show-" + side, !!panels[side]);
       btns[side].classList.toggle("on", !!panels[side]);
       btns[side].title = (panels[side] ? "Hide " : "Show ") + labels[side];
+      btns[side].innerHTML = (side === "left") === !!panels[side] ? "&#9666;" : "&#9656;";
     }
     try { localStorage.setItem(PANELS_KEY, JSON.stringify(panels)); } catch (e) {}
   }
@@ -590,6 +591,7 @@ function percRolloutEnded() {
 
 switchTab((() => { try { return localStorage.getItem(TAB_KEY) || "console"; } catch (e) { return "console"; } })());
 
+window.startPolicyLoop = () => runBtn.click(); // /policy-dev in the chat does the same as the run button
 function runBtnLabel() {
   document.getElementById("run-btn").textContent =
     DATA.mode === "loop" ? "Run policy development loop" : "Run policy development step";

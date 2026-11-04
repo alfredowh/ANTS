@@ -23,6 +23,8 @@
   <div class="resize-handle" id="handle-left"></div>
 
   <div class="col" id="col-center">
+    <button class="edge-tab left" id="toggle-left" type="button" title="Show context panel (primitives, scene prompt)" aria-label="Show context panel (primitives, scene prompt)">&#9656;</button>
+    <button class="edge-tab right" id="toggle-right" type="button" title="Show run details (usage, reply, settings)" aria-label="Show run details (usage, reply, settings)">&#9666;</button>
     <div class="flowline" id="flowline">
       <span class="flow-loop" title="the loop repeats: Adversary attacks, a failure goes to Synthesizer, the gate decides, repeat">&#8634;</span>
       <div class="sys" id="sys2-badge" title="selector &rarr; proposer &rarr; rollout &rarr; diagnoser, all inside one call -- Loop only reports when the whole attack is done, not each inner step"><span class="dot"></span><span class="who">Adversary</span><span class="stage" id="sys2-stage">idle</span></div>

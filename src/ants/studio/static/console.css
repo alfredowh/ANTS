@@ -225,8 +225,14 @@ body[data-tab="console"] .console-only{display:inline-flex}
 .navsess .navnote{padding:0}
 .navsess .mono{font-family:var(--mono)}
 /* /policy-dev wizard */
-.wizard-chip{align-self:flex-start;margin:6px 0 0 4px;border:1px solid var(--line);background:var(--raise);color:var(--accent,#1877F2);border-radius:14px;padding:3px 10px;font-size:12px;cursor:pointer;flex:none}
+.wizard-chip{align-self:flex-start;margin:4px 0 0 4px;border:1px solid var(--line);background:var(--raise);color:var(--accent,#1877F2);border-radius:10px;padding:1px 8px;font-size:11px;line-height:1.4;cursor:pointer;flex:none}
 .wizard-chip:hover{border-color:var(--accent,#1877F2)}
 .turn.wizard-turn .main{white-space:pre-wrap}
 .turn.wizard-turn.needs .tk{color:#d9534f}
 #chat-attach.wizard-ask{border-color:var(--accent,#1877F2);color:var(--accent,#1877F2);box-shadow:0 0 0 3px rgba(24,119,242,.2)}
+
+#col-center{position:relative}
+.edge-tab{position:absolute;top:50%;transform:translateY(-50%);z-index:5;width:16px;height:56px;padding:0;border:1px solid var(--line);background:var(--raise);color:var(--muted);cursor:pointer;font-size:12px;line-height:1}
+.edge-tab:hover{color:var(--accent);border-color:var(--accent)}
+.edge-tab.left{left:0;border-left:0;border-radius:0 8px 8px 0}
+.edge-tab.right{right:0;border-right:0;border-radius:8px 0 0 8px}

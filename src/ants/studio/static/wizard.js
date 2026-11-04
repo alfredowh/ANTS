@@ -36,7 +36,7 @@
     }
     active = state.status === "active";
     chip.textContent = active ? "cancel wizard" : "/policy-dev";
-    chip.title = active ? "Stop the policy-dev wizard" : "Start the guided policy-development setup";
+    chip.title = active ? "Stop the policy-dev wizard" : "Run the policy development loop (type /policy-dev setup for the guided questions)";
     const askUpload = !!state.awaiting_upload;
     attach.disabled = !askUpload;
     attach.classList.toggle("wizard-ask", askUpload);
@@ -83,7 +83,13 @@
 
   window.wizardHandle = function (message) {
     const text = message.trim();
-    if (text.toLowerCase().startsWith("/policy-dev")) {
+    const low = text.toLowerCase();
+    if (low === "/policy-dev" || low === "/policy-dev run") {
+      userBubble(text);
+      if (window.startPolicyLoop) window.startPolicyLoop(); // asks for confirmation, then runs the loop
+      return true;
+    }
+    if (low.startsWith("/policy-dev")) { // "/policy-dev setup": the guided questions
       userBubble(text);
       seen = 0;
       post("/wizard", {action: "start"}).then((s) => render(s, false));
