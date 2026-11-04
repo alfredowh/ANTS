@@ -659,11 +659,6 @@ def make_handler(
             "repair": _scene2d_or_none(scene_repair_path or scene_generation_path),
             "same_source": scene_repair_path is None,
         },
-        "phases_summary": (
-            "Phase A, full closed loop (mock System 2, real Muse Code rewrites)."
-            if mode == "loop"
-            else "Phase A, one repair step only -- deployment (Phase B) is out of scope."
-        ),
         "loop_config": (
             {
                 "backend": loop_cfg.backend,

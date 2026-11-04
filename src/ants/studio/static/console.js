@@ -27,7 +27,6 @@ function renderToolList(el, tools) {
   });
 }
 
-document.getElementById("phase-summary").textContent = DATA.phases_summary;
 document.getElementById("incumbent-name").textContent = "incumbent: " + DATA.incumbent_name;
 renderToolList(document.getElementById("tools-left-wrap"), DATA.tools_left);
 
@@ -38,10 +37,11 @@ function renderRunSettings() {
   renderToolList(document.getElementById("tools-right"), DATA.tools_right);
   if (DATA.mode === "loop" && DATA.loop_config) {
     const c = DATA.loop_config;
+    const friendly = (v) => v === "mock" ? "offline (built-in)" : v;
     document.getElementById("config-tiles").innerHTML = [
-      ["Backend", c.backend], ["Max cycles", c.cycles], ["Severity (rho)", c.rho], ["Eta", c.eta],
+      ["Backend", friendly(c.backend)], ["Max cycles", c.cycles], ["Severity (rho)", c.rho], ["Eta", c.eta],
       ["Stall window (W)", c.stall_window], ["Nominal seeds", c.nominal_seeds.join(", ")],
-      ["Min tests to stop", c.min_tests], ["Adversary model", c.adversary_model],
+      ["Min tests to stop", c.min_tests], ["Adversary model", friendly(c.adversary_model)],
       ["Reasoning effort", c.reasoning_effort], ["Max model steps", c.max_model_steps],
       ["Synth token budget", c.synth_token_budget],
     ].map(([l, v]) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("");
@@ -207,7 +207,7 @@ renderScene2D("generation");
   const noteEl = document.getElementById("agentview-note");
   noteEl.textContent = archive.frames.length ? "Archived example, not live" : "No archived example found";
   noteEl.title = archive.frames.length
-    ? `From ${archive.source} — this console's loop uses the mock System 2 backend (no simulator or camera), so real frames aren't available yet.`
+    ? `From ${archive.source} — using the offline backend (no simulator or camera), so real frames aren't available yet.`
     : `Expected under ${archive.source || "data/runs/exp04_scene"}.`;
   const grid = document.getElementById("agentview-grid");
   const frames = archive.frames;
