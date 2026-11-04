@@ -263,22 +263,6 @@ function resetSceneView() {
 
 renderScene2D("generation");
 
-/* ---------- top-level tabs: data-driven, so adding a tab is one entry here + matching markup ---------- */
-const TAB_KEY = "ants-console-active-tab";
-const TABS = ["console", "perception", "synthesizer", "adversary"].filter(
-  (name) => document.getElementById("tab-" + name)
-);
-function switchTab(name) {
-  if (!TABS.includes(name)) name = "console";
-  TABS.forEach((t) => {
-    document.getElementById("tab-" + t).classList.toggle("on", t === name);
-    document.getElementById("tabbtn-" + t).classList.toggle("on", t === name);
-  });
-  document.body.dataset.tab = name;
-  try { localStorage.setItem(TAB_KEY, name); } catch (e) {}
-}
-TABS.forEach((t) => document.getElementById("tabbtn-" + t).addEventListener("click", () => switchTab(t)));
-document.getElementById("perception-btn").addEventListener("click", () => switchTab("perception"));
 document.body.dataset.tab = "console";
 
 /* ---------- navigator + side-panel visibility (claude.ai-style: only the main window by default) ---------- */
@@ -355,8 +339,6 @@ function resetSessionUi() {
   document.getElementById("usage-tiles").innerHTML = "";
   document.getElementById("reply-box").textContent = "(waiting)";
   runBtn.disabled = false;
-  renderSynthPanel();
-  renderAdvPanel();
   updateCenterLayout();
   refreshRunList();
   refreshSession();
@@ -370,237 +352,6 @@ document.getElementById("new-session").addEventListener("click", () => {
     resetSessionUi();
   }).catch(() => { msg.textContent = "server unreachable"; });
 });
-
-/* ---------- source badge: LIVE (green, pulsing) or ARCHIVED (muted) or MISSING ---------- */
-function renderSrcBadge(elId, live, available, archivedLabel) {
-  const el = document.getElementById(elId);
-  if (available === false) { el.textContent = "missing"; el.className = "src-badge missing"; return; }
-  el.textContent = live ? "live" : "archived";
-  el.className = "src-badge" + (live ? " live" : "");
-  el.title = live ? "" : archivedLabel;
-}
-
-/* ---------- Perception tab: agentview scrubber + SAM 3 grounding + cuRobo view, each togglable ----------
-   Each layer starts on its archived fallback. If the loop is run with --backend cap_harness, the
-   server's watch_aspire_live() thread tails the real rollout's keyframes/SAM3 overlays on disk as
-   cap_harness writes them (one directory per primitive call, written WHILE the subprocess is still
-   running -- confirmed in ASPIRE/src/cap_harness/artifacts.py) and broadcasts perception_run /
-   perception_keyframe / perception_sam3 over the same SSE channel as everything else. The first such
-   event for a layer flips it from archived to live and starts replacing its content; nothing here
-   fakes liveness the data doesn't have -- cuRobo's trajectory/collision view has no such live path
-   (its archived plan_viewer.html is built by a separate offline script, dev/curobo/make_viewer.py,
-   not produced by an ordinary rollout), so it stays on its archived embed permanently, honestly. */
-let percAgentviewFrames = [];
-let percAgentviewIdx = 0, percAgentviewPlaying = false, percAgentviewTimer = null;
-let percSam3Frames = [];
-let percLiveRunId = null;
-let percMode = localStorage.getItem("ants-perc-mode") || "auto"; // auto | live | replay
-let percRolloutActive = false;
-let percLiveFrames = [], percLiveSam3 = [];
-let percArchivedFrames = [], percArchivedSam3 = [];
-
-function percShowLive() { return percMode === "live" || (percMode === "auto" && percRolloutActive); }
-function percApplySource() {
-  const live = percShowLive() && percLiveFrames.length;
-  // Live is a stream, not a replay: hide slider/play controls while live frames arrive.
-  // They come back automatically when the rollout ends (percRolloutEnded -> auto replay).
-  document.getElementById("perc-controls").style.display = live ? "none" : "";
-  percAgentviewFrames = live ? percLiveFrames : percArchivedFrames;
-  percSam3Frames = live ? percLiveSam3 : percArchivedSam3;
-  percAgentviewIdx = Math.min(percAgentviewIdx, Math.max(0, percAgentviewFrames.length - 1));
-  if (percAgentviewFrames.length) percRenderFrame();
-  percRenderSam3();
-  for (const m of ["auto", "live", "replay"]) {
-    document.getElementById("perc-mode-" + m).classList.toggle("on", percMode === m);
-  }
-}
-
-function percRenderFrame() {
-  const f = percAgentviewFrames[percAgentviewIdx];
-  if (!f) return;
-  document.getElementById("perc-player-img").src = f.src;
-  document.getElementById("perc-player-pos").textContent = percAgentviewIdx + 1;
-  document.getElementById("perc-player-total").textContent = percAgentviewFrames.length;
-  document.getElementById("perc-player-call").textContent = (f.phase || "") + " " + (f.call || "");
-  document.getElementById("perc-player-index").textContent = "#" + (f.index ?? "");
-  const slider = document.getElementById("perc-player-slider");
-  slider.max = percAgentviewFrames.length - 1;
-  slider.value = percAgentviewIdx;
-}
-
-function percRenderSam3() {
-  document.getElementById("perc-sam3-grid").innerHTML = percSam3Frames.map((s) => `
-    <div class="sam3-item">
-      <img src="${s.src}" loading="lazy" title="${esc(s.name)}" alt="SAM 3: ${esc(s.label || "")}">
-      <div class="cap">${esc(s.label || "?")}${s.score != null ? " " + s.score : ""}</div>
-    </div>`).join("") || `<div class="empty">no frames found</div>`;
-}
-
-function percGoLive(runId) {
-  percRolloutActive = true;
-  if (percLiveRunId === runId) { percApplySource(); return; }
-  percLiveRunId = runId;
-  percLiveFrames = [];
-  percLiveSam3 = [];
-  percAgentviewPlaying = false;
-  clearInterval(percAgentviewTimer);
-  document.getElementById("perc-player-play").textContent = "play";
-  if (percShowLive()) {
-    renderSrcBadge("perc-agentview-badge", true, true, "");
-    document.getElementById("perc-agentview-note").textContent =
-      "LIVE — policy rollout running (run " + runId + "). Expect one new frame each time the robot " +
-      "finishes a primitive call, every few seconds — this is a rollout, not video. The frame slider " +
-      "is hidden while live and returns when the rollout ends.";
-    renderSrcBadge("perc-sam3-badge", true, true, "");
-    document.getElementById("perc-sam3-note").textContent = "Live detections for run " + runId + ".";
-  }
-  percApplySource();
-}
-
-function percPushKeyframe(ev) {
-  percGoLive(ev.run_id);
-  percLiveFrames.push(ev);
-  if (percShowLive()) { percAgentviewIdx = percLiveFrames.length - 1; }
-  percApplySource();
-}
-
-function percPushSam3(ev) {
-  percGoLive(ev.run_id);
-  percLiveSam3.push(ev);
-  percApplySource();
-}
-
-function percRolloutEnded() {
-  percRolloutActive = false;
-  if (percMode === "auto") {
-    renderSrcBadge("perc-agentview-badge", false, percArchivedFrames.length ? true : null,
-      "Rollout finished — back to replay. Run with --backend cap_harness for live.");
-    document.getElementById("perc-agentview-note").textContent = "Rollout finished — showing replay (archived).";
-    renderSrcBadge("perc-sam3-badge", false, percArchivedSam3.length ? true : null,
-      "Rollout finished — back to replay.");
-    document.getElementById("perc-sam3-note").textContent = "Rollout finished — showing replay (archived).";
-  }
-  percApplySource();
-}
-
-(function () {
-  const agentview = DATA.agentview_archive || { frames: [], live: false };
-  const sam3 = DATA.sam3_archive || { frames: [], live: false };
-  const planViewer = DATA.plan_viewer || { available: false, live: false };
-
-  // -- layer toggles, persisted --
-  const TOGGLE_KEY = "ants-perception-toggles";
-  const panels = { agentview: "perc-panel-agentview", sam3: "perc-panel-sam3", curobo: "perc-panel-curobo" };
-  let toggles = { agentview: true, sam3: true, curobo: true };
-  try { toggles = { ...toggles, ...JSON.parse(localStorage.getItem(TOGGLE_KEY) || "{}") }; } catch (e) {}
-  function applyToggles() {
-    for (const [k, panelId] of Object.entries(panels)) {
-      document.getElementById(panelId).classList.toggle("off", !toggles[k]);
-      document.getElementById("perc-toggle-" + k).checked = toggles[k];
-    }
-  }
-  for (const k of Object.keys(panels)) {
-    document.getElementById("perc-toggle-" + k).addEventListener("change", (e) => {
-      toggles[k] = e.target.checked;
-      applyToggles();
-      try { localStorage.setItem(TOGGLE_KEY, JSON.stringify(toggles)); } catch (err) {}
-    });
-  }
-  applyToggles();
-
-  // -- agentview player, mounted directly in the tab (not a modal); starts on the archive --
-  renderSrcBadge("perc-agentview-badge", false, agentview.frames.length ? true : null,
-    `From ${agentview.source} — run with --backend cap_harness for a live camera feed during the rollout.`);
-  document.getElementById("perc-agentview-note").textContent = agentview.frames.length
-    ? "Showing an archived rollout; switches to the live feed the moment a real rollout starts."
-    : "No archived example found either.";
-  percArchivedFrames = agentview.frames;
-  percAgentviewFrames = agentview.frames;
-  for (const m of ["auto", "live", "replay"]) {
-    document.getElementById("perc-mode-" + m).addEventListener("click", () => {
-      percMode = m;
-      localStorage.setItem("ants-perc-mode", m);
-      percApplySource();
-    });
-  }
-  percApplySource();
-  if (percAgentviewFrames.length) {
-    percRenderFrame();
-  } else {
-    document.getElementById("perc-panel-agentview").querySelector(".player-frame").innerHTML = `<div class="empty">no frames found</div>`;
-  }
-  document.getElementById("perc-player-prev").addEventListener("click", () => { percAgentviewIdx = Math.max(0, percAgentviewIdx - 1); percRenderFrame(); });
-  document.getElementById("perc-player-next").addEventListener("click", () => { percAgentviewIdx = Math.min(percAgentviewFrames.length - 1, percAgentviewIdx + 1); percRenderFrame(); });
-  document.getElementById("perc-player-slider").addEventListener("input", (e) => { percAgentviewIdx = +e.target.value; percRenderFrame(); });
-  document.getElementById("perc-player-play").addEventListener("click", (e) => {
-    percAgentviewPlaying = !percAgentviewPlaying;
-    e.target.textContent = percAgentviewPlaying ? "pause" : "play";
-    if (percAgentviewPlaying) {
-      percAgentviewTimer = setInterval(() => {
-        percAgentviewIdx = percAgentviewIdx + 1 >= percAgentviewFrames.length ? 0 : percAgentviewIdx + 1;
-        percRenderFrame();
-      }, 500);
-    } else { clearInterval(percAgentviewTimer); }
-  });
-
-  // -- SAM 3 grounding gallery; starts on the archive --
-  renderSrcBadge("perc-sam3-badge", false, sam3.frames.length ? true : null,
-    `From ${sam3.source} — run with --backend cap_harness for live detections during the rollout.`);
-  document.getElementById("perc-sam3-note").textContent = sam3.frames.length
-    ? "Showing archived detections; switches to live the moment a real rollout starts."
-    : "No archived example found either.";
-  percArchivedSam3 = sam3.frames;
-  percSam3Frames = sam3.frames;
-  percRenderSam3();
-
-  // -- cuRobo trajectory & collision view, embedded (not linked out); no live path exists --
-  renderSrcBadge("perc-curobo-badge", false, planViewer.available,
-    "From data/runs/curobo/exp10 (exp09-11, the held-bowl-attached work). Its plan_viewer.html is " +
-    "built by a separate offline script (dev/curobo/make_viewer.py), not produced by an ordinary " +
-    "rollout, so this stays archived even with --backend cap_harness -- there is no live path for it.");
-  if (planViewer.available) {
-    const frame = document.getElementById("perc-curobo-frame");
-    frame.src = "/perception/planviewer";
-    document.getElementById("perc-curobo-note").textContent =
-      "Latest archived cuRobo 3D viewer (" + (planViewer.name || "exp11") + "), embedded as-is; no live trajectory source exists yet. " +
-      "Collision bodies / 3D scan / Paths buttons above toggle the viewer's own layers.";
-    // The viewer is same-origin, so the console toggles click its own layer buttons
-    // (data-l="cloud|start|goal|straight|planned"). If a future viewer changes those,
-    // the buttons degrade to no-ops and the viewer's own controls still work.
-    const layerGroups = {
-      "curobo-tgl-collision": ["start", "goal"],
-      "curobo-tgl-scan": ["cloud"],
-      "curobo-tgl-paths": ["straight", "planned"],
-    };
-    const clickLayers = (layers, on) => {
-      try {
-        const doc = frame.contentDocument;
-        if (!doc) return;
-        for (const l of layers) {
-          const b = doc.querySelector(`[data-l="${l}"]`);
-          if (b && b.classList.contains("on") !== on) b.click();
-        }
-      } catch (e) { /* viewer changed; its own layer buttons still work */ }
-    };
-    for (const [btnId, layers] of Object.entries(layerGroups)) {
-      document.getElementById(btnId).addEventListener("click", (e) => {
-        const on = !e.target.classList.contains("on");
-        e.target.classList.toggle("on", on);
-        clickLayers(layers, on);
-      });
-    }
-    frame.addEventListener("load", () => {
-      for (const [btnId, layers] of Object.entries(layerGroups)) {
-        clickLayers(layers, document.getElementById(btnId).classList.contains("on"));
-      }
-    });
-  } else {
-    document.getElementById("perc-curobo-frame").remove();
-    document.getElementById("perc-curobo-note").textContent = "No archived cuRobo plan viewer found.";
-  }
-})();
-
-switchTab((() => { try { return localStorage.getItem(TAB_KEY) || "console"; } catch (e) { return "console"; } })());
 
 window.startPolicyLoop = () => runBtn.click(); // /policy-dev in the chat does the same as the run button
 function runBtnLabel() {
@@ -771,7 +522,6 @@ function handleLoopEvent(row) {
       if (row.rewrite_detail) {
         const idx = cycleDetails.push(row) - 1;
         main += `<br><span class="details-link" data-detail-i="${idx}">View details (reasoning, diff, cache)</span>`;
-        renderSynthPanel();
       }
     }
     if (row.gate) {
@@ -810,12 +560,10 @@ function handleAttackEvent(a) {
   } else {
     setSys("orch", true, "replaying candidate / checking robust");
   }
-  addTurn("task", `<div class="tk">attack ${esc(a.attack_id)}</div><div class="main">Adversary attacked with <b>${esc(a.category)}</b> (severity ${a.severity}) &rarr; <b>${esc(a.outcome)}</b></div>`);
-  renderAdvPanel();
+  addTurn("task", `<div class="tk">attack ${esc(a.attack_id)}</div><div class="main">Adversary attacked with <b>${esc(a.category)}</b> (severity ${a.severity}) &rarr; <b>${esc(a.outcome)}</b><br><span class="replay-link" data-attack="${esc(a.attack_id)}">Open in Replay</span></div>`);
 }
 
 function handleDone(payload) {
-  percRolloutEnded();
   setStatus("done", "done");
   runBtn.disabled = false;
   resetSys();
@@ -838,7 +586,6 @@ function handleDone(payload) {
 }
 
 function handleError(payload) {
-  percRolloutEnded();
   setStatus("error", "error");
   runBtn.disabled = false;
   addTurn("error", `<div class="tk">error</div><div class="main">${esc(payload.message)}</div>`);
@@ -900,24 +647,16 @@ function openStream() {
   const es = new EventSource("/events");
   es.onmessage = (ev) => {
     const data = JSON.parse(ev.data);
+    if (window.studioEvent) window.studioEvent(data); // Adversary view refresh
     if (window.wizardEvent) window.wizardEvent(data); // one shared connection (browsers allow only ~6 per site)
     if (data.kind === "muse_event") handleMuseEvent(data.event);
     else if (data.kind === "loop_event") handleLoopEvent(data.row);
     else if (data.kind === "attack_event") handleAttackEvent(data);
     else if (data.kind === "run_started") {
-      if (data.backend === "mock") {
-        document.getElementById("perc-agentview-note").textContent =
-          "This run uses the mock backend — there is no robot and no camera, so no live frames will " +
-          "arrive. For the live robot view, restart the console with --backend cap_harness.";
-      }
       document.getElementById("run-folder").textContent = "saving to " + data.run_dir;
       addTurn("task", `<div class="tk">run started</div><div class="main">saving this run to <b>${esc(data.run_dir)}</b> (backend: ${esc(data.backend)})</div>`);
       currentRunName = data.run_dir.split("/").pop();
-      renderAdvPanel();
     }
-    else if (data.kind === "perception_run") percGoLive(data.run_id);
-    else if (data.kind === "perception_keyframe") percPushKeyframe(data);
-    else if (data.kind === "perception_sam3") percPushSam3(data);
     else if (data.kind === "session_reset") { resetSessionUi(); return; }
     else if (data.kind === "done") handleDone(data);
     else if (data.kind === "error") handleError(data);
@@ -935,8 +674,6 @@ runBtn.addEventListener("click", () => {
   rewriteTokenTotal = 0;
   cycleDetails = [];
   currentRunName = null;
-  renderSynthPanel();
-  renderAdvPanel();
   runBtn.disabled = true;
   turnCount = 0;
   turnsEl.innerHTML = "";
@@ -1097,89 +834,6 @@ document.getElementById("chat-input").addEventListener("keydown", (e) => {
     if (input.disabled) stop();
   }).observe(input, {attributes: true, attributeFilter: ["disabled"]});
 })();
-
-/* ---------- Perception tab: Synthesizer / Adversary detail toggle ----------
-   Merges the loop's own rollout/result logging into one place: the Synthesizer side reuses
-   cycleDetails (same data the per-cycle "View details" modal already uses), the Adversary side
-   reads this run's attacks.jsonl (written in ants.studio.run's exact row shape by on_attack in
-   console_server.py, so it is readable by Daniel's existing Replay-view data shape too). Either
-   side shows a simple "missing" badge instead of an error when a run has no such logging yet
-   (an old run folder, or a run that hasn't reached its first attack/repair). */
-let percDetailSide = "synth";
-
-function setPercDetailBadge(hasData) {
-  const el = document.getElementById("perc-detail-badge");
-  el.textContent = hasData ? "archived" : "missing";
-  el.className = "src-badge" + (hasData ? "" : " missing");
-}
-
-function renderSynthPanel() {
-  const body = document.getElementById("perc-detail-synth-body");
-  if (!cycleDetails.length) {
-    body.innerHTML = `<div class="perc-empty">no repairs logged yet for this run</div>`;
-  } else {
-    body.innerHTML = cycleDetails.map((row, idx) => {
-      const detail = row.rewrite_detail || {};
-      const why = (detail.why || "").slice(0, 200);
-      return `<div class="turn">
-        <div class="tk">cycle ${esc(String(row.cycle))} &middot; v${esc(row.policy_version ?? "?")} &rarr; v${esc(row.candidate_version ?? "?")}</div>
-        <div class="main">${esc(why) || "(no WHY note)"}</div>
-        <span class="details-link" data-detail-i="${idx}">View full details</span>
-      </div>`;
-    }).reverse().join("");
-  }
-  if (percDetailSide === "synth") setPercDetailBadge(cycleDetails.length > 0);
-}
-
-function renderAdvPanel() {
-  const body = document.getElementById("perc-detail-adv-body");
-  if (!currentRunName) {
-    body.innerHTML = `<div class="perc-empty">no run yet</div>`;
-    if (percDetailSide === "adv") setPercDetailBadge(false);
-    return;
-  }
-  fetch("/attacks/" + encodeURIComponent(currentRunName))
-    .then((r) => { if (!r.ok) throw new Error("no attacks.jsonl"); return r.text(); })
-    .then((text) => {
-      const rows = text.split("\n").filter((l) => l.trim()).map((l) => {
-        try { return JSON.parse(l); } catch (e) { return null; }
-      }).filter(Boolean);
-      if (!rows.length) {
-        body.innerHTML = `<div class="perc-empty">no attacks logged yet</div>`;
-      } else {
-        body.innerHTML = rows.map((row) => {
-          const p = (row.report && row.report.perturbation) || {};
-          const res = (row.report && row.report.result) || {};
-          return `<div class="turn">
-            <div class="tk">${esc(p.category || "?")} &middot; severity ${p.severity ?? "?"}</div>
-            <div class="main"><b>${esc(res.outcome || "?")}</b>${row.explanation ? "<br>" + esc(row.explanation) : ""}</div>
-          </div>`;
-        }).reverse().join("");
-      }
-      if (percDetailSide === "adv") setPercDetailBadge(rows.length > 0);
-    })
-    .catch(() => {
-      body.innerHTML = `<div class="perc-empty">no attacks logged yet</div>`;
-      if (percDetailSide === "adv") setPercDetailBadge(false);
-    });
-}
-
-function switchPercDetailSide(side) {
-  percDetailSide = side;
-  document.getElementById("perc-side-synth").classList.toggle("on", side === "synth");
-  document.getElementById("perc-side-adv").classList.toggle("on", side === "adv");
-  document.getElementById("perc-detail-synth-body").hidden = side !== "synth";
-  document.getElementById("perc-detail-adv-body").hidden = side !== "adv";
-  if (side === "synth") renderSynthPanel(); else renderAdvPanel();
-}
-document.getElementById("perc-side-synth").addEventListener("click", () => switchPercDetailSide("synth"));
-document.getElementById("perc-side-adv").addEventListener("click", () => switchPercDetailSide("adv"));
-document.getElementById("perc-detail-synth-body").addEventListener("click", (e) => {
-  const link = e.target.closest(".details-link");
-  if (link) openCycleDetailModal(+link.dataset.detailI);
-});
-renderSynthPanel();
-renderAdvPanel();
 
 openStream();
 restoreUiState();

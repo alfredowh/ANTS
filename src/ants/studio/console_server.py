@@ -33,6 +33,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
+from ants.studio import adversary_view
 from ants.studio.policy_wizard import WizardManager, launch_generation
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -40,15 +41,12 @@ PHASES_DOC = REPO_ROOT / "docs" / "orchestrator" / "phases.md"
 STUDIO_DIR = Path(__file__).parent
 VIEWS_DIR = STUDIO_DIR / "views"
 STATIC_DIR = STUDIO_DIR / "static"
-# Whitelist: every /static/<name> and /views/<name>_stub route this server will serve.
+# Whitelist: every /static/<name> route this server will serve.
 STATIC_FILES = {
     "console.css": STATIC_DIR / "console.css",
     "console.js": STATIC_DIR / "console.js",
     "wizard.js": STATIC_DIR / "wizard.js",
-}
-STUB_FILES = {
-    "synthesizer_stub": VIEWS_DIR / "synthesizer_stub.html",
-    "adversary_stub": VIEWS_DIR / "adversary_stub.html",
+    "studio_switch.js": STATIC_DIR / "studio_switch.js",
 }
 
 
@@ -57,52 +55,10 @@ def _assemble_shell() -> str:
     shell = (VIEWS_DIR / "shell.html").read_text(encoding="utf-8")
     fragments = {
         "<!--__AGENT_CONSOLE__-->": (VIEWS_DIR / "agent_console.html").read_text(encoding="utf-8"),
-        "<!--__PERCEPTION__-->": (VIEWS_DIR / "perception.html").read_text(encoding="utf-8"),
-        "<!--__SYNTHESIZER__-->": (VIEWS_DIR / "synthesizer.html").read_text(encoding="utf-8"),
-        "<!--__ADVERSARY__-->": (VIEWS_DIR / "adversary.html").read_text(encoding="utf-8"),
     }
     for marker, content in fragments.items():
         shell = shell.replace(marker, content)
     return shell
-
-
-# Archived example only: a real simulator rollout's agentview keyframes (exp04_scene, E3 evidence
-# arm, sample0). This console's own loop runs Adversary on the mock backend, which has no simulator
-# or camera -- there is nothing live to show here yet. Kept as a labelled reference, not live data.
-AGENTVIEW_ARCHIVE_BASE = REPO_ROOT / "data" / "runs" / "exp04_scene" / "E-E3" / "sample0"
-
-
-def _find_agentview_keyframes() -> dict[str, Path]:
-    """name ("000001-before-open-gripper") -> its agentview.png, in one archived sample run."""
-    matches = sorted(AGENTVIEW_ARCHIVE_BASE.rglob("media/keyframes/*/agentview.png"))
-    return {m.parent.name: m for m in matches}
-
-
-# Archived cuRobo trajectory/collision-sphere viewer (exp09-11, the held-bowl-attached work), a
-# separate pre-built static page -- reused by linking out to it, not rebuilt here.
-def _latest_plan_viewer() -> Path | None:
-    """Newest cuRobo plan viewer (exp11 preferred over exp10), by experiment number then mtime."""
-    base = REPO_ROOT / "data" / "runs" / "curobo"
-    candidates = sorted(base.glob("exp*/**/plan_viewer/index*.html"))
-    if not candidates:
-        return None
-
-    def rank(p: Path) -> tuple[int, float]:
-        import re
-
-        m = re.search(r"exp(\d+)", str(p))
-        return (int(m.group(1)) if m else 0, p.stat().st_mtime)
-
-    return max(candidates, key=rank)
-
-
-PLAN_VIEWER_PATH = _latest_plan_viewer()
-
-
-def _find_sam3_overlays() -> dict[str, Path]:
-    """name ("sam3-000001-camera-agentview") -> its overlay PNG, same archived sample run."""
-    matches = sorted(AGENTVIEW_ARCHIVE_BASE.rglob("media/overlays/sam3-*.png"))
-    return {m.stem: m for m in matches}
 
 
 def _parse_why(reply_text: str) -> str:
@@ -113,106 +69,6 @@ def _parse_why(reply_text: str) -> str:
             break
         lines.append(line)
     return "\n".join(lines).strip()
-
-
-def _sam3_overlay_meta(png_path: Path) -> dict:
-    """Top SAM3 candidate (label, score) from the overlay's sibling JSON, if present."""
-    json_path = png_path.with_suffix(".json")
-    if not json_path.exists():
-        return {}
-    try:
-        data = json.loads(json_path.read_text(encoding="utf-8"))
-    except (json.JSONDecodeError, OSError):
-        return {}
-    candidates = data.get("candidates") or []
-    top = max(candidates, key=lambda c: c.get("score", 0), default=None)
-    if top is None:
-        return {}
-    return {"label": top.get("label"), "score": round(top.get("score", 0), 2)}
-
-
-def _split_keyframe_name(name: str) -> dict[str, str]:
-    """ "000001-before-open-gripper" -> {index: "000001", phase: "before", call: "open gripper"}."""
-    index, _, rest = name.partition("-")
-    phase, _, call = rest.partition("-")
-    return {"index": index, "phase": phase, "call": call.replace("-", " ")}
-
-
-# Where AspireBackend.run_program() writes each real rollout (adversary/rollout/aspire_backend.py's
-# AspireConfig.output_root default). cap_harness's own artifact writer appends one keyframe/overlay
-# directory to disk as each primitive call finishes, WHILE the subprocess is still running -- see
-# ASPIRE/src/cap_harness/artifacts.py's `_keyframe`/overlay writers. So a thread polling this
-# directory tree genuinely observes a rollout in progress, not just its finished result.
-ASPIRE_LIVE_ROOT = REPO_ROOT / "data" / "runs" / "aspire"
-
-
-def watch_aspire_live(state: RunState, stop: threading.Event) -> None:
-    """Tail the newest real rollout's keyframes/SAM3 overlays, broadcasting each as it appears."""
-    started = time.time()
-    current: Path | None = None
-    seen_kf: set[str] = set()
-    seen_ov: set[str] = set()
-    while not stop.is_set():
-        if ASPIRE_LIVE_ROOT.exists():
-            # Only runs touched since this watcher started count as live; an older finished
-            # run must never flip the Perception tab to "live" with stale frames.
-            run_dirs = sorted(
-                (
-                    p
-                    for p in ASPIRE_LIVE_ROOT.iterdir()
-                    if p.is_dir() and p.stat().st_mtime >= started - 1.0
-                ),
-                key=lambda p: p.stat().st_mtime,
-            )
-            if run_dirs and run_dirs[-1] != current:
-                current = run_dirs[-1]
-                seen_kf, seen_ov = set(), set()
-                state.broadcast({"kind": "perception_run", "run_id": current.name})
-            if current is not None:
-                kf_dir = current / "media" / "keyframes"
-                if kf_dir.exists():
-                    for kf in sorted(kf_dir.iterdir()):
-                        img = kf / "agentview.png"
-                        if kf.name not in seen_kf and img.exists():
-                            seen_kf.add(kf.name)
-                            state.broadcast(
-                                {
-                                    "kind": "perception_keyframe",
-                                    "run_id": current.name,
-                                    "src": f"/live/keyframe/{current.name}/{kf.name}",
-                                    **_split_keyframe_name(kf.name),
-                                }
-                            )
-                ov_dir = current / "media" / "overlays"
-                if ov_dir.exists():
-                    for ov in sorted(ov_dir.glob("sam3-*.png")):
-                        if ov.stem not in seen_ov:
-                            seen_ov.add(ov.stem)
-                            state.broadcast(
-                                {
-                                    "kind": "perception_sam3",
-                                    "run_id": current.name,
-                                    "name": ov.stem,
-                                    "src": f"/live/overlay/{current.name}/{ov.stem}",
-                                    **_sam3_overlay_meta(ov),
-                                }
-                            )
-        time.sleep(0.3)
-
-
-def _live_asset_path(run_id: str, rest: str, *, overlay: bool) -> Path | None:
-    """Resolve a /live/keyframe or /live/overlay request, refusing anything outside the root."""
-    candidate = (
-        ASPIRE_LIVE_ROOT / run_id / "media" / "overlays" / f"{rest}.png"
-        if overlay
-        else ASPIRE_LIVE_ROOT / run_id / "media" / "keyframes" / rest / "agentview.png"
-    )
-    try:
-        resolved = candidate.resolve()
-        resolved.relative_to(ASPIRE_LIVE_ROOT.resolve())
-    except (OSError, ValueError):
-        return None
-    return resolved if resolved.exists() else None
 
 
 def _list_runs(out_dir: Path) -> list[dict]:
@@ -233,17 +89,6 @@ def _list_runs(out_dir: Path) -> list[dict]:
             {"name": d.name, "cycles": lines("loop.jsonl"), "attacks": lines("attacks.jsonl")}
         )
     return runs
-
-
-def _attacks_jsonl_path(out_dir: Path, run_name: str) -> Path | None:
-    """Resolve a /attacks/<run_name> request, refusing anything outside out_dir."""
-    candidate = out_dir / run_name / "attacks.jsonl"
-    try:
-        resolved = candidate.resolve()
-        resolved.relative_to(out_dir.resolve())
-    except (OSError, ValueError):
-        return None
-    return resolved if resolved.exists() else None
 
 
 TOOLS_LEFT = [
@@ -652,6 +497,7 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
     """Drive one real `Loop.run()` call, tailing `loop.jsonl` live and broadcasting each row."""
     from ants.adversary import Adversary, AdversaryConfig
     from ants.adversary.perturbations import Bounds
+    from ants.adversary.rollout.aspire_backend import AspireConfig
     from ants.contracts import Policy
     from ants.orchestrator.loop import Loop, LoopConfig
     from ants.orchestrator.synthesis import GenerateSynthesizer
@@ -684,6 +530,10 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
     }
     if cfg.categories:
         adv_kwargs["categories"] = cfg.categories
+    if (
+        cfg.backend == "cap_harness"
+    ):  # rollout videos inside the run folder, where the Replay finds them
+        adv_kwargs["aspire"] = AspireConfig(output_root=run_dir / "aspire")
     adv = Adversary.from_config(AdversaryConfig(**adv_kwargs))
 
     muse_orch = MuseOrchestrator(
@@ -742,6 +592,7 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
         return GateAnswer(channel="text", text=text)
 
     loop = Loop(adv, synth, loop_cfg, on_attack=on_attack, ask_human=ask_human)
+    adversary_view.write_run_meta(run_dir, adv, policy, cfg)
 
     log_path = run_dir / "loop.jsonl"
     stop_tail = threading.Event()
@@ -785,16 +636,11 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
                     pos = f.tell()
             time.sleep(0.3)
 
-    threads = [threading.Thread(target=tail, daemon=True)]
-    if cfg.backend == "cap_harness":
-        threads.append(
-            threading.Thread(target=watch_aspire_live, args=(state, stop_tail), daemon=True)
-        )
-    for t in threads:
-        t.start()
+    threading.Thread(target=tail, daemon=True).start()
     try:
         result = loop.run(policy)
         time.sleep(0.4)  # let the tailer pick up the final "end" row before it stops
+        adversary_view.mark_finished(run_dir)
         state.broadcast(
             {
                 "kind": "done",
@@ -841,6 +687,7 @@ def make_handler(
     max_model_steps: int = 20,
     loop_cfg: LoopRunConfig | None = None,
     scene_generation_path: Path | None = None,
+    adversary_run: Path | None = None,
     scene_repair_path: Path | None = None,
     sessions_dir: Path | None = None,
     session_id: str | None = None,
@@ -865,16 +712,6 @@ def make_handler(
     tools_right = (
         TOOLS_RIGHT if mode == "loop" else [t for t in TOOLS_RIGHT if t["role"] != "Adversary"]
     )
-    agentview = _find_agentview_keyframes()
-    agentview_list = [
-        {"name": name, "src": f"/agentview/{name}", **_split_keyframe_name(name)}
-        for name in sorted(agentview)
-    ]
-    sam3 = _find_sam3_overlays()
-    sam3_list = [
-        {"name": name, "src": f"/sam3/{name}", **_sam3_overlay_meta(sam3[name])}
-        for name in sorted(sam3)
-    ]
     data = {
         "incumbent_name": incumbent.name,
         "incumbent_code": incumbent.read_text(encoding="utf-8"),
@@ -903,25 +740,6 @@ def make_handler(
             if loop_cfg
             else None
         ),
-        "agentview_archive": {
-            "frames": agentview_list,
-            "source": str(AGENTVIEW_ARCHIVE_BASE.relative_to(REPO_ROOT)),
-            # No live camera feed exists yet: Adversary runs on the mock backend (no simulator, no
-            # camera). "live" stays False until a real rollout backend actually streams frames; a
-            # future live source should just flip this and add a live frame URL, not change the
-            # the shape the perception tab reads.
-            "live": False,
-        },
-        "sam3_archive": {
-            "frames": sam3_list,
-            "source": str(AGENTVIEW_ARCHIVE_BASE.relative_to(REPO_ROOT)),
-            "live": False,  # same reason: no live perception call happens in this console's loop
-        },
-        "plan_viewer": {
-            "available": PLAN_VIEWER_PATH is not None,
-            "live": False,  # same reason: no live cuRobo call happens in this console's loop
-            "name": str(PLAN_VIEWER_PATH.relative_to(REPO_ROOT)) if PLAN_VIEWER_PATH else None,
-        },
     }
     page = _assemble_shell().replace("/*__DATA__*/null", json.dumps(data))
 
@@ -979,49 +797,11 @@ def make_handler(
                 self.end_headers()
                 self.wfile.write(body)
                 return
-            if path.startswith("/views/"):
-                name = path[len("/views/") :]
-                file_path = STUB_FILES.get(name)  # whitelist
-                if file_path is None or not file_path.exists():
-                    self.send_response(404)
-                    self.end_headers()
-                    return
-                body = file_path.read_bytes()
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
+            # ---- Adversary view: Daniel's page for this session's latest run, plus its videos ----
+            if path == "/adversary" or path.startswith("/adversary/"):
+                self._serve_adversary(path[len("/adversary/") :])
                 return
-            if path == "/perception/planviewer":
-                if PLAN_VIEWER_PATH is None or not PLAN_VIEWER_PATH.exists():
-                    self.send_response(404)
-                    self.end_headers()
-                    return
-                body = PLAN_VIEWER_PATH.read_bytes()
-                self.send_response(200)
-                self.send_header("Content-Type", "text/html; charset=utf-8")
-                self.send_header("Content-Length", str(len(body)))
-                self.end_headers()
-                self.wfile.write(body)
-                return
-            if path.startswith("/live/keyframe/") or path.startswith("/live/overlay/"):
-                overlay = path.startswith("/live/overlay/")
-                prefix = "/live/overlay/" if overlay else "/live/keyframe/"
-                run_id, _, rest = path[len(prefix) :].partition("/")
-                image_path = _live_asset_path(run_id, rest, overlay=overlay)
-                if image_path is None:
-                    self.send_response(404)
-                    self.end_headers()
-                    return
-                body = image_path.read_bytes()
-                self.send_response(200)
-                self.send_header("Content-Type", "image/png")
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Cache-Control", "no-cache")  # live: never cache a stale frame
-                self.end_headers()
-                self.wfile.write(body)
-                return
+            # ---- end Adversary view ----
             if path == "/runs":
                 cur = runs_dir()
                 runs = _list_runs(cur) if cur else []
@@ -1047,44 +827,6 @@ def make_handler(
                         "running": state.running,
                     }
                 )
-                return
-            if path.startswith("/attacks/"):
-                run_name = path[len("/attacks/") :]
-                cur = runs_dir()
-                attacks_path = _attacks_jsonl_path(cur, run_name) if cur else None
-                if attacks_path is None:  # older runs from before sessions existed (read-only)
-                    attacks_path = _attacks_jsonl_path(LEGACY_RUNS_DIR, run_name)
-                if attacks_path is None:
-                    self.send_response(404)
-                    self.end_headers()
-                    return
-                body = attacks_path.read_bytes()
-                self.send_response(200)
-                self.send_header("Content-Type", "application/x-ndjson")
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Cache-Control", "no-cache")  # appended to live during a run
-                self.end_headers()
-                self.wfile.write(body)
-                return
-            if path.startswith("/agentview/") or path.startswith("/sam3/"):
-                prefix, lookup = (
-                    ("/agentview/", agentview)
-                    if path.startswith("/agentview/")
-                    else ("/sam3/", sam3)
-                )
-                name = path[len(prefix) :]
-                image_path = lookup.get(name)  # whitelist: only names this run actually found
-                if image_path is None or not image_path.exists():
-                    self.send_response(404)
-                    self.end_headers()
-                    return
-                body = image_path.read_bytes()
-                self.send_response(200)
-                self.send_header("Content-Type", "image/png")
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("Cache-Control", "public, max-age=86400")
-                self.end_headers()
-                self.wfile.write(body)
                 return
             if path == "/":
                 body = page.encode("utf-8")
@@ -1241,6 +983,54 @@ def make_handler(
             threading.Thread(target=target, daemon=True).start()
             self._send_json({"ok": True})
 
+        # ---- Adversary view ----
+        def _serve_adversary(self, rest: str) -> None:
+            run_dir = adversary_view.latest_run(runs_dir()) or adversary_run
+            if not rest:
+                html = adversary_view.page(run_dir)
+                body = html.encode("utf-8")
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "no-store")
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            media = adversary_view.media_path(run_dir, unquote(rest))
+            if media is None:
+                self.send_response(404)
+                self.end_headers()
+                return
+            size = media.stat().st_size
+            start, end = adversary_view.byte_range(self.headers.get("Range"), size)
+            if start is None:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
+            partial = self.headers.get("Range") is not None
+            self.send_response(206 if partial else 200)
+            self.send_header("Content-Type", adversary_view.media_type(media))
+            self.send_header("Accept-Ranges", "bytes")  # his player seeks: the browser needs ranges
+            self.send_header("Content-Length", str(end - start + 1))
+            if partial:
+                self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            self.end_headers()
+            try:
+                with media.open("rb") as fh:
+                    fh.seek(start)
+                    left = end - start + 1
+                    while left > 0:
+                        chunk = fh.read(min(1 << 20, left))
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        left -= len(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                pass  # the browser cancels ranges while seeking
+
+        # ---- end Adversary view ----
+
         def _handle_new_session(self) -> None:
             if sessions_dir is None:
                 self._send_json({"ok": False, "error": "sessions are not enabled"}, status=400)
@@ -1372,6 +1162,7 @@ def serve(
     / "scenes"
     / "L1"
     / "contacts_scene.json",
+    adversary_run: Path | None = None,
     scene_repair_path: Path | None = None,
     session_id: str | None = None,
     sessions_dir: Path | None = SESSIONS_DIR,
@@ -1388,6 +1179,7 @@ def serve(
         loop_cfg=loop_cfg if mode == "loop" else None,
         scene_generation_path=scene_generation_path,
         scene_repair_path=scene_repair_path,
+        adversary_run=adversary_run,
         sessions_dir=sessions_dir,
         session_id=session_id,
     )

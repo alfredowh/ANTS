@@ -54,8 +54,8 @@ def main() -> None:
         default="mock",
         help="Adversary rollout backend. 'mock' (default): free, instant, offline. 'cap_harness': "
         "real ASPIRE/LIBERO rollouts (~40s+ each, real GPU time) -- needs the sam3/pyroki/curobo "
-        "services up (uv run python -m ants.orchestrator.preflight) and feeds the Perception "
-        "tab's layers live frames while a rollout is in progress.",
+        "services up (uv run python -m ants.orchestrator.preflight); rollout videos appear in the "
+        "Adversary view's Replay.",
     )
     parser.add_argument("--rho", type=float, default=0.8, help="severity bound")
     parser.add_argument("--eta", type=float, default=0.2, help="selector exploration rate")
@@ -100,6 +100,13 @@ def main() -> None:
         help="resume an existing session folder data/console_sessions/<id> (default: start a new "
         "one). A session stores session.json, chat.jsonl, events.jsonl and runs/run-<ts>/.",
     )
+    parser.add_argument(
+        "--adversary-run",
+        type=Path,
+        default=None,
+        help="run folder the Adversary view shows while this session has no run of its own, e.g. "
+        "a finished ants.orchestrator.run directory (read-only)",
+    )
     args = parser.parse_args()
 
     loop_cfg = LoopRunConfig(
@@ -129,6 +136,7 @@ def main() -> None:
         loop_cfg=loop_cfg,
         scene_generation_path=args.scene,
         scene_repair_path=args.scene_repair,
+        adversary_run=args.adversary_run,
         session_id=args.session,
     )
 

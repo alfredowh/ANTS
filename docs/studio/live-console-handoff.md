@@ -1,4 +1,30 @@
-# Studio (live console): handoff — 2026-11-04, switching to Sonnet 5.5
+# Studio (live console): handoff
+
+## Current state: ANTS Studio (2026-11-04, supersedes the tab layout described below)
+
+One window, one switch: **Adversary | Synthesizer**. Perception and the old Synthesizer/Adversary
+tabs are gone (views, routes, JS, CSS); older sections below that mention them are history.
+
+- **Synthesizer** = `/`, the console (chat, live run, side columns, Stop, mic). It stays alive under
+  the other view, so switching never resets it.
+- **Adversary** = `/adversary/` in a full-window iframe: Daniel's page, built by his unmodified
+  `build.py` for this session's newest run that has `run.json`, or `--adversary-run <dir>` when the
+  session has none; otherwise an honest empty state. Refreshed after new logs, but never reloaded
+  under an open Replay (it refreshes when you leave it).
+- **Daniel's files:** the only edit is one comment in `template.html`,
+  `<!--ANTS_STUDIO_SWITCH-->`. The server fills it when serving (`adversary_view.inject`, with
+  `views/adversary_inject.css/.js`); a standalone `studio.html` differs from before by that comment
+  only. **This edit needs Daniel's OK before it goes to `integration`.**
+- **Run data:** `run_live_loop` now writes `run.json` + `policy.py` (`adversary_view.write_run_meta`,
+  includes one nominal rollout: free on mock, about 40 s real) and sends real rollouts to
+  `<run>/aspire`, so videos resolve. `/adversary/<path>` serves only videos inside the run folder,
+  with HTTP ranges (his player seeks).
+- **Testing tip:** `--virtual-time-budget` hangs headless Chrome on `/` because the SSE stream never
+  idles. That was the "Chrome hangs" problem. Drive it over the DevTools protocol, or use `--timeout`.
+
+---
+
+# Older notes: handoff, 2026-11-04, switching to Sonnet 5.5
 
 Supersedes the earlier version of this file (everything below is current as of commit `8503b00`).
 Written because the user is switching models mid-session. Read this before touching

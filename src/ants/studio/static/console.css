@@ -32,8 +32,6 @@ header .phase{color:var(--muted);font-size:14.7px}
 .app{display:flex;height:calc(100vh - 53px)}
 .nav{flex:none;width:220px;border-right:1px solid var(--line);padding:12px 10px;overflow-y:auto;background:var(--bg)}
 body.nav-hidden .nav{display:none}
-.navtabs{display:flex;flex-direction:column;gap:2px;margin-bottom:18px}
-.navtabs .tabbtn{text-align:left;width:100%}
 .navh{padding:0 4px}
 .navruns{display:flex;flex-direction:column;gap:1px}
 .navrun{font:11.5px var(--mono);color:var(--muted);padding:5px 8px;border-radius:6px;cursor:default;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -156,40 +154,10 @@ body[data-tab="console"] .console-only{display:inline-flex}
 .modal .section{margin-bottom:14px}
 .modal .section .h{margin-bottom:6px}
 .tabbar{display:flex;gap:4px;margin-left:4px}
-.tabbtn{background:none;border:1px solid transparent;color:var(--muted);padding:6px 12px;cursor:pointer;font:inherit;font-weight:500}
-.tabbtn:hover{color:var(--fg)}
-.tabbtn.on{color:var(--hi);border-color:var(--line);background:var(--raise)}
-#tab-perception{display:none}
-#tab-perception.on{display:block}
 #tab-console{display:none}
 #tab-console.on{display:block}
-.perc-bar{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--line);font-size:15.2px}
 .perc-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--soft)}
 .perc-toggle input{accent-color:var(--accent)}
-.perc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:1px;background:var(--line);height:calc(62vh - 146px)}
-.perc-detail{border-top:1px solid var(--line)}
-.perc-detail-body{padding:14px 20px;overflow-y:auto;max-height:calc(38vh - 10px)}
-.perc-detail-body .turn{margin-bottom:6px}
-.perc-detail-body .turn .tk{font-size:12.7px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
-.perc-detail-body .turn .main{font-size:14.7px;margin-top:3px}
-.perc-empty{color:var(--dim);font-size:14.7px;padding:16px 0}
-.perc-panel{background:var(--bg);padding:14px 16px;overflow-y:auto;display:flex;flex-direction:column;min-height:0}
-.perc-panel.off{display:none}
-.perc-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.perc-head .h{margin-bottom:0}
-.src-badge{font-size:12.7px;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border:1px solid var(--line);color:var(--dim)}
-.src-badge.live{color:var(--built);border-color:var(--built);animation:pulse-badge 1.3s ease-in-out infinite}
-.src-badge.missing{color:var(--fail);border-color:var(--fail)}
-@keyframes pulse-badge{0%,100%{opacity:1}50%{opacity:.5}}
-@media (prefers-reduced-motion: reduce){.src-badge.live{animation:none}}
-.perc-player .player-frame{min-height:320px}
-.perc-sam3-grid{display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start}
-.perc-sam3-grid .sam3-item{width:120px}
-.perc-curobo-frame{flex:1;width:100%;min-height:420px;background:#fff;border:1px solid var(--line)}
-.perc-note{font-size:13.7px;color:var(--dim);margin-top:8px}
-.stub-note{font-size:13.7px;color:var(--dim);padding:10px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
-.stub-note code{color:var(--soft)}
-.stub-frame{width:100%;height:calc(100vh - 53px - 38px);border:0;background:#fff}
 /* ---------- chat composer: docked under the turns feed, centered when idle ---------- */
 #col-center{display:flex;flex-direction:column;align-items:center;overflow-y:hidden}
 #col-center>*{width:100%;max-width:780px}
@@ -247,3 +215,13 @@ body[data-tab="console"] .console-only{display:inline-flex}
 .stop-btn{background:#d9342b;border-color:#d9342b;color:#fff;margin-left:8px}
 .stop-btn:hover{background:#b72a22;border-color:#b72a22}
 .stop-btn[hidden]{display:none}
+
+/* ---------- Adversary | Synthesizer switch; the Adversary view (Daniel's page) covers the window ---------- */
+.view-switch{display:inline-flex;border:1px solid var(--line);margin-left:12px}
+.view-switch button{background:none;border:0;padding:5px 12px;font:inherit;font-size:14px;color:var(--muted);cursor:pointer}
+.view-switch button+button{border-left:1px solid var(--line)}
+.view-switch button[aria-pressed="true"]{background:var(--raise);color:var(--accent);font-weight:500}
+#adversary-view{display:none;position:fixed;inset:0;width:100%;height:100%;border:0;z-index:50;background:var(--bg)}
+body[data-view="adversary"] #adversary-view{display:block}
+.replay-link{font-size:13.2px;color:var(--accent);cursor:pointer;display:inline-block;margin-top:2px}
+.replay-link:hover{text-decoration:underline}
