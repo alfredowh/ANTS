@@ -71,6 +71,12 @@ class AspireConfig:
     scene: Mapping[str, Any] = field(default_factory=dict)  # extra launcher keys, e.g. planner
     venv: str = ".venv-libero"
 
+    def __post_init__(self) -> None:
+        # The harness runs with cwd=root, so a relative root (`--aspire ASPIRE`) would point the
+        # CLI and python paths at ASPIRE/ASPIRE/... Resolve the root only: the venv's python is a
+        # symlink that must stay unresolved, or it runs outside the venv.
+        self.root = Path(self.root).expanduser().resolve()
+
     @property
     def python(self) -> Path:
         return self.root / self.venv / "bin" / "python"

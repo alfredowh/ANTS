@@ -165,3 +165,13 @@ def test_default_root_is_the_submodule_and_the_env_overrides_it(monkeypatch):
     assert AspireConfig().root == DEFAULT_ASPIRE_ROOT == REPO_ROOT / "ASPIRE"
     monkeypatch.setenv("ANTS_ASPIRE_ROOT", "/opt/aspire")
     assert AspireConfig().root == Path("/opt/aspire")
+
+
+def test_relative_root_is_resolved_because_the_harness_runs_with_cwd_root(tmp_path, monkeypatch):
+    # `--aspire ASPIRE` from the repo root: with cwd=root, a relative cli path would point at
+    # ASPIRE/ASPIRE/.venv-libero/bin/cap-harness (seen on the first GPU smoke run).
+    monkeypatch.chdir(tmp_path)
+    cfg = AspireConfig(root=Path("ASPIRE"))
+    assert cfg.root == tmp_path.resolve() / "ASPIRE"
+    assert cfg.cli.is_absolute() and cfg.python.is_absolute()
+    assert cfg.cli == tmp_path.resolve() / "ASPIRE" / ".venv-libero" / "bin" / "cap-harness"
