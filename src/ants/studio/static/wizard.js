@@ -109,6 +109,7 @@
       if (r.ok) {
         video = {path: r.path, name: r.name};
         renderChosen();
+        window.dispatchEvent(new CustomEvent("demo-video-picked"));
         syncAttach();
         input.focus();
       } else if (r.fallback) {

@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from ants.studio import adversary_view, live_view, policy_dev
+from ants.studio import adversary_view, attempts_view, live_view, policy_dev
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 STUDIO_DIR = Path(__file__).parent
@@ -36,6 +36,8 @@ STATIC_FILES = {
     "console.css": STATIC_DIR / "console.css",
     "console.js": STATIC_DIR / "console.js",
     "wizard.js": STATIC_DIR / "wizard.js",
+    "demo_media.js": STATIC_DIR / "demo_media.js",
+    "attempts.js": STATIC_DIR / "attempts.js",
     "studio_switch.js": STATIC_DIR / "studio_switch.js",
     "flow.js": STATIC_DIR / "flow.js",
     "live.js": STATIC_DIR / "live.js",
@@ -295,6 +297,7 @@ class RunState:
     awaiting_answer: queue.Queue[str] | None = None
     queued_chat: str | None = None
     session: Session | None = None
+    picked_video: Path | None = None  # chosen in the file dialog, shown before a run starts
     live: live_view.LiveView | None = None  # the rollout-in-progress panel (live_view.py)
 
     def broadcast(self, event: dict) -> None:
@@ -928,6 +931,41 @@ def make_handler(
                 self.wfile.write(body or b"")
                 return
             # ---- end live simulator panel ----
+            # ---- human demo video and generation attempts of the current run ----
+            current_run = Path(pipeline.current["run_dir"]) if pipeline.current else None
+            if path == "/demo-video/status":
+                overlay = current_run / "demo" / "overlay.mp4" if current_run else None
+                self._send_json(
+                    {
+                        "raw": self._demo_raw() is not None,
+                        "overlay": bool(overlay and overlay.is_file()),
+                    }
+                )
+                return
+            if path in ("/demo-video/raw", "/demo-video/overlay"):
+                file = (
+                    self._demo_raw()
+                    if path.endswith("raw")
+                    else (current_run / "demo" / "overlay.mp4" if current_run else None)
+                )
+                if file is None or not file.is_file():
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                self._send_ranged(file, "video/mp4")
+                return
+            if path == "/attempts":
+                self._send_json({"attempts": attempts_view.attempts(current_run)})
+                return
+            if path.startswith("/attempts/media/"):
+                rel = unquote(path[len("/attempts/media/") :])
+                image = attempts_view.media_path(current_run, rel)
+                if image is None:
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                self._send_ranged(image, attempts_view.MEDIA[image.suffix.lower()])
+                return
             if path == "/session":
                 self._send_json(
                     {
@@ -995,7 +1033,10 @@ def make_handler(
                 folder = (loop_cfg.video_dir if loop_cfg else None) or (
                     REPO_ROOT / skill["video"]["folder"]
                 )
-                self._send_json(policy_dev.pick_file(folder, skill["video"]["extensions"]))
+                picked = policy_dev.pick_file(folder, skill["video"]["extensions"])
+                if picked.get("ok"):
+                    state.picked_video = Path(picked["path"])
+                self._send_json(picked)
                 return
             if path == "/pick-script":
                 self._send_json(
@@ -1069,6 +1110,41 @@ def make_handler(
             self.end_headers()
 
         # ---- Adversary view ----
+        def _demo_raw(self) -> Path | None:
+            if pipeline.current and pipeline.current.get("video"):
+                return Path(pipeline.current["video"])
+            return state.picked_video
+
+        def _send_ranged(self, file: Path, content_type: str) -> None:
+            size = file.stat().st_size
+            start, end = adversary_view.byte_range(self.headers.get("Range"), size)
+            if start is None:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
+            partial = self.headers.get("Range") is not None
+            self.send_response(206 if partial else 200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Length", str(end - start + 1))
+            self.send_header("Cache-Control", "no-store")
+            if partial:
+                self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            self.end_headers()
+            try:
+                with file.open("rb") as fh:
+                    fh.seek(start)
+                    left = end - start + 1
+                    while left > 0:
+                        chunk = fh.read(min(1 << 20, left))
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        left -= len(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
         def _serve_adversary(self, rest: str) -> None:
             run_dir = adversary_view.latest_run(runs_dir()) or adversary_run
             if not rest:
@@ -1132,6 +1208,8 @@ def make_handler(
                     )
                     return
                 state.queued_chat = None
+                state.picked_video = None
+                pipeline.current = None
                 start_session(state, sessions_dir, loop_cfg, session_meta())
             state.broadcast({"kind": "session_reset", "session": state.session.id})
             self._send_json({"ok": True, "session": state.session.id})

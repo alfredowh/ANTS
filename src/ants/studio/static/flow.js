@@ -11,7 +11,7 @@
   const STORE = "ants-flow-state", COLLAPSE = "ants-flow-collapsed";
   const root = document.getElementById("flow-panel");
   if (!root) return;
-  const W = 780, CELL_W = 130, NODE_W = 116, ROW_H = 76, NODE_H = 60;
+  const W = 800, CELL_W = 131, NODE_W = 116, ROW_H = 80, NODE_H = 58, TOP = 20;
   const OWNER = { synthesizer: "Synthesizer", adversary: "Adversary", orchestrator: "Orchestrator", io: "Input / output" };
   const LABEL = { idle: "idle", running: "running", done: "done", failed: "failed", skipped: "skipped" };
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -175,34 +175,44 @@
   }
   function overview() {
     const tops = G.blocks.filter((b) => b.pos);
-    const at = (b) => ({ x: 7 + b.pos.col * CELL_W, y: 4 + b.pos.row * ROW_H });
+    const at = (b) => ({ x: 7 + b.pos.col * CELL_W, y: TOP + b.pos.row * ROW_H });
+    const box = (cls, label, c0, r0, c1, r1) => {
+      const o = at({ pos: { col: c0, row: r0 } }), pad = 6;
+      const w = (c1 - c0) * CELL_W + NODE_W + 2 * pad, h = (r1 - r0) * ROW_H + NODE_H + 2 * pad;
+      return `<rect class="fl-box ${cls}" x="${o.x - pad}" y="${o.y - pad}" width="${w}" height="${h}"/>` +
+        `<text class="fl-boxl ${cls}" x="${o.x - pad + 2}" y="${o.y - pad - 4}">${label}</text>`;
+    };
+    const boxes = box("syn", "SYNTHESIZER", 1, 0, 3, 2) + box("adv", "ADVERSARY", 5, 1, 5, 2);
     let edges = "";
     for (const e of G.edges) {
       const a = byId[e.from], b = byId[e.to];
       const p = at(a), q = at(b);
       let d, lx = null, ly = null;
-      const gap = p.y + NODE_H + 8; // the channel between two rows
-      if (e.from === "gate" && e.to === "attack") { // the loop back, under the row
-        d = `M${p.x + NODE_W * 0.75} ${p.y + NODE_H} L${p.x + NODE_W * 0.75} ${gap} L${q.x + NODE_W * 0.35} ${gap} L${q.x + NODE_W * 0.35} ${q.y + NODE_H}`;
-        lx = p.x + NODE_W + 50; ly = gap + 11;
-      } else if (e.from === "gate" && e.to === "memory") { // down and left, to a planned block
-        d = `M${p.x + 10} ${p.y + NODE_H} L${p.x + 10} ${gap} L${q.x + NODE_W / 2} ${gap} L${q.x + NODE_W / 2} ${q.y}`;
-      } else if (e.to === "attack" && e.from === "escalation") { // the human answer returns
-        d = `M${p.x + NODE_W} ${p.y + NODE_H / 2} L${q.x + NODE_W * 0.7} ${p.y + NODE_H / 2} L${q.x + NODE_W * 0.7} ${q.y + NODE_H}`;
-        lx = p.x + NODE_W + 8; ly = p.y + NODE_H / 2 - 4;
+      if (e.from === "gate" && e.to === "attack") { // up the gutter between orchestrator and Adversary
+        const up = p.y - 7, side = q.x - 7, y = q.y + NODE_H * 0.8;
+        d = `M${p.x + NODE_W * 0.8} ${p.y} L${p.x + NODE_W * 0.8} ${up} L${side} ${up} L${side} ${y} L${q.x} ${y}`;
+        lx = p.x + 2; ly = up - 3;
+      } else if (e.from === "escalation" && e.to === "attack") { // the human answer, around the outside
+        const low = p.y + NODE_H + 9, out = W - 4, y = q.y + NODE_H / 2;
+        d = `M${p.x + NODE_W / 2} ${p.y + NODE_H} L${p.x + NODE_W / 2} ${low} L${out} ${low} L${out} ${y} L${q.x + NODE_W} ${y}`;
+        lx = p.x + NODE_W / 2 + 6; ly = low - 3;
+      } else if (e.from === "rewrite" && e.to === "gate") { // down, then right, into the gate from above
+        const y = p.y + NODE_H + 11, x = q.x + NODE_W * 0.3;
+        d = `M${p.x + NODE_W / 2} ${p.y + NODE_H} L${p.x + NODE_W / 2} ${y} L${x} ${y} L${x} ${q.y}`;
       } else if (p.y === q.y) { // same row
         const left = q.x < p.x;
         d = `M${left ? p.x : p.x + NODE_W} ${p.y + NODE_H / 2} L${left ? q.x + NODE_W : q.x} ${q.y + NODE_H / 2}`;
+        if (e.label && Math.abs(q.x - p.x) > CELL_W) { lx = (left ? q.x + NODE_W : p.x + NODE_W) + 1; ly = p.y + NODE_H / 2 - 4; }
       } else { // straight down
         d = `M${p.x + NODE_W / 2} ${p.y + NODE_H} L${q.x + NODE_W / 2} ${q.y}`;
       }
       edges += `<path class="${edgeClass(e, a, b)}" d="${d}" marker-end="url(#fl-arrow)"/>`;
       if (e.label && lx != null) edges += `<text class="fl-elabel" x="${lx}" y="${ly}">${esc(e.label)}</text>`;
     }
-    const H = 4 + 3 * ROW_H;
-    const legend = `<foreignObject x="7" y="${4 + ROW_H}" width="${NODE_W}" height="${2 * ROW_H - 16}"><div xmlns="http://www.w3.org/1999/xhtml" class="fl-legend">
+    const H = TOP + 4 * ROW_H + 8;
+    const legend = `<foreignObject x="7" y="${TOP + ROW_H}" width="${NODE_W - 8}" height="${2 * ROW_H}"><div xmlns="http://www.w3.org/1999/xhtml" class="fl-legend">
       <span><i class="running"></i>running</span><span><i class="running inferred"></i>inferred</span><span><i class="done"></i>done</span><span><i class="failed"></i>failed</span><span><i class="skipped"></i>skipped</span><span><i class="planned"></i>planned</span></div></foreignObject>`;
-    return svg(W, H, edges + legend + tops.map((b) => { const p = at(b); return nodeHtml(b, p.x, p.y, NODE_W, NODE_H); }).join(""));
+    return svg(W, H, boxes + edges + legend + tops.map((b) => { const p = at(b); return nodeHtml(b, p.x, p.y, NODE_W, NODE_H); }).join(""));
   }
   function childView(b) {
     const kids = b.children.map((id) => byId[id]);

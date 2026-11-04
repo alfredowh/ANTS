@@ -1,26 +1,20 @@
-/* Live simulator panel: visible only while a rollout of this console's run is in progress. It sits
-   above both views, because Daniel's page is an iframe in this window. Polling only: holding a
-   connection open per camera would use up the browser's per-site limit. */
+/* Live simulator panel: in the right column under the reply, wrist view on top, agent view below.
+   It exists only while a rollout of this console's run is in progress, and opens the column for
+   that time. Polling only: holding a connection open per camera would use up the browser's per-site
+   limit. */
 (function () {
   const STATUS_MS = 1000, FRAME_MS = 125, STALE_S = 2;
-  let status = {active: false}, dismissed = false, pos = null;
+  let status = {active: false};
   const panel = document.createElement("aside");
   panel.id = "live-panel";
   panel.hidden = true;
   panel.innerHTML = `<div class="live-head" id="live-head">
       <span class="live-badge" id="live-badge">LIVE</span>
       <span class="live-label" id="live-label"></span>
-      <button type="button" id="live-close" title="Hide; the Live button brings it back" aria-label="Hide live view">&times;</button>
     </div>
     <div class="live-views" id="live-views"></div>
     <div class="live-foot" id="live-foot"></div>`;
-  const chip = document.createElement("button");
-  chip.id = "live-chip";
-  chip.type = "button";
-  chip.hidden = true;
-  chip.textContent = "Live";
-  chip.title = "Show the live simulator view";
-  document.body.append(panel, chip);
+  (document.getElementById("media-slot") || document.body).append(panel);
   const views = {};
 
   function label(s) {
@@ -53,7 +47,7 @@
   }
 
   function loadFrame(v) {
-    if (v.busy || !status.active || dismissed || document.hidden || status.age_s === null) return;
+    if (v.busy || !status.active || document.hidden || status.age_s === null) return;
     v.busy = true;
     const next = new Image();
     const done = () => { v.busy = false; };
@@ -64,10 +58,11 @@
 
   function render() {
     const on = !!status.active;
-    panel.hidden = !on || dismissed;
-    chip.hidden = !on || !dismissed;
+    panel.hidden = !on;
+    if (window.studioForceRight) window.studioForceRight("live", on);
     if (!on) { clear(); return; }
-    (status.cameras || []).forEach(camera);
+    // wrist on top, agent view below
+    [...(status.cameras || [])].sort((a, b) => (b === "robot0_eye_in_hand") - (a === "robot0_eye_in_hand")).forEach(camera);
     const live = status.age_s !== null && status.age_s < STALE_S;
     const badge = document.getElementById("live-badge");
     badge.textContent = live ? "LIVE" : "WAITING";
@@ -89,29 +84,6 @@
       window.dispatchEvent(new CustomEvent("live-status", {detail: {status, shown: !panel.hidden}}));
     }).catch(() => { status = {active: false}; render(); });
   }
-
-  document.getElementById("live-close").addEventListener("click", () => { dismissed = true; render(); });
-  chip.addEventListener("click", () => { dismissed = false; render(); });
-
-  const head = document.getElementById("live-head");
-  head.addEventListener("pointerdown", (e) => {
-    if (e.target.closest("button")) return;
-    const r = panel.getBoundingClientRect();
-    const dx = e.clientX - r.left, dy = e.clientY - r.top;
-    head.setPointerCapture(e.pointerId);
-    const move = (m) => {
-      pos = {
-        left: Math.max(0, Math.min(innerWidth - r.width, m.clientX - dx)),
-        top: Math.max(0, Math.min(innerHeight - 40, m.clientY - dy)),
-      };
-      panel.style.left = pos.left + "px";
-      panel.style.top = pos.top + "px";
-      panel.style.right = panel.style.bottom = "auto";
-    };
-    const up = () => { head.removeEventListener("pointermove", move); head.removeEventListener("pointerup", up); };
-    head.addEventListener("pointermove", move);
-    head.addEventListener("pointerup", up);
-  });
 
   poll();
   setInterval(poll, STATUS_MS);

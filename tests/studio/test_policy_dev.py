@@ -523,3 +523,42 @@ def test_other_simulator_jobs_ignores_shells_that_only_mention_a_marker(tmp_path
         (tmp_path / pid / "cmdline").write_bytes("\0".join(argv).encode())
     found = pd.other_simulator_jobs(proc=tmp_path, own=1)
     assert len(found) == 1 and found[0].startswith("pid 12")
+
+
+def test_execution_record_logs_what_a_run_uses(tmp_path):
+    settings, problem = pd.parse_settings({}, pd.load_skill())
+    assert problem is None
+    req = pd.Request("put the bowl on the plate", None, tmp_path, settings)
+    record = pd.execution_record(req, pd.load_skill(), tmp_path)
+    assert record["synthesizer"]["evidence"] == "e3"
+    assert "S4" in record["scene"]["scene_text"]
+    assert record["planner"]["curobo_requested"] is False
+
+
+def test_observed_planner_reads_a_logged_plan(tmp_path):
+    assert pd.observed_planner(tmp_path) is None
+    call = tmp_path / "a" / "trace" / "calls" / "call-1-plan-motion"
+    call.mkdir(parents=True)
+    plan = {
+        "diagnostics": {"ik_solver": "pyroki", "trajectory_planner": "interpolation"},
+        "trajectory": {"collision_aware": False},
+    }
+    (call / "output.json").write_text(json.dumps(plan), encoding="utf-8")
+    seen = pd.observed_planner(tmp_path)
+    assert seen["ik_solver"] == "pyroki" and seen["curobo_used"] is False
+
+
+def test_generation_asks_for_the_models_reason_and_the_scene_context(tmp_path):
+    cmd = pd.generation_command(
+        "put the bowl on the plate",
+        tmp_path / "d.json",
+        tmp_path,
+        1000,
+        5,
+        True,
+        pd.load_skill(),
+        tmp_path,
+    )
+    assert "--explain" in cmd
+    assert cmd[cmd.index("--evidence") + 1] == "e3"
+    assert "S4" in cmd[cmd.index("--scene-text-file") + 1]

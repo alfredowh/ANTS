@@ -178,6 +178,28 @@
    }
   },
   {
+   "id": "cache",
+   "label": "Reply cache",
+   "owner": "synthesizer",
+   "status": "built",
+   "summary": "Generation and its repairs: every model call is cached on disk by model, messages and temperature, so a resumed run spends nothing on repeated calls.",
+   "details": "A cache hit is marked on the attempt card. Rewrites in the Adversary loop go through Muse Code and are not in this disk cache.",
+   "code": [
+    "src/ants/synthesizer/llm.py"
+   ],
+   "docs": [],
+   "children": [],
+   "live": {
+    "signal": "static",
+    "note": "not reported live; attempts show from_cache"
+   },
+   "flow": true,
+   "pos": {
+    "col": 2,
+    "row": 1
+   }
+  },
+  {
    "id": "generate",
    "label": "Muse writes program",
    "owner": "synthesizer",
@@ -203,8 +225,8 @@
    "stage": "generate",
    "flow": true,
    "pos": {
-    "col": 4,
-    "row": 0
+    "col": 3,
+    "row": 1
    }
   },
   {
@@ -285,8 +307,8 @@
    },
    "stage": "nominal",
    "pos": {
-    "col": 5,
-    "row": 0
+    "col": 4,
+    "row": 1
    }
   },
   {
@@ -518,8 +540,8 @@
    },
    "stage": "diagnose",
    "pos": {
-    "col": 4,
-    "row": 1
+    "col": 5,
+    "row": 2
    }
   },
   {
@@ -544,7 +566,7 @@
    "stage": "rewrite",
    "pos": {
     "col": 3,
-    "row": 1
+    "row": 2
    }
   },
   {
@@ -567,8 +589,8 @@
    },
    "stage": "gate",
    "pos": {
-    "col": 2,
-    "row": 1
+    "col": 4,
+    "row": 3
    }
   },
   {
@@ -589,8 +611,8 @@
    },
    "stage": "deploy",
    "pos": {
-    "col": 1,
-    "row": 1
+    "col": 5,
+    "row": 3
    }
   },
   {
@@ -611,7 +633,7 @@
    },
    "pos": {
     "col": 1,
-    "row": 2
+    "row": 1
    }
   },
   {
@@ -634,8 +656,8 @@
    },
    "stage": "escalation",
    "pos": {
-    "col": 2,
-    "row": 2
+    "col": 3,
+    "row": 3
    }
   }
  ],
@@ -657,6 +679,15 @@
    "to": "generate"
   },
   {
+   "from": "cache",
+   "to": "generate"
+  },
+  {
+   "from": "memory",
+   "to": "cache",
+   "planned": true
+  },
+  {
    "from": "generate",
    "to": "nominal"
   },
@@ -670,7 +701,8 @@
   },
   {
    "from": "diagnose",
-   "to": "rewrite"
+   "to": "rewrite",
+   "label": "constraint"
   },
   {
    "from": "rewrite",
@@ -678,18 +710,14 @@
   },
   {
    "from": "gate",
-   "to": "deploy"
+   "to": "deploy",
+   "label": "accepted"
   },
   {
    "from": "gate",
    "to": "attack",
    "loop": true,
    "label": "next cycle"
-  },
-  {
-   "from": "gate",
-   "to": "memory",
-   "planned": true
   },
   {
    "from": "gate",
