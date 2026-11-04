@@ -107,6 +107,20 @@ def main() -> None:
         help="run folder the Adversary view shows while this session has no run of its own, e.g. "
         "a finished ants.orchestrator.run directory (read-only)",
     )
+    parser.add_argument(
+        "--video-dir",
+        type=Path,
+        default=None,
+        help="folder /policy-dev's file dialog opens at (default: the skill file's, "
+        "hurobo/data/raw/e1/clips)",
+    )
+    parser.add_argument(
+        "--pipeline-token-budget",
+        type=int,
+        default=None,
+        help="/policy-dev: default of the dialog's Muse token cap (default: the skill file's, "
+        "300000)",
+    )
     args = parser.parse_args()
 
     loop_cfg = LoopRunConfig(
@@ -123,6 +137,8 @@ def main() -> None:
         stall_window=args.stall_window,
         nominal_seeds=tuple(int(s) for s in args.nominal_seeds.split(",")),
         synth_token_budget=args.synth_token_budget,
+        video_dir=args.video_dir,
+        pipeline_token_budget=args.pipeline_token_budget,
         reasoning_effort=args.reasoning_effort,
         max_model_steps=args.max_model_steps,
     )
