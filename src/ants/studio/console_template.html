@@ -99,6 +99,15 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
 .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:50;align-items:center;justify-content:center}
 .modal-backdrop.on{display:flex}
 .modal{background:var(--panel);border:1px solid var(--line);max-width:640px;width:92vw;max-height:82vh;overflow-y:auto;padding:18px 20px;position:relative}
+.modal.wide{max-width:980px}
+.player-frame{background:#000;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;min-height:280px}
+.player-frame img{max-width:100%;max-height:60vh;display:block}
+.player-caption{display:flex;justify-content:space-between;align-items:baseline;margin:6px 0;font-size:12px;color:var(--muted)}
+.player-caption b{color:var(--fg)}
+.player-controls{display:flex;align-items:center;gap:8px;margin-bottom:14px}
+.player-controls input[type=range]{flex:1}
+.player-ref-grid{display:flex;flex-wrap:wrap;gap:6px}
+.player-ref-grid .sam3-item{width:64px}
 .modal .close{position:absolute;top:10px;right:14px;cursor:pointer;color:var(--muted);font-size:20px;line-height:1}
 .modal .close:hover{color:var(--hi)}
 .modal h3{margin:0 0 4px;font-size:14px}
@@ -151,6 +160,7 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
       <div class="h">Agentview frames</div>
       <div class="agentview-note" id="agentview-note"></div>
       <div class="agentview-grid" id="agentview-grid"></div>
+      <button class="btn sm" id="perception-btn" style="margin-top:8px">Open perception replay</button>
     </div>
   </div>
   <div class="resize-handle" id="handle-left"></div>
@@ -357,6 +367,87 @@ renderScene2D("generation");
         <figure><img src="${after.src}" loading="lazy" title="after" alt="after ${esc(after.call)}"></figure>
       </div>
     </div>`).join("") || `<div class="empty">no frames found</div>`;
+})();
+
+/* ---------- perception replay (archived scrubber + SAM 3 reference + cuRobo link-out) ---------- */
+(function () {
+  const frames = (DATA.agentview_archive || { frames: [] }).frames;
+  const sam3Frames = (DATA.sam3_archive || { frames: [] }).frames;
+  const btn = document.getElementById("perception-btn");
+  if (!frames.length) { btn.disabled = true; btn.title = "no archived frames found"; return; }
+
+  let idx = 0, playing = false, timer = null;
+
+  function frameHtml() {
+    const f = frames[idx];
+    const sam3Ref = sam3Frames.map((s) => `
+      <div class="sam3-item">
+        <img src="${s.src}" loading="lazy" title="${esc(s.name)}" alt="SAM 3: ${esc(s.label || "")}">
+        <div class="cap">${esc(s.label || "?")}${s.score != null ? " " + s.score : ""}</div>
+      </div>`).join("");
+    return `
+      <h3>Perception replay</h3>
+      <div class="sub">archived, not live &mdash; exp04_scene/E-E3/sample0 (this console's loop uses the mock System 2 backend, no simulator or camera)</div>
+      <div class="player-frame"><img id="player-img" src="${f.src}" alt="${esc(f.call)}"></div>
+      <div class="player-caption">
+        <span>frame <b id="player-pos">${idx + 1}</b> / ${frames.length}</span>
+        <span><b id="player-call">${esc(f.phase)} ${esc(f.call)}</b> <span style="color:var(--dim)" id="player-index">#${esc(f.index)}</span></span>
+      </div>
+      <div class="player-controls">
+        <button class="btn sm" id="player-play">${playing ? "pause" : "play"}</button>
+        <button class="btn sm" id="player-prev">&larr;</button>
+        <input type="range" id="player-slider" min="0" max="${frames.length - 1}" value="${idx}">
+        <button class="btn sm" id="player-next">&rarr;</button>
+      </div>
+      <div class="section">
+        <div class="h">SAM 3 detections seen during this rollout (reference, not aligned to this exact frame)</div>
+        <div class="player-ref-grid">${sam3Ref}</div>
+      </div>
+      ${DATA.plan_viewer_available
+        ? `<a class="btn sm" href="/perception/planviewer" target="_blank" rel="noopener">Open cuRobo trajectory &amp; collision view &#8599;</a>`
+        : `<div class="scene2d-note">No archived cuRobo plan viewer found.</div>`}
+    `;
+  }
+
+  function renderFrame() {
+    document.getElementById("player-img").src = frames[idx].src;
+    document.getElementById("player-pos").textContent = idx + 1;
+    document.getElementById("player-call").textContent = frames[idx].phase + " " + frames[idx].call;
+    document.getElementById("player-index").textContent = "#" + frames[idx].index;
+    document.getElementById("player-slider").value = idx;
+  }
+
+  function wire() {
+    document.getElementById("player-prev").addEventListener("click", () => { idx = Math.max(0, idx - 1); renderFrame(); });
+    document.getElementById("player-next").addEventListener("click", () => { idx = Math.min(frames.length - 1, idx + 1); renderFrame(); });
+    document.getElementById("player-slider").addEventListener("input", (e) => { idx = +e.target.value; renderFrame(); });
+    document.getElementById("player-play").addEventListener("click", (e) => {
+      playing = !playing;
+      e.target.textContent = playing ? "pause" : "play";
+      if (playing) {
+        timer = setInterval(() => {
+          idx = idx + 1 >= frames.length ? 0 : idx + 1;
+          renderFrame();
+        }, 500);
+      } else {
+        clearInterval(timer);
+      }
+    });
+  }
+
+  btn.addEventListener("click", () => {
+    idx = 0; playing = false; clearInterval(timer);
+    document.getElementById("modal").classList.add("wide");
+    openModal(frameHtml());
+    wire();
+  });
+  document.getElementById("modal-close").addEventListener("click", () => {
+    clearInterval(timer); playing = false;
+    document.getElementById("modal").classList.remove("wide");
+  });
+  document.getElementById("modal-backdrop").addEventListener("click", (e) => {
+    if (e.target.id === "modal-backdrop") { clearInterval(timer); playing = false; document.getElementById("modal").classList.remove("wide"); }
+  });
 })();
 
 if (DATA.mode === "loop" && DATA.loop_config) {

@@ -46,6 +46,20 @@ def _find_agentview_keyframes() -> dict[str, Path]:
     return {m.parent.name: m for m in matches}
 
 
+# Archived cuRobo trajectory/collision-sphere viewer (exp09-11, the held-bowl-attached work), a
+# separate pre-built static page -- reused by linking out to it, not rebuilt here.
+PLAN_VIEWER_PATH = next(
+    iter(
+        sorted(
+            (REPO_ROOT / "data" / "runs" / "curobo").glob(
+                "exp10/*/plan_viewer/index_compare_*.html"
+            )
+        )
+    ),
+    None,
+)
+
+
 def _find_sam3_overlays() -> dict[str, Path]:
     """name ("sam3-000001-camera-agentview") -> its overlay PNG, same archived sample run."""
     matches = sorted(AGENTVIEW_ARCHIVE_BASE.rglob("media/overlays/sam3-*.png"))
@@ -499,6 +513,7 @@ def make_handler(
             "frames": sam3_list,
             "source": str(AGENTVIEW_ARCHIVE_BASE.relative_to(REPO_ROOT)),
         },
+        "plan_viewer_available": PLAN_VIEWER_PATH is not None,
     }
     page = TEMPLATE.read_text(encoding="utf-8").replace("/*__DATA__*/null", json.dumps(data))
 
@@ -516,6 +531,18 @@ def make_handler(
 
         def do_GET(self) -> None:  # noqa: N802 -- stdlib handler name
             path = urlparse(self.path).path
+            if path == "/perception/planviewer":
+                if PLAN_VIEWER_PATH is None or not PLAN_VIEWER_PATH.exists():
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                body = PLAN_VIEWER_PATH.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if path.startswith("/agentview/") or path.startswith("/sam3/"):
                 prefix, lookup = (
                     ("/agentview/", agentview)
