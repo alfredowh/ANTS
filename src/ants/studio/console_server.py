@@ -46,11 +46,44 @@ def _find_agentview_keyframes() -> dict[str, Path]:
     return {m.parent.name: m for m in matches}
 
 
+def _find_sam3_overlays() -> dict[str, Path]:
+    """name ("sam3-000001-camera-agentview") -> its overlay PNG, same archived sample run."""
+    matches = sorted(AGENTVIEW_ARCHIVE_BASE.rglob("media/overlays/sam3-*.png"))
+    return {m.stem: m for m in matches}
+
+
+def _parse_why(reply_text: str) -> str:
+    """The leading WHY note from a MuseOrchestrator reply, before its fenced code block."""
+    lines: list[str] = []
+    for line in reply_text.splitlines():
+        if line.strip().startswith("```"):
+            break
+        lines.append(line)
+    return "\n".join(lines).strip()
+
+
+def _sam3_overlay_meta(png_path: Path) -> dict:
+    """Top SAM3 candidate (label, score) from the overlay's sibling JSON, if present."""
+    json_path = png_path.with_suffix(".json")
+    if not json_path.exists():
+        return {}
+    try:
+        data = json.loads(json_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+    candidates = data.get("candidates") or []
+    top = max(candidates, key=lambda c: c.get("score", 0), default=None)
+    if top is None:
+        return {}
+    return {"label": top.get("label"), "score": round(top.get("score", 0), 2)}
+
+
 def _split_keyframe_name(name: str) -> dict[str, str]:
-    """"000001-before-open-gripper" -> {index: "000001", phase: "before", call: "open gripper"}."""
+    """ "000001-before-open-gripper" -> {index: "000001", phase: "before", call: "open gripper"}."""
     index, _, rest = name.partition("-")
     phase, _, call = rest.partition("-")
     return {"index": index, "phase": phase, "call": call.replace("-", " ")}
+
 
 TOOLS_LEFT = [
     {
@@ -334,7 +367,10 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
     log_path = run_dir / "loop.jsonl"
     stop_tail = threading.Event()
 
+    muse_cycle = 0  # MuseOrchestrator's own cycle counter: +1 on every rewrite call, same order
+
     def tail() -> None:
+        nonlocal muse_cycle
         pos = 0
         while not stop_tail.is_set():
             if log_path.exists():
@@ -348,6 +384,24 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
                             row = json.loads(line)
                         except json.JSONDecodeError:
                             continue
+                        if row.get("event") == "cycle" and "rewrite_tokens" in row:
+                            muse_cycle += 1
+                            cycle_dir = run_dir / "muse" / f"cycle{muse_cycle}"
+                            detail: dict = {}
+                            try:
+                                detail["why"] = _parse_why(
+                                    (cycle_dir / "reply.md").read_text(encoding="utf-8")
+                                )
+                            except OSError:
+                                pass
+                            try:
+                                detail["usage"] = json.loads(
+                                    (cycle_dir / "usage.json").read_text(encoding="utf-8")
+                                )
+                            except (OSError, json.JSONDecodeError):
+                                pass
+                            if detail:
+                                row["rewrite_detail"] = detail
                         state.broadcast({"kind": "loop_event", "row": row})
                     pos = f.tell()
             time.sleep(0.3)
@@ -400,6 +454,11 @@ def make_handler(
         {"name": name, "src": f"/agentview/{name}", **_split_keyframe_name(name)}
         for name in sorted(agentview)
     ]
+    sam3 = _find_sam3_overlays()
+    sam3_list = [
+        {"name": name, "src": f"/sam3/{name}", **_sam3_overlay_meta(sam3[name])}
+        for name in sorted(sam3)
+    ]
     data = {
         "incumbent_name": incumbent.name,
         "incumbent_code": incumbent.read_text(encoding="utf-8"),
@@ -436,6 +495,10 @@ def make_handler(
             "frames": agentview_list,
             "source": str(AGENTVIEW_ARCHIVE_BASE.relative_to(REPO_ROOT)),
         },
+        "sam3_archive": {
+            "frames": sam3_list,
+            "source": str(AGENTVIEW_ARCHIVE_BASE.relative_to(REPO_ROOT)),
+        },
     }
     page = TEMPLATE.read_text(encoding="utf-8").replace("/*__DATA__*/null", json.dumps(data))
 
@@ -453,9 +516,14 @@ def make_handler(
 
         def do_GET(self) -> None:  # noqa: N802 -- stdlib handler name
             path = urlparse(self.path).path
-            if path.startswith("/agentview/"):
-                name = path[len("/agentview/") :]
-                image_path = agentview.get(name)  # whitelist: only names this run actually found
+            if path.startswith("/agentview/") or path.startswith("/sam3/"):
+                prefix, lookup = (
+                    ("/agentview/", agentview)
+                    if path.startswith("/agentview/")
+                    else ("/sam3/", sam3)
+                )
+                name = path[len(prefix) :]
+                image_path = lookup.get(name)  # whitelist: only names this run actually found
                 if image_path is None or not image_path.exists():
                     self.send_response(404)
                     self.end_headers()
