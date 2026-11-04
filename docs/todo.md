@@ -245,6 +245,47 @@ LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl
 LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
 ```
 
+**Exp 12: demo vs no demo on cuRobo (simulator robot mask, attached bowl)** (final (submission experiment, tag submission-experiment))
+
+```bash
+uv run python -m ants.orchestrator.demo_vs_nodemo \
+    --aspire ASPIRE \
+    --out data/runs/demo_e3_s4_sim \
+    --demospec data/demospecs/hurobo_233859.json \
+    --arms demo \
+    --temperatures 0.2,0.7 \
+    --explain \
+    --repairs 4 \
+    --planner curobo-sim \
+    --attach-known \
+    --save-clouds \
+    --debug-scene scaled \
+    --scenes scaled \
+    --eval-seeds 1,2,3,4,5 \
+    --token-budget 300000 \
+    --evidence e3 \
+    --contacts \
+    --scene-text-file data/scene_text/S4_L1.txt
+```
+
+```bash
+uv run python -m ants.orchestrator.demo_vs_nodemo \
+    --aspire ASPIRE \
+    --out data/runs/nodemo_task_only_sim \
+    --demospec data/demospecs/hurobo_233859.json \
+    --arms nodemo \
+    --temperatures 0.2,0.7 \
+    --explain \
+    --repairs 4 \
+    --planner curobo-sim \
+    --attach-known \
+    --save-clouds \
+    --debug-scene scaled \
+    --scenes scaled \
+    --eval-seeds 1,2,3,4,5 \
+    --token-budget 300000
+```
+
 <!-- runbook:end -->
 | 25 | Choose the memory bundle (Minimal / Standard / Full) and the store location (`evalkit/` or a new `ants/memory/`) | [memory-integration-plan.md](synthesizer/memory-integration-plan.md) §2.5 and §8 | open |
 | 26 | Approve the E0 determinism canary (about 10 rollouts) and a token budget for E6 (about 0.7M tokens) | Confirm the Muse price first (item 19) | open |

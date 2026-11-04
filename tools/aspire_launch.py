@@ -55,7 +55,10 @@ to `file`, in the hand frame, for the dev cuRobo service (`service_dev.py`, ANTS
 attach to the hand. The bowl's points come from the SAM 3 text `query` (curobo-sam3), the sam-3.1
 boxes for `query` (curobo-sam31) or the simulator's segmentation of `body` (curobo-sim); the axis
 comes from a fit to the visible rim (curobo-sam3/31) or from the simulator box of `body_main`
-(curobo-sim). The cuRobo service
+(curobo-sim). `oracle_exclude` [body prefixes, e.g. "akita_black_bowl", "plate_1"]: the pixels of
+those bodies, from the simulator's segmentation render (PRIVILEGED), never enter the planning cloud;
+localisation for the program is unaffected. An upper-bound test, not a result for the method.
+The cuRobo service
 (`dev/curobo/service_dev.py`, carve margin ANTS_CARVE_MARGIN_M) must be running.
 
 "bodies" in physics match by substring of the MuJoCo body name. "scale" rebuilds the scene
@@ -475,6 +478,8 @@ def install_curobo_planning(cfg: dict) -> None:
             )
         return binary_dilation(mask, iterations=2 if not prefix else 0)
 
+    oracle_prefixes = list(cfg.get("oracle_exclude") or [])
+
     def masked(self, mask, *, camera_name, target_frame, observation):
         if isinstance(mask, np.ndarray) and mask.dtype == bool and "env" in LIVE:
             if mode == "curobo-sam3":
@@ -484,6 +489,10 @@ def install_curobo_planning(cfg: dict) -> None:
             else:
                 robot = sim_pixels(camera_name, observation.cameras[camera_name].depth_m)
             mask = mask & ~robot
+            if oracle_prefixes and LIVE.get("planning_scene"):
+                depth = observation.cameras[camera_name].depth_m
+                for prefix in oracle_prefixes:
+                    mask = mask & ~sim_pixels(camera_name, depth, prefix)
         return original(
             self, mask, camera_name=camera_name, target_frame=target_frame, observation=observation
         )
@@ -679,6 +688,17 @@ def install_curobo_planning(cfg: dict) -> None:
             return kept
 
         CapApi._exclude_target_from_scene = staticmethod(exclude_near)
+    if oracle_prefixes:
+        scene_builder = CapApi._planning_scene
+
+        def flagged_scene(self, *a, **kw):
+            LIVE["planning_scene"] = True
+            try:
+                return scene_builder(self, *a, **kw)
+            finally:
+                LIVE["planning_scene"] = False
+
+        CapApi._planning_scene = flagged_scene
 
 
 class PerturbedEnv:

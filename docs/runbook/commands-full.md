@@ -1213,6 +1213,35 @@ Exp 02 over http:
 uv run python -m ants.evalkit.report data/runs/exp02_scaled --serve --open
 ```
 
+### `curobo.replay`: Replay logged programs with the held-bowl attach or an oracle cloud (no tokens)
+
+Costs no model tokens (GPU and simulator only). Needs the SAM 3 and PyRoki services and the dev cuRobo service on 8118 (services.start, curobo.service). Runs one program at a time and resets the global attach file before each run; never start two at once. Written 2026-11-04 for the cuRobo false-negative debugging (docs/synthesizer/handoff-curobo-debug.md).
+
+```bash
+ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py \
+    --mode attach \
+    --out data/runs/curobo/replay
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `--mode` | `attach` | yes | sparse: no attach (single-frame carved cloud). attach: held bowl as spheres, written to the global data/runs/curobo/attach.json. oracle: bowl and plate pixels removed from the planning cloud with simulator segmentation (privileged upper bound). oracle-attach: both. Choices: sparse, attach, oracle, oracle-attach. |
+| `--out` | `data/runs/curobo/replay` | yes | Output root; results go to <out>/<mode>/<label>/result.json. |
+| `--only` | `exp10_nodemo_a1,exp10_nodemo_a2` | no | Comma-separated labels (see PROGRAMS in the script). Default: all seven. |
+| `--timeout-s` | `900` | no | Per-run wall clock. |
+
+Two programs, attach on:
+
+```bash
+ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --out data/runs/curobo/replay --only exp10_nodemo_a1,exp10_nodemo_a2
+```
+
+Oracle upper bound:
+
+```bash
+ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode oracle --out data/runs/curobo/replay_oracle --only exp10_nodemo_a1
+```
+
 ## Scene reconstruction probe: cuRobo Mapper TSDF/ESDF on the LIBERO scene
 
 *probe working, logged once.* Can ANTS fuse a multi-view camera scan of the LIBERO scene into a persistent 3D reconstruction (cuRobo's Mapper: TSDF to ESDF to mesh), as a step toward a policy planning against a reconstructed scene instead of a single-frame point cloud?
@@ -1301,4 +1330,136 @@ Orbit rings used above:
 
 ```bash
 cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py --n-frames 32 --height 0.95 --out-dir ../data/runs/mapper_probe/frames_orbit_r1 && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py --n-frames 32 --height 1.35 --radius 0.5 --out-dir ../data/runs/mapper_probe/frames_orbit_r2
+```
+
+## Exp 12: demo vs no demo on cuRobo (simulator robot mask, attached bowl)
+
+*final (submission experiment, tag submission-experiment).* With cuRobo planning and the held bowl attached, does one human demonstration (plus S4 scene text and E3 repair evidence) beat task text only?
+
+- Docs: `docs/synthesizer/exp12/analysis.ipynb` · run dir: `data/runs/demo_e3_s4_sim | data/runs/nodemo_task_only_sim`
+- Inputs: data/demospecs/hurobo_233859.json; data/scene_text/S4_L1.txt
+- Outputs: data/runs/demo_e3_s4_sim/; data/runs/nodemo_task_only_sim/
+- Result so far: Held-out seeds 1 to 5, two samples (T 0.2, 0.7) per arm. Demo: debug seed solved in 2 and 2 attempts; scaled 5/5 and 2/5, stock 4/5 and 3/5. No-demo: solved in 5 (no) and 3 attempts; scaled 4/5 and 4/5, stock 0/5 and 0/5. The arms also differ in scene text and evidence. Source: events.jsonl of each run.
+
+### `exp12.demo`: Exp 12 demo arm: demo + S4 + E3 on cuRobo (paid)
+
+Needs the SAM 3 and PyRoki services and the dev cuRobo service on port 8118 (runbook entries services.start and curobo.service). Settings saved in docs/synthesizer/demo-vs-nodemo-config.json. Run the demo and no-demo commands one after the other, not in parallel.
+
+```bash
+uv run python -m ants.orchestrator.demo_vs_nodemo \
+    --aspire ASPIRE \
+    --out data/runs/demo_e3_s4_sim \
+    --demospec data/demospecs/hurobo_233859.json \
+    --arms demo \
+    --temperatures 0.2,0.7 \
+    --explain \
+    --repairs 4 \
+    --planner curobo-sim \
+    --attach-known \
+    --save-clouds \
+    --debug-scene scaled \
+    --scenes scaled \
+    --eval-seeds 1,2,3,4,5 \
+    --token-budget 300000 \
+    --evidence e3 \
+    --contacts \
+    --scene-text-file data/scene_text/S4_L1.txt
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `--aspire` | `ASPIRE` | yes | ASPIRE checkout. |
+| `--out` | `data/runs/demo_e3_s4_sim` | yes | Run folder. Repeat the same --out to resume. |
+| `--demospec` | `data/demospecs/hurobo_233859.json` | yes | DemoSpec of clip 233859 (the no-demo arm ignores its content but the flag is required). |
+| `--arms` | `demo` | yes | demo or nodemo. |
+| `--temperatures` | `0.2,0.7` | yes | One sample per temperature. |
+| `--explain` |  | yes | Repair replies start with WHY. |
+| `--repairs` | `4` | yes | Max repairs per sample (5 attempts). |
+| `--planner` | `curobo-sim` | yes | cuRobo with the robot mask from the simulator (privileged). |
+| `--attach-known` |  | yes | Attach the held bowl with its known size (privileged). Needs the dev cuRobo service with ANTS_ATTACH_FILE=data/runs/curobo/attach.json; do not run two such commands at once (one shared attach file). |
+| `--save-clouds` |  | yes | Keep every planning cloud for dev/curobo/make_viewer.py. |
+| `--debug-scene` | `scaled` | yes | Debug and repair in the scaled scene. |
+| `--scenes` | `scaled` | yes | As run on 2026-11-04. The run also logged stock-scene evaluation. |
+| `--eval-seeds` | `1,2,3,4,5` | yes | Held-out seeds, reporting only. |
+| `--token-budget` | `300000` | yes | Hard cap on new tokens per command. Observed: demo 204,933, no-demo 247,243 (about 2.8 and 3.3 USD). |
+| `--evidence` | `e3` | yes | Repair adds the contact log, the scene text and stall readings. |
+| `--contacts` |  | yes | Log simulator contacts per attempt. |
+| `--scene-text-file` | `data/scene_text/S4_L1.txt` | yes | S4 scene text (regenerate with g_scene_text('S4','L1') in ants.orchestrator.scene_context_exp). |
+
+Exp 12 demo arm: demo + S4 + E3 on cuRobo:
+
+```bash
+uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --temperatures 0.2,0.7 --explain --repairs 4 --planner curobo-sim --attach-known --save-clouds --debug-scene scaled --scenes scaled --eval-seeds 1,2,3,4,5 --token-budget 300000 --demospec data/demospecs/hurobo_233859.json --out data/runs/demo_e3_s4_sim --arms demo --evidence e3 --contacts --scene-text-file data/scene_text/S4_L1.txt
+```
+
+### `exp12.nodemo`: Exp 12 no-demo arm: task text only on cuRobo (paid)
+
+Needs the SAM 3 and PyRoki services and the dev cuRobo service on port 8118 (runbook entries services.start and curobo.service). Settings saved in docs/synthesizer/demo-vs-nodemo-config.json. Run the demo and no-demo commands one after the other, not in parallel.
+
+```bash
+uv run python -m ants.orchestrator.demo_vs_nodemo \
+    --aspire ASPIRE \
+    --out data/runs/nodemo_task_only_sim \
+    --demospec data/demospecs/hurobo_233859.json \
+    --arms nodemo \
+    --temperatures 0.2,0.7 \
+    --explain \
+    --repairs 4 \
+    --planner curobo-sim \
+    --attach-known \
+    --save-clouds \
+    --debug-scene scaled \
+    --scenes scaled \
+    --eval-seeds 1,2,3,4,5 \
+    --token-budget 300000
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `--aspire` | `ASPIRE` | yes | ASPIRE checkout. |
+| `--out` | `data/runs/nodemo_task_only_sim` | yes | Run folder. Repeat the same --out to resume. |
+| `--demospec` | `data/demospecs/hurobo_233859.json` | yes | DemoSpec of clip 233859 (the no-demo arm ignores its content but the flag is required). |
+| `--arms` | `nodemo` | yes | demo or nodemo. |
+| `--temperatures` | `0.2,0.7` | yes | One sample per temperature. |
+| `--explain` |  | yes | Repair replies start with WHY. |
+| `--repairs` | `4` | yes | Max repairs per sample (5 attempts). |
+| `--planner` | `curobo-sim` | yes | cuRobo with the robot mask from the simulator (privileged). |
+| `--attach-known` |  | yes | Attach the held bowl with its known size (privileged). Needs the dev cuRobo service with ANTS_ATTACH_FILE=data/runs/curobo/attach.json; do not run two such commands at once (one shared attach file). |
+| `--save-clouds` |  | yes | Keep every planning cloud for dev/curobo/make_viewer.py. |
+| `--debug-scene` | `scaled` | yes | Debug and repair in the scaled scene. |
+| `--scenes` | `scaled` | yes | As run on 2026-11-04. The run also logged stock-scene evaluation. |
+| `--eval-seeds` | `1,2,3,4,5` | yes | Held-out seeds, reporting only. |
+| `--token-budget` | `300000` | yes | Hard cap on new tokens per command. Observed: demo 204,933, no-demo 247,243 (about 2.8 and 3.3 USD). |
+
+Exp 12 no-demo arm: task text only on cuRobo:
+
+```bash
+uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --temperatures 0.2,0.7 --explain --repairs 4 --planner curobo-sim --attach-known --save-clouds --debug-scene scaled --scenes scaled --eval-seeds 1,2,3,4,5 --token-budget 300000 --demospec data/demospecs/hurobo_233859.json --out data/runs/nodemo_task_only_sim --arms nodemo
+```
+
+### `report.run`: View a run (HTML trace UI)
+
+Writes one self-contained report.html in the run dir: success rates with intervals, seed-by-sample heatmap, rollout explorer with video, compare, policies, System 2 and Scene tabs. Keep report.html in the folder (videos are linked by relative path). Works on any run dir and on data/runs itself.
+
+```bash
+uv run python -m ants.evalkit.report data/runs/exp04_scene \
+    --open
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `--open` |  | yes | Open report.html in the browser. |
+| `--serve` |  | no | Serve the run directory over http so videos play (127.0.0.1). |
+| `--port` | `8765` | no | Port for --serve. |
+
+All runs, pick in the UI:
+
+```bash
+uv run python -m ants.evalkit.report data/runs --open
+```
+
+Exp 02 over http:
+
+```bash
+uv run python -m ants.evalkit.report data/runs/exp02_scaled --serve --open
 ```

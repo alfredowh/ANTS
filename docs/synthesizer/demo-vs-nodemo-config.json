@@ -1,0 +1,87 @@
+{
+  "status": "final: submission experiment (git tag submission-experiment)",
+  "about": "Demo vs no-demo settings run on 2026-11-04 with cuRobo (simulator robot mask, held bowl attached with its known size). Results come from events.jsonl of each run dir. Read by the dashboard later; commands are in docs/runbook/commands.json (exp12.demo, exp12.nodemo).",
+  "differences_between_arms": [
+    "demo arm gets the DemoSpec of clip 233859, the S4 scene text and E3 repair evidence",
+    "no-demo arm gets the task text only (no scene text, no evidence)"
+  ],
+  "caveats": [
+    "two samples per arm (temperatures 0.2 and 0.7), one run each",
+    "held-out seeds 1 to 5 only",
+    "the arms differ in scene text and evidence as well as the demonstration",
+    "--attach-known and curobo-sim use simulator information (privileged)",
+    "debug seed 51 in the scaled scene for both arms"
+  ],
+  "runs": {
+    "demo": {
+      "run_dir": "data/runs/demo_e3_s4_sim",
+      "saved_config": "data/runs/demo_e3_s4_sim/config.json",
+      "settings": {
+        "arms": "demo",
+        "temperatures": "0.2,0.7",
+        "repairs": "4",
+        "explain": "True",
+        "planner": "curobo-sim",
+        "attach_known": "True",
+        "save_clouds": "True",
+        "debug_scene": "scaled",
+        "debug_seed": "51",
+        "eval_seeds": "[1, 2, 3, 4, 5]",
+        "scene_text_file": "data/scene_text/S4_L1.txt",
+        "evidence": "e3",
+        "contacts": "True",
+        "model": "muse-wonder-1.0",
+        "token_budget": "300000",
+        "demospec": "data/demospecs/hurobo_233859.json",
+        "task": "put the bowl on the plate",
+        "suite": "libero_goal_swap",
+        "task_id": "8",
+        "sam_model": "sam3"
+      },
+      "eval_logged": {
+        "sample0_scaled": "5/5",
+        "sample0_stock": "4/5",
+        "sample1_scaled": "2/5",
+        "sample1_stock": "3/5"
+      },
+      "new_tokens": 204933,
+      "usd_est": 2.77
+    },
+    "nodemo": {
+      "run_dir": "data/runs/nodemo_task_only_sim",
+      "saved_config": "data/runs/nodemo_task_only_sim/config.json",
+      "settings": {
+        "arms": "nodemo",
+        "temperatures": "0.2,0.7",
+        "repairs": "4",
+        "explain": "True",
+        "planner": "curobo-sim",
+        "attach_known": "True",
+        "save_clouds": "True",
+        "debug_scene": "scaled",
+        "debug_seed": "51",
+        "eval_seeds": "[1, 2, 3, 4, 5]",
+        "scene_text_file": "None",
+        "evidence": "none",
+        "contacts": "False",
+        "model": "muse-wonder-1.0",
+        "token_budget": "300000",
+        "demospec": "data/demospecs/hurobo_233859.json",
+        "task": "put the bowl on the plate",
+        "suite": "libero_goal_swap",
+        "task_id": "8",
+        "sam_model": "sam3"
+      },
+      "eval_logged": {
+        "sample0_scaled": "4/5",
+        "sample0_stock": "0/5",
+        "sample1_scaled": "4/5",
+        "sample1_stock": "0/5"
+      },
+      "new_tokens": 247243,
+      "usd_est": 3.34
+    }
+  },
+  "analysis_notebook": "docs/synthesizer/exp12/analysis.ipynb",
+  "log_snapshot": "docs/synthesizer/exp12/{demo,nodemo}/"
+}

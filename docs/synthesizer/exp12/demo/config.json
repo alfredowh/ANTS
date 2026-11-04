@@ -1,0 +1,72 @@
+{
+ "aspire": "/home/eeschner/alfredo/workspace/ANTS/ASPIRE",
+ "out": "/home/eeschner/alfredo/workspace/ANTS/data/runs/demo_e3_s4_sim",
+ "demospec": "data/demospecs/hurobo_233859.json",
+ "arms": "demo",
+ "temperatures": "0.2,0.7",
+ "suite": "libero_goal_swap",
+ "task_id": "8",
+ "task": "put the bowl on the plate",
+ "debug_seed": "51",
+ "eval_seeds": "[1, 2, 3, 4, 5]",
+ "repairs": "4",
+ "explain": "True",
+ "scene_text_file": "data/scene_text/S4_L1.txt",
+ "evidence": "e3",
+ "contacts": "True",
+ "planner": "curobo-sim",
+ "sam_model": "sam3",
+ "attach_known": "True",
+ "save_clouds": "True",
+ "ontop_area": "None",
+ "doc": "None",
+ "model": "muse-wonder-1.0",
+ "token_budget": "300000",
+ "usd_per_mtok": "13.5",
+ "scenes": {
+  "scaled": {
+   "scale": {
+    "bodies": {
+     "akita_black_bowl_1_main": 1.227,
+     "plate_1_main": 1.855
+    }
+   },
+   "planner": {
+    "mode": "curobo-sim",
+    "exclude_radius_m": 0.12,
+    "sam_model": "sam3",
+    "attach": {
+     "file": "/home/eeschner/alfredo/workspace/ANTS/data/runs/curobo/attach.json",
+     "profile": [
+      [
+       0.0,
+       0.0279
+      ],
+      [
+       0.0124,
+       0.0562
+      ],
+      [
+       0.0372,
+       0.0667
+      ],
+      [
+       0.062,
+       0.0658
+      ]
+     ],
+     "sphere_r": 0.015,
+     "query": "bowl",
+     "body": "akita_black_bowl",
+     "body_main": "akita_black_bowl_1_main"
+    }
+   }
+  },
+  "stock": null
+ },
+ "debug_scene": "scaled",
+ "scale_json": "{\"akita_black_bowl_1_main\": 1.227, \"plate_1_main\": 1.855}",
+ "eval_only": "False",
+ "started": "2026-11-04T18:33:11",
+ "ledger_spent_at_start": 6305780
+}
