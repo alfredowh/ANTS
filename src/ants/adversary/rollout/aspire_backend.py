@@ -271,6 +271,8 @@ def read_run_dir(
     if outcome.get("error"):
         feedback["error"] = outcome["error"]
     if result.get("stdout"):
+        # Programs print their measurements first and their outcome last; keep both ends.
+        feedback["stdout_head"] = result["stdout"][:2500]
         feedback["stdout_tail"] = result["stdout"][-1500:]
     if "result" in result:
         feedback["program_result"] = result["result"]

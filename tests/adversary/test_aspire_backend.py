@@ -149,13 +149,85 @@ def test_run_program_logs_seed_split_and_scene(backend, monkeypatch):
     assert Path(cmd[cmd.index("--program") + 1]).read_text(encoding="utf-8") == "result = 1"
 
 
+class SplitHarness(FakeHarness):
+    """Nominal runs (cap-harness) and perturbed runs (the launcher) get different run dirs."""
+
+    def __init__(self, nominal, perturbed):
+        super().__init__()
+        self.nominal, self.perturbed = nominal, perturbed
+
+    def __call__(self, cmd, **kwargs):
+        self.run_kwargs = self.perturbed if "aspire_launch.py" in " ".join(cmd) else self.nominal
+        return super().__call__(cmd, **kwargs)
+
+
+V0 = Policy("bowl_on_plate", 0, "put the bowl on the plate", "result = 1")
+
+
 def test_adversary_attacks_through_cap_harness(backend, monkeypatch):
     monkeypatch.setattr(subprocess, "run", FakeHarness(calls=[OK_CALL, TIMEOUT_CALL]))
     adv = Adversary(AdversaryConfig(backend="cap_harness"), backend)
-    report = adv.attack(Policy("bowl_on_plate", 0, "put the bowl on the plate", "result = 1"))
+    report = adv.attack(V0)
     assert report.result.outcome is Outcome.FAILURE
-    assert report.constraint.failure_signature.endswith(":move_to_pose:timeout")
     assert adv.replay(Policy("p", 0, "t", "x"), [None])[0].details["scene"] == {}
+
+
+def test_a_call_that_also_fails_in_the_nominal_run_is_not_blamed(backend, monkeypatch):
+    # Every rollout of the real v0 has a harmless move_to_pose timeout at approach_high; it was
+    # blamed for every failure on the GPU. Here nominal and attack share it: not the cause.
+    harness = SplitHarness(
+        nominal={"success": True, "calls": [OK_CALL, TIMEOUT_CALL]},
+        perturbed={"calls": [OK_CALL, TIMEOUT_CALL]},
+    )
+    monkeypatch.setattr(subprocess, "run", harness)
+    adv = Adversary(AdversaryConfig(backend="cap_harness"), backend)
+    report = adv.attack(V0)
+    assert report.result.outcome is Outcome.FAILURE
+    assert report.constraint.failure_signature.endswith(":program_completed:not_scored")
+    assert any("also failing in the nominal run" in e for e in report.constraint.evidence)
+    notes = adv.history.records[-1].notes["nominal"]
+    assert notes == {"outcome": "success", "expected_failed_calls": ["move_to_pose:timeout"]}
+
+
+def test_a_call_that_fails_only_under_the_perturbation_is_blamed(backend, monkeypatch):
+    harness = SplitHarness(
+        nominal={"success": True, "calls": [OK_CALL]},
+        perturbed={"calls": [OK_CALL, TIMEOUT_CALL]},
+    )
+    monkeypatch.setattr(subprocess, "run", harness)
+    adv = Adversary(AdversaryConfig(backend="cap_harness"), backend)
+    report = adv.attack(V0)
+    assert report.constraint.failure_signature.endswith(":move_to_pose:timeout")
+    runs = len(harness.commands)
+    adv.nominal_feedback(V0, 0)  # cached per version and seed: no second nominal run
+    assert len(harness.commands) == runs
+
+
+def test_the_model_diagnoser_sees_both_runs_printed_measurements(backend, monkeypatch):
+    from ants.adversary.models import Effort, MockModel
+
+    harness = SplitHarness(
+        nominal={"success": True, "calls": [OK_CALL], "stdout": "plate height m: 0.021"},
+        perturbed={"calls": [OK_CALL], "stdout": "plate height m: 0.157"},
+    )
+    monkeypatch.setattr(subprocess, "run", harness)
+    model = MockModel()
+    adv = Adversary(AdversaryConfig(backend="cap_harness"), backend, model=model)
+    adv.attack(V0)
+    prompts = [m[0][0].content for m in model.calls if m[1] is Effort.DELIBERATE]
+    assert prompts and "plate height m: 0.157" in prompts[0] and "0.021" in prompts[0]
+    assert "outcome: success" in prompts[0]
+
+
+def test_the_adversary_token_budget_reaches_the_model(monkeypatch):
+    import ants.adversary.adversary as adversary_module
+
+    class Budgeted:
+        token_budget = 100_000
+
+    monkeypatch.setattr(adversary_module, "get_model", lambda spec: Budgeted())
+    adv = Adversary.from_config(AdversaryConfig(model="muse-spark", token_budget=500_000))
+    assert adv.model.token_budget == 500_000
 
 
 def test_default_root_is_the_submodule_and_the_env_overrides_it(monkeypatch):

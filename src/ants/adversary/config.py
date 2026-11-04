@@ -13,6 +13,7 @@ from ants.adversary.rollout.runner import DEFAULT_LINE_BUDGET, DEFAULT_TIMEOUT_S
 @dataclass
 class AdversaryConfig:
     model: str = "mock"  # "muse-spark" enables the model proposer, diagnoser and explainer
+    token_budget: int | None = None  # new model tokens per run; None keeps the adapter default
     n_agents: int = 4  # parallel proposer agents (PARALLEL effort)
     confidence_floor: float = 0.5  # below it the rule diagnosis is used
     backend: str = "mock"  # "mock" (offline fixture) or "cap_harness" (ASPIRE on LIBERO-Pro)
