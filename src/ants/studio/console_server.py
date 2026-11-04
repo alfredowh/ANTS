@@ -310,6 +310,31 @@ SESSIONS_DIR = REPO_ROOT / "data" / "console_sessions"
 LEGACY_RUNS_DIR = REPO_ROOT / "data" / "console_runs"
 
 
+def deploy_latest(session_dir: Path | None, incumbent: Path, deploy_dir: Path) -> dict:
+    """Save the last main program to the deploy folder: the highest accepted version found in this
+    session's runs (policies/v<N>.py), else the incumbent file. Writes <deploy_dir>/<ts>-v<N>.py
+    and latest.py + latest.json. Never overwrites an older timestamped copy."""
+    best: tuple[int, float, Path] | None = None
+    if session_dir is not None:
+        for f in (session_dir / "runs").glob("run-*/policies/v*.py"):
+            digits = f.stem[1:]
+            if digits.isdigit():
+                key = (int(digits), f.stat().st_mtime, f)
+                if best is None or key[:2] > best[:2]:
+                    best = key
+    src = best[2] if best else incumbent
+    version = best[0] if best else 0
+    deploy_dir.mkdir(parents=True, exist_ok=True)
+    stamp = time.strftime("%Y%m%dT%H%M%S")
+    code = src.read_text(encoding="utf-8")
+    target = deploy_dir / f"{stamp}-v{version}.py"
+    target.write_text(code, encoding="utf-8")
+    (deploy_dir / "latest.py").write_text(code, encoding="utf-8")
+    info = {"deployed": stamp, "version": version, "source": str(src), "file": target.name}
+    (deploy_dir / "latest.json").write_text(json.dumps(info, indent=2), encoding="utf-8")
+    return info
+
+
 class Session:
     """One server/browser session = one folder holding everything relevant to it.
 
@@ -1052,6 +1077,19 @@ def make_handler(
                 return
             if path == "/upload":
                 self._handle_upload()
+                return
+            if path == "/deploy":
+                try:
+                    info = deploy_latest(
+                        state.session.dir if state.session else None,
+                        incumbent,
+                        REPO_ROOT / "data" / "deploy",
+                    )
+                except OSError as exc:
+                    self._send_json({"ok": False, "error": str(exc)}, status=500)
+                    return
+                info["dir"] = "data/deploy"
+                self._send_json({"ok": True, **info})
                 return
             if path != "/run":
                 self.send_response(404)

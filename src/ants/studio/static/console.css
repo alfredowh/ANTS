@@ -225,14 +225,16 @@ body[data-tab="console"] .console-only{display:inline-flex}
 .navsess .navnote{padding:0}
 .navsess .mono{font-family:var(--mono)}
 /* /policy-dev wizard */
-.wizard-chip{align-self:flex-start;margin:4px 0 0 4px;border:1px solid var(--line);background:var(--raise);color:var(--accent,#1877F2);border-radius:10px;padding:1px 8px;font-size:11px;line-height:1.4;cursor:pointer;flex:none}
+.wizard-chip{display:inline-flex;align-items:center;width:auto;min-width:0;max-width:max-content;flex:none;margin:0;border:1px solid var(--line);background:var(--raise);color:var(--accent,#1877F2);border-radius:10px;padding:1px 8px;font-size:11px;line-height:1.4;cursor:pointer}
+.chip-row{display:flex;flex-direction:row;gap:6px;align-self:flex-start;width:100%;margin:4px 0 0 4px}
+#col-center.idle .chip-row{align-self:center;max-width:640px;margin:6px auto 0;padding:0}
 .wizard-chip:hover{border-color:var(--accent,#1877F2)}
 .turn.wizard-turn .main{white-space:pre-wrap}
 .turn.wizard-turn.needs .tk{color:#d9534f}
 #chat-attach.wizard-ask{border-color:var(--accent,#1877F2);color:var(--accent,#1877F2);box-shadow:0 0 0 3px rgba(24,119,242,.2)}
 
 #col-center{position:relative}
-.edge-tab{position:absolute;top:50%;transform:translateY(-50%);z-index:5;width:16px;height:56px;padding:0;border:1px solid var(--line);background:var(--raise);color:var(--muted);cursor:pointer;font-size:12px;line-height:1}
+.edge-tab{position:absolute;top:113px;transform:none;z-index:5;display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:18px;min-width:18px;max-width:18px;height:56px;padding:0;border:1px solid var(--line);background:var(--raise);color:var(--muted);cursor:pointer;font-size:12px;line-height:1}
 .edge-tab:hover{color:var(--accent);border-color:var(--accent)}
-.edge-tab.left{left:0;border-left:0;border-radius:0 8px 8px 0}
-.edge-tab.right{right:0;border-right:0;border-radius:8px 0 0 8px}
+.edge-tab.left{left:0;right:auto;border-left:0;border-radius:0 8px 8px 0}
+.edge-tab.right{right:0;left:auto;border-right:0;border-radius:8px 0 0 8px}

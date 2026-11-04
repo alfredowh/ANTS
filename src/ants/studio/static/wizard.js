@@ -57,7 +57,16 @@
     input.value = "/policy-dev";
     input.focus(); // press Enter to start
   });
-  bar.insertAdjacentElement("afterend", chip); // below the chat field
+  const row = document.createElement("div");
+  row.className = "chip-row";
+  const dep = document.createElement("button");
+  dep.type = "button";
+  dep.className = "wizard-chip";
+  dep.textContent = "/deploy";
+  dep.title = "Save the latest main program (highest accepted version of this session, else the incumbent) to data/deploy/";
+  dep.addEventListener("click", () => { input.value = "/deploy"; input.focus(); });
+  row.append(chip, dep);
+  bar.insertAdjacentElement("afterend", row); // below the chat field
 
   const picker = document.createElement("input");
   picker.type = "file";
@@ -84,6 +93,14 @@
   window.wizardHandle = function (message) {
     const text = message.trim();
     const low = text.toLowerCase();
+    if (low === "/deploy") {
+      userBubble(text);
+      post("/deploy", {}).then((r) => agentTurn(r.ok
+        ? "Deployed v" + r.version + " to " + r.dir + "/" + r.file + " (also latest.py)."
+        : "Deploy failed: " + r.error, r.ok ? "" : "needs"))
+        .catch(() => agentTurn("Deploy failed: server unreachable.", "needs"));
+      return true;
+    }
     if (low === "/policy-dev" || low === "/policy-dev run") {
       userBubble(text);
       if (window.startPolicyLoop) window.startPolicyLoop(); // asks for confirmation, then runs the loop

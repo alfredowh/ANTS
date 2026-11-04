@@ -277,3 +277,20 @@ def test_session_resume_keeps_folder(tmp_path):
     again = console_server.Session(tmp_path, first.id)
     assert again.dir == first.dir and again.info["started"] == first.info["started"]
     assert again.info["resumed"]
+
+
+def test_deploy_latest_picks_highest_accepted_version(tmp_path):
+    from ants.studio.console_server import deploy_latest
+
+    inc = tmp_path / "policy.py"
+    inc.write_text("incumbent", encoding="utf-8")
+    out = tmp_path / "deploy"
+    assert deploy_latest(None, inc, out)["version"] == 0
+    assert (out / "latest.py").read_text(encoding="utf-8") == "incumbent"
+    pol = tmp_path / "sess" / "runs" / "run-1" / "policies"
+    pol.mkdir(parents=True)
+    (pol / "v0.py").write_text("zero", encoding="utf-8")
+    (pol / "v2.py").write_text("two", encoding="utf-8")
+    info = deploy_latest(tmp_path / "sess", inc, out)
+    assert info["version"] == 2
+    assert (out / "latest.py").read_text(encoding="utf-8") == "two"
