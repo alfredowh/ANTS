@@ -19,6 +19,7 @@ Two modes, picked by `--mode`:
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import queue
 import subprocess
@@ -28,7 +29,9 @@ import time
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
+
+from ants.studio.policy_wizard import WizardManager, launch_generation
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PHASES_DOC = REPO_ROOT / "docs" / "orchestrator" / "phases.md"
@@ -36,7 +39,11 @@ STUDIO_DIR = Path(__file__).parent
 VIEWS_DIR = STUDIO_DIR / "views"
 STATIC_DIR = STUDIO_DIR / "static"
 # Whitelist: every /static/<name> and /views/<name>_stub route this server will serve.
-STATIC_FILES = {"console.css": STATIC_DIR / "console.css", "console.js": STATIC_DIR / "console.js"}
+STATIC_FILES = {
+    "console.css": STATIC_DIR / "console.css",
+    "console.js": STATIC_DIR / "console.js",
+    "wizard.js": STATIC_DIR / "wizard.js",
+}
 STUB_FILES = {
     "synthesizer_stub": VIEWS_DIR / "synthesizer_stub.html",
     "adversary_stub": VIEWS_DIR / "adversary_stub.html",
@@ -737,6 +744,31 @@ def make_handler(
     }
     page = _assemble_shell().replace("/*__DATA__*/null", json.dumps(data))
 
+    def _set_running(on: bool) -> bool:
+        with state.lock:
+            if on and state.running:
+                return False
+            state.running = on
+            return True
+
+    def _wizard_run_loop(program: Path, answers: dict) -> None:
+        cfg = dataclasses.replace(
+            loop_cfg or LoopRunConfig(),
+            cycles=answers.get("adv_cycles", 3),
+            stall_window=answers.get("adv_stall", 2),
+            eta=1.0 if answers.get("strategy") == "uniform" else 0.2,
+            synth_token_budget=answers["synth_budget"],
+        )
+        run_live_loop(state, program, cfg)
+
+    wizard = WizardManager(
+        state.broadcast,
+        launcher=lambda a, folder, emit: launch_generation(
+            a, folder, emit, run_loop=_wizard_run_loop
+        ),
+        set_running=_set_running,
+    )
+
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args) -> None:  # noqa: A002 -- stdlib signature
             pass
@@ -855,6 +887,9 @@ def make_handler(
                 self.end_headers()
                 self.wfile.write(body)
                 return
+            if path == "/wizard":
+                self._send_json(wizard.state())
+                return
             if path == "/events":
                 self.send_response(200)
                 self.send_header("Content-Type", "text/event-stream")
@@ -882,6 +917,12 @@ def make_handler(
             path = urlparse(self.path).path
             if path == "/chat":
                 self._handle_chat()
+                return
+            if path == "/wizard":
+                self._handle_wizard()
+                return
+            if path == "/upload":
+                self._handle_upload()
                 return
             if path != "/run":
                 self.send_response(404)
@@ -943,6 +984,55 @@ def make_handler(
             target = drive_loop if (mode == "loop" and loop_cfg is not None) else drive_single
             threading.Thread(target=target, daemon=True).start()
             self._send_json({"ok": True})
+
+        def _handle_wizard(self) -> None:
+            length = int(self.headers.get("Content-Length", "0"))
+            body = json.loads(self.rfile.read(length) or b"{}")
+            action = body.get("action")
+            if action == "start":
+                self._send_json(wizard.start())
+            elif action == "cancel":
+                self._send_json(wizard.cancel())
+            elif action == "message":
+                self._send_json(wizard.message(str(body.get("message") or "")))
+            else:
+                self._send_json({"ok": False, "error": "unknown action"}, status=400)
+
+        def _handle_upload(self) -> None:
+            limit = wizard.skill["limits"]["upload_max_mb"] * 1024 * 1024
+            length = int(self.headers.get("Content-Length", "0"))
+            name = unquote(self.headers.get("X-Filename", ""))
+            target = wizard.upload_target(name)
+            if target is None:
+                self._send_json(
+                    {
+                        "ok": False,
+                        "error": "no video is being asked for, or the file type is not "
+                        "an allowed video extension",
+                    },
+                    status=400,
+                )
+                return
+            if length <= 0 or length > limit:
+                self._send_json(
+                    {"ok": False, "error": f"file must be 1 byte to {limit // 1024 // 1024} MB"},
+                    status=413,
+                )
+                return
+            target.parent.mkdir(parents=True, exist_ok=True)
+            remaining = length
+            with target.open("wb") as fh:
+                while remaining > 0:
+                    chunk = self.rfile.read(min(1 << 20, remaining))
+                    if not chunk:
+                        break
+                    fh.write(chunk)
+                    remaining -= len(chunk)
+            if remaining:
+                target.unlink(missing_ok=True)
+                self._send_json({"ok": False, "error": "upload was cut short"}, status=400)
+                return
+            self._send_json(wizard.uploaded(target))
 
         def _handle_chat(self) -> None:
             length = int(self.headers.get("Content-Length", "0"))

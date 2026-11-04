@@ -1,0 +1,31 @@
+{
+  "name": "policy-dev",
+  "version": 1,
+  "description": "Guided setup for one policy-development run: task, optional demonstration, Synthesizer only or Synthesizer + Adversary, budgets and retries, Adversary sampling strategy, then an explicit confirmation. Plain data: any agent (Muse Wonder, Muse Code, a person) can read the questions, and the Studio server walks them as a state machine without a model call. Muse tokens cost about $13.5 per million, so nothing launches without an explicit 'yes' at the last step, and 'go with defaults' never skips that step.",
+  "commands": {"start": "/policy-dev", "cancel": "/cancel", "defaults": ["defaults", "go with defaults", "default", "go"]},
+  "limits": {"paid_confirm_above_tokens": 100000, "token_budget_max": 600000, "upload_max_mb": 200, "video_extensions": [".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"]},
+  "steps": [
+    {"id": "task", "type": "text", "default": "put the bowl on the plate", "ask": "What should the robot do? Describe the task in one sentence."},
+    {"id": "demo", "type": "choice", "default": "none", "ask": "Do you have an example demonstration?",
+     "choices": [
+       {"value": "video", "label": "video", "help": "attach a human demo video with the + button"},
+       {"value": "demospec", "label": "demospec", "help": "use a DemoSpec already extracted under data/demospecs/"},
+       {"value": "none", "label": "none", "help": "no demonstration: the generator works from the task text only"}]},
+    {"id": "video", "type": "upload", "when": {"demo": "video"}, "ask": "Attach the video with the + button (mp4, mov, webm, mkv, avi, m4v; up to 200 MB). Say 'skip' to continue without it."},
+    {"id": "demospec", "type": "demospec", "when": {"demo": "demospec"}, "ask": "Which DemoSpec? Give its number or file name."},
+    {"id": "mode", "type": "choice", "default": "synth", "ask": "What should run?",
+     "choices": [
+       {"value": "synth", "label": "synthesizer", "help": "write the first program from the demo and task, then stop"},
+       {"value": "synth_adv", "label": "synthesizer + adversary", "help": "write the program, then run the closed loop: attack, repair, gate"}]},
+    {"id": "synth_budget", "type": "int", "default": 100000, "min": 10000, "max": 600000, "ask": "Synthesizer token budget (hard cap on new Muse tokens)?"},
+    {"id": "synth_retries", "type": "int", "default": 2, "min": 0, "max": 8, "ask": "Synthesizer max retries (repair attempts on a failing program)?"},
+    {"id": "adv_cycles", "type": "int", "when": {"mode": "synth_adv"}, "default": 3, "min": 1, "max": 30, "ask": "Adversary budget: how many attacks (cycles) at most?"},
+    {"id": "adv_stall", "type": "int", "when": {"mode": "synth_adv"}, "default": 2, "min": 1, "max": 6, "ask": "Adversary max retries: how many stalled cycles on one failure before escalating to you?"},
+    {"id": "strategy", "type": "choice", "when": {"mode": "synth_adv"}, "default": "thompson", "ask": "How should the Adversary pick what to attack?",
+     "choices": [
+       {"value": "thompson", "label": "thompson", "help": "adaptive: favour categories most likely to break the policy (eta 0.2)", "eta": 0.2},
+       {"value": "uniform", "label": "random", "help": "uniform sampling over categories (eta 1.0), the baseline", "eta": 1.0}]},
+    {"id": "confirm", "type": "choice", "confirm": true, "default": null, "ask": "Launch this run?",
+     "choices": [{"value": "yes", "label": "yes", "help": "start now"}, {"value": "no", "label": "no", "help": "cancel the wizard"}]}
+  ]
+}
