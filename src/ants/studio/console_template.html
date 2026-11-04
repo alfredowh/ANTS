@@ -68,12 +68,20 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
 .tile .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em} .tile .v{font-family:var(--mono);font-size:18px}
 .reply{background:var(--panel);border:1px solid var(--line);padding:10px;font-family:var(--mono);font-size:11px;white-space:pre-wrap;max-height:420px;overflow-y:auto}
 .sysbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:40px;border-bottom:1px solid var(--line);padding:0 20px;font-size:12px}
-.sys{display:flex;align-items:center;gap:7px;border:1px solid var(--line);padding:4px 10px}
+.sys{display:flex;align-items:center;gap:7px;border:1px solid var(--line);padding:4px 10px;cursor:help;transition:border-color .15s}
 .sys .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
-.sys.active .dot{background:var(--accent);box-shadow:0 0 6px var(--accent)}
+.sys.active .dot{background:var(--accent);box-shadow:0 0 6px var(--accent);animation:pulse-dot 1.1s ease-in-out infinite}
+.sys.active{border-color:var(--accent)}
 .sys .who{font-weight:600;letter-spacing:.03em}
 .sys .stage{color:var(--muted)}
 .sys.active .stage{color:var(--fg)}
+#escalate-badge.active .dot{background:var(--fail);box-shadow:0 0 6px var(--fail)}
+#escalate-badge.active{border-color:var(--fail)}
+#escalate-badge.active .stage{color:var(--fail)}
+.flow-arrow{color:var(--dim);font-size:14px}
+.flow-loop{color:var(--dim);font-size:16px;margin-right:2px}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.35}}
+@media (prefers-reduced-motion: reduce){.sys.active .dot{animation:none}}
 .banner{display:none;border:1px solid var(--fail);background:#2a0f0f;color:#ffb3b0;padding:10px 14px;margin-bottom:14px;font-size:12.5px;line-height:1.5}
 .banner.on{display:block}
 .banner b{color:#ff8884}
@@ -126,9 +134,14 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
 </header>
 
 <div class="sysbar">
-  <div class="sys" id="sys1-badge"><span class="dot"></span><span class="who">System 1</span><span class="stage" id="sys1-stage">idle</span></div>
-  <div class="sys" id="sys2-badge"><span class="dot"></span><span class="who">System 2</span><span class="stage" id="sys2-stage">idle</span></div>
-  <div class="sys" id="orch-badge"><span class="dot"></span><span class="who">Orchestrator</span><span class="stage" id="orch-stage">idle</span></div>
+  <span class="flow-loop" title="the loop repeats: System 2 attacks, a failure goes to System 1, the gate decides, repeat">&#8634;</span>
+  <div class="sys" id="sys2-badge" title="selector &rarr; proposer &rarr; rollout &rarr; diagnoser, all inside one call -- Loop only reports when the whole attack is done, not each inner step"><span class="dot"></span><span class="who">System 2</span><span class="stage" id="sys2-stage">idle</span></div>
+  <span class="flow-arrow">&rarr;</span>
+  <div class="sys" id="sys1-badge" title="muse_orchestrator.py -&gt; muse exec, one blocking call per repair"><span class="dot"></span><span class="who">System 1</span><span class="stage" id="sys1-stage">idle</span></div>
+  <span class="flow-arrow">&rarr;</span>
+  <div class="sys" id="orch-badge" title="orchestrator/gate.py: no worse on every case seen, better on at least one"><span class="dot"></span><span class="who">Orchestrator</span><span class="stage" id="orch-stage">idle</span></div>
+  <span class="flow-arrow">&rarr;</span>
+  <div class="sys" id="escalate-badge" title="W stalled cycles on one signature, or the token budget runs out"><span class="dot"></span><span class="who">Escalation</span><span class="stage" id="escalate-stage">none</span></div>
 </div>
 
 <main>
@@ -524,6 +537,7 @@ function resetSys() {
   setSys("sys1", false, "idle");
   setSys("sys2", false, "idle");
   setSys("orch", false, "idle");
+  setSys("escalate", false, "none");
 }
 
 /* ---------- blocking-state banner ---------- */
@@ -568,6 +582,7 @@ function handleLoopEvent(row) {
     } else if (decision === "budget_stop") {
       setSys("sys2", false, "idle");
       setSys("orch", true, "blocked: budget exhausted");
+      setSys("escalate", true, "budget exhausted");
       showBanner(`<b>Budget exhausted.</b> System 1's rewrite budget (${esc(String(row.cycle))} cycles in) ran out before the loop could reach a stop condition. It cannot continue on its own from here &mdash; raise <code>--synth-token-budget</code> and re-run, or treat this as a point for human review.`);
     } else {
       setSys("sys2", false, "idle (result logged)");
@@ -601,12 +616,14 @@ function handleLoopEvent(row) {
     setSys("sys1", false, "idle");
     setSys("sys2", false, "idle");
     setSys("orch", true, "blocked: escalated");
+    setSys("escalate", true, "signature " + row.signature);
     showBanner(`<b>Escalated &mdash; needs human intervention.</b> ${esc(row.request)}<br>signature <code>${esc(row.signature)}</code> stalled ${row.stalled_cycles} cycles in a row (W). The loop will not continue past this without a human answer.`);
     addTurn("error", `<div class="tk">escalate</div><div class="main">${esc(row.request)}<br><span class="delta">signature: ${esc(row.signature)}, stalled ${row.stalled_cycles} cycles</span></div>`);
   } else if (event === "no_working_policy") {
     setSys("sys1", false, "idle");
     setSys("sys2", false, "idle");
     setSys("orch", true, "blocked: no working policy");
+    setSys("escalate", true, "no working policy");
     showBanner(`<b>No working policy &mdash; needs human intervention.</b> ${esc(row.request)}. v0 fails its own nominal cases, so there is nothing for System 2 to attack yet.`);
     addTurn("error", `<div class="tk">no working policy</div><div class="main">${esc(row.request)}</div>`);
   } else if (event === "end") {
@@ -666,7 +683,7 @@ function saveUiState() {
       statusClass: pill.className, statusText: pill.textContent,
       bannerOn: document.getElementById("banner").classList.contains("on"),
       bannerHTML: document.getElementById("banner").innerHTML,
-      sys: ["sys1", "sys2", "orch"].reduce((o, id) => {
+      sys: ["sys1", "sys2", "orch", "escalate"].reduce((o, id) => {
         o[id] = [document.getElementById(id + "-badge").classList.contains("active"), document.getElementById(id + "-stage").textContent];
         return o;
       }, {}),
@@ -689,7 +706,7 @@ function restoreUiState() {
     document.getElementById("banner").innerHTML = snap.bannerHTML;
     document.getElementById("banner").classList.add("on");
   }
-  for (const id of ["sys1", "sys2", "orch"]) {
+  for (const id of ["sys1", "sys2", "orch", "escalate"]) {
     const [active, stage] = snap.sys[id] || [false, "idle"];
     setSys(id, wasRunning ? false : active, wasRunning ? "idle (reload)" : stage);
   }
@@ -738,6 +755,7 @@ runBtn.addEventListener("click", () => {
   turnsEl.innerHTML = "";
   hideBanner();
   setSys("sys1", DATA.mode === "single", "active (muse exec)");
+  setSys("escalate", false, "none");
   if (DATA.mode === "loop") { setSys("sys2", false, "idle"); setSys("orch", true, "starting"); }
   setStatus("running", "running");
   document.getElementById("reply-box").textContent = "(waiting)";
