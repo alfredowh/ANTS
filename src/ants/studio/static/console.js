@@ -915,22 +915,7 @@ function openStream() {
 }
 
 runBtn.addEventListener("click", () => {
-  const realBackend = DATA.loop_config && DATA.loop_config.backend === "cap_harness";
-  const gateMsg = DATA.mode === "loop"
-    ? "Ready to run the policy development phase?\n\n" +
-      "This runs the real closed loop: Adversary attacks (" +
-      (realBackend ? "real ASPIRE/LIBERO rollouts, ~40s+ and real GPU time each" : "mock backend, free") +
-      ") and Synthesizer rewrites for real via muse exec (Muse Code), up to " +
-      (DATA.loop_config ? DATA.loop_config.cycles : "N") +
-      " cycles. Each rewrite spends Muse tokens (observed ~$0.5 per rewrite); the loop stops " +
-      "earlier if it becomes robust, stalls, or hits the token budget." +
-      (realBackend ? "\n\nThe Perception tab will switch to live frames from this rollout as it runs." : "")
-    : "Ready to run the policy development phase?\n\n" +
-      "This sends one real request to muse exec (Muse Code) and spends Muse tokens " +
-      "(observed ~$0.5 per repair step). It runs one Phase A repair step against the incumbent " +
-      "program shown here, not the full loop.";
-  const ok = window.confirm(gateMsg);
-  if (!ok) return;
+  // no confirmation dialog: the run starts immediately (the server still needs the confirmed flag the client sends)
   document.getElementById("restored-note")?.remove();
   rewriteTokenTotal = 0;
   cycleDetails = [];
