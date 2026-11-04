@@ -5,8 +5,7 @@
     uv run python -m ants.studio.console --cycles 6 --max-model-steps 6 --reasoning-effort medium
 
 Opens one local page with a turns viewer in the center, Synthesizer/Adversary/orchestrator
-tools on the sides, and a Run button gated by a "ready to run the policy development phase?"
-confirmation.
+tools on the sides. `/policy-dev` in the chat starts the pipeline after its settings dialog.
 
 Two modes (`--mode`):
 - "loop" (default): drives the real closed loop (`ants.orchestrator.loop.Loop`) against the mock

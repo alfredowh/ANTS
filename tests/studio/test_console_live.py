@@ -177,3 +177,26 @@ def test_attacks_only_runs_real_mock_attacks_and_ends_with_a_report(tmp_path):
 
 
 REPO_ROOT_FOR_TEST = Path(__file__).resolve().parents[2]
+
+
+def test_review_fixes_stay_fixed():
+    root = Path(console_server.__file__).parent
+    shell = (root / "views" / "shell.html").read_text(encoding="utf-8")
+    console = (root / "views" / "agent_console.html").read_text(encoding="utf-8")
+    css = (root / "static" / "console.css").read_text(encoding="utf-8")
+    wizard = (root / "static" / "wizard.js").read_text(encoding="utf-8")
+    assert 'id="run-btn"' not in shell  # /policy-dev is the way to start a run
+    for stale in ("Phase A", "not wired", "!important"):
+        assert stale not in console
+    # #col-center>* sets width:100%; only an id-level rule keeps the tabs at 1 cm
+    assert "#col-center>.edge-tab{" in css and "width:38px" in css
+    assert 'id="set-cancel"' in wizard and "session_reset" in wizard
+
+
+def test_served_adversary_page_uses_ui_names_standalone_does_not():
+    from ants.studio import adversary_view
+
+    page = "<head></head><body>System 2 attacks, System 1 rewrites, a System 2 run</body>"
+    served = adversary_view.inject(page)
+    assert "System" not in served.split("<script>")[0].split("</style>")[-1]
+    assert "an Adversary run" in served and "Synthesizer rewrites" in served

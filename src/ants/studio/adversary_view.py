@@ -23,7 +23,7 @@ MEDIA_TYPES = {".mp4": "video/mp4", ".webm": "video/webm"}
 _BUILD_LOCK = threading.Lock()
 
 
-def write_run_meta(run_dir: Path, adv, policy, cfg) -> None:
+def write_run_meta(run_dir: Path, adv, policy, cfg, *, gate_mode: str | None = None) -> None:
     """Write `run.json` + `policy.py` in the shape `build.collect` reads (see orchestrator/run.py).
 
     Includes the nominal rollout his Replay compares every attack against: one extra rollout at
@@ -58,6 +58,8 @@ def write_run_meta(run_dir: Path, adv, policy, cfg) -> None:
             "synthesizer": "GenerateSynthesizer",
         },
     }
+    if gate_mode:
+        meta["config"]["gate_mode"] = gate_mode
     try:
         meta["nominal"] = nominal_events(adv, policy, c.seed)
     except Exception as exc:  # noqa: BLE001 -- the Replay shows no nominal comparison instead
@@ -109,8 +111,20 @@ SWITCH_HTML = """<div class="ants-switch" role="group" aria-label="View">\
 title="Stop the whole run">Stop</button></span>"""
 
 
+def _ui_names(page_html: str) -> str:
+    """The window says Adversary and Synthesizer; standalone pages keep their wording."""
+    for old, new in (
+        ("a System 2", "an Adversary"),
+        ("System 2", "Adversary"),
+        ("System 1", "Synthesizer"),
+    ):
+        page_html = page_html.replace(old, new)
+    return page_html
+
+
 def inject(page_html: str) -> str:
-    """His page plus the switch. Only the marker and two head/body insertions differ."""
+    """His page plus the switch. Only the names, the marker and two insertions differ."""
+    page_html = _ui_names(page_html)
     css = (VIEWS_DIR / "adversary_inject.css").read_text(encoding="utf-8")
     js = (VIEWS_DIR / "adversary_inject.js").read_text(encoding="utf-8")
     head, sep, rest = page_html.partition("</head>")

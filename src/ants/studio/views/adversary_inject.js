@@ -27,6 +27,9 @@
     const running = pill.classList.contains("running");
     document.getElementById("ants-run").hidden = !running;
     stop.hidden = !running;
+    const hostStop = host.document.getElementById("stop-btn");
+    stop.disabled = hostStop.disabled;
+    stop.textContent = hostStop.textContent;
     document.getElementById("ants-pill").textContent = pill.textContent;
   }, 1000);
 })();

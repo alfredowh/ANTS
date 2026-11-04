@@ -12,7 +12,7 @@
 /* DATA is a global set by the inline <script> in views/shell.html before this file loads. */
 
 function esc(s) {
-  return String(s ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+  return String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 }
 
 /* ---------- shared modal ---------- */
@@ -20,8 +20,12 @@ function openModal(html) {
   document.getElementById("modal-content").innerHTML = html;
   document.getElementById("modal-backdrop").classList.add("on");
 }
+let modalOnClose = null; // one-shot: runs when the modal is dismissed (X, backdrop, Cancel)
 function closeModal() {
   document.getElementById("modal-backdrop").classList.remove("on");
+  const done = modalOnClose;
+  modalOnClose = null;
+  if (done) done();
 }
 document.getElementById("modal-close").addEventListener("click", closeModal);
 document.getElementById("modal-backdrop").addEventListener("click", (e) => {
@@ -65,7 +69,7 @@ function renderRunSettings() {
   renderToolList(document.getElementById("tools-right"), DATA.tools_right);
   if (DATA.mode === "loop" && DATA.loop_config) {
     const c = DATA.loop_config;
-    const friendly = (v) => v === "mock" ? "offline (built-in)" : v;
+    const friendly = (v) => v === "mock" ? "offline (built-in)" : v === "cap_harness" ? "real simulator" : v;
     document.getElementById("config-tiles").innerHTML = [
       ["Backend", friendly(c.backend)], ["Max cycles", c.cycles], ["Severity (rho)", c.rho], ["Eta", c.eta],
       ["Stall window (W)", c.stall_window], ["Nominal seeds", c.nominal_seeds.join(", ")],
@@ -263,8 +267,6 @@ function resetSceneView() {
 
 renderScene2D("generation");
 
-document.body.dataset.tab = "console";
-
 /* ---------- navigator + side-panel visibility (claude.ai-style: only the main window by default) ---------- */
 const NAV_KEY = "ants-studio-nav", PANELS_KEY = "ants-studio-panels";
 (function () {
@@ -325,6 +327,7 @@ function resetSessionUi() {
   turnsEl.innerHTML = "";
   turnCount = 0;
   rewriteTokenTotal = 0;
+  rewriteCount = 0;
   cycleDetails = [];
   currentRunName = null;
   chatMode = "idle";
@@ -338,7 +341,6 @@ function resetSessionUi() {
   document.getElementById("run-folder").textContent = "";
   document.getElementById("usage-tiles").innerHTML = "";
   document.getElementById("reply-box").textContent = "(waiting)";
-  runBtn.disabled = false;
   updateCenterLayout();
   refreshRunList();
   refreshSession();
@@ -353,19 +355,14 @@ document.getElementById("new-session").addEventListener("click", () => {
   }).catch(() => { msg.textContent = "server unreachable"; });
 });
 
-function runBtnLabel() {
-  document.getElementById("run-btn").textContent =
-    DATA.mode === "loop" ? "Run policy development loop" : "Run policy development step";
-}
-runBtnLabel();
-
 const turnsEl = document.getElementById("turns");
 const pill = document.getElementById("status-pill");
-const runBtn = document.getElementById("run-btn");
 let turnCount = 0;
 let rewriteTokenTotal = 0;
+let rewriteCount = 0;
 let cycleDetails = [];
 let currentRunName = null;
+let runTokenCap = null; // the /policy-dev dialog's Muse cap for the current run
 
 /* centered-when-empty chat layout, like claude.ai/new -- docks to the bottom once there's content */
 function updateCenterLayout() {
@@ -379,7 +376,7 @@ function openCycleDetailModal(idx) {
   const detail = row.rewrite_detail || {};
   const u = detail.usage || {};
   openModal(`
-    <h3>Cycle ${esc(String(row.cycle))} repair</h3>
+    <h3>Cycle ${esc(String(row.cycle + 1))} repair</h3>
     <div class="sub">v${esc(row.policy_version ?? "?")} &rarr; v${esc(row.candidate_version ?? "?")} &middot; ${esc(row.signature || "")}</div>
     <div class="section"><div class="h">Why the model changed the code</div><div class="delta">${esc(detail.why || "(no WHY note found)")}</div></div>
     <div class="section"><div class="h">Tokens &amp; cache</div><div class="tiles">
@@ -396,6 +393,12 @@ function openCycleDetailModal(idx) {
 }
 
 turnsEl.addEventListener("click", (e) => {
+  const more = e.target.closest(".turn-more");
+  if (more) {
+    const open = more.closest(".turn").classList.toggle("expanded");
+    more.textContent = open ? "Show less" : "Show more";
+    return;
+  }
   const tk = e.target.closest(".tk");
   if (tk && !e.target.closest("a,button")) {
     tk.closest(".turn").classList.toggle("collapsed");
@@ -413,22 +416,20 @@ function setStatus(kind, text) {
   if (sb) { sb.hidden = kind !== "running"; sb.disabled = false; sb.textContent = "Stop"; }
 }
 
-/* each turn shows at most ~10 lines; a per-turn button expands it */
-function addClampToggle(div) {
-  const main = div.querySelector(".main");
-  if (!main) return;
+/* a turn shows at most 5 lines; longer ones get a Show more button. Call again when a turn's text
+   changes (streamed replies). Clicks are delegated, so restored turns keep working. */
+function refreshClamp(div) {
+  const body = div && div.querySelector(":scope > .main, :scope > .delta");
+  if (!body) return;
   requestAnimationFrame(() => {
-    if (main.scrollHeight <= main.clientHeight + 2) return;
+    if (div.classList.contains("expanded") || body.scrollHeight <= body.clientHeight + 2) return;
+    if (div.querySelector(":scope > .turn-more")) return;
     div.classList.add("clamped");
     const b = document.createElement("button");
     b.type = "button";
     b.className = "turn-more";
     b.textContent = "Show more";
-    b.addEventListener("click", () => {
-      const open = div.classList.toggle("expanded");
-      b.textContent = open ? "Show less" : "Show more";
-    });
-    main.insertAdjacentElement("afterend", b);
+    body.insertAdjacentElement("afterend", b);
   });
 }
 
@@ -442,7 +443,7 @@ function addTurn(cls, html) {
   const stick = turnsEl.scrollHeight - turnsEl.scrollTop - turnsEl.clientHeight < 80; // follow the feed only if already at the bottom
   turnsEl.appendChild(div); // oldest on top, newest at the bottom
   if (stick || cls.includes("you")) requestAnimationFrame(() => { turnsEl.scrollTop = turnsEl.scrollHeight; });
-  addClampToggle(div);
+  refreshClamp(div);
 }
 
 /* ---------- Synthesizer / Adversary / Orchestrator status ---------- */
@@ -503,20 +504,20 @@ function handleLoopEvent(row) {
       setSys("sys2", false, "idle");
       setSys("orch", true, "blocked: budget exhausted");
       setSys("escalate", true, "budget exhausted");
-      showBanner(`<b>Budget exhausted.</b> Synthesizer's rewrite budget (${esc(String(row.cycle))} cycles in) ran out before the loop could reach a stop condition. It cannot continue on its own from here &mdash; raise <code>--synth-token-budget</code> and re-run, or treat this as a point for human review.`);
+      showBanner(`<b>Budget exhausted.</b> Synthesizer's rewrite budget ran out at cycle ${row.cycle + 1} before the loop could reach a stop condition. It cannot continue on its own from here &mdash; raise the Muse token cap in the <code>/policy-dev</code> dialog and run again, or treat this as a point for human review.`);
     } else {
       setSys("sys2", false, "idle (result logged)");
       setSys("orch", true, decision === "accepted" ? "gate: accepted" : "gate: rejected");
     }
-    let main = `cycle ${row.cycle}: attack <b>${esc(row.category)}</b> (severity ${row.severity}) &rarr; <b>${esc(row.outcome)}</b>`;
+    let main = `attack <b>${esc(row.category)}</b> (severity ${Number(row.severity).toFixed(2)}) &rarr; <b>${esc(row.outcome)}</b>`;
     if (row.decision) main += ` &rarr; <b>${esc(decision)}</b>`;
     if (row.signature) main += `<br><span class="delta">signature: ${esc(row.signature)}</span>`;
     if (row.rewrite_tokens) {
       rewriteTokenTotal += row.rewrite_tokens;
       main += `<br><span class="delta">rewrite: ${row.rewrite_tokens} tokens ($${row.rewrite_cost_usd ?? "?"})</span>`;
-      const budget = DATA.loop_config ? DATA.loop_config.synth_token_budget : null;
+      const budget = runTokenCap || (DATA.loop_config ? DATA.loop_config.synth_token_budget : null);
       document.getElementById("usage-tiles").innerHTML = [
-        ["Rewrites so far", row.candidate_version ? "see cycles" : "-"],
+        ["Rewrites so far", ++rewriteCount],
         ["Rewrite tokens (running)", rewriteTokenTotal],
       ].concat(budget ? [["Budget remaining", Math.max(0, budget - rewriteTokenTotal)]] : [])
         .map(([l, v]) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("");
@@ -528,7 +529,7 @@ function handleLoopEvent(row) {
     if (row.gate) {
       main += `<br><span class="delta">gate: ${row.gate.accepted ? "accepted" : "rejected"} (${row.gate.cases} cases, +${(row.gate.improvements||[]).length})</span>`;
     }
-    addTurn(cls, `<div class="tk">cycle ${row.cycle}</div><div class="main">${main}</div>`);
+    addTurn(cls, `<div class="tk">cycle ${row.cycle + 1}</div><div class="main">${main}</div>`);
     if (row.diff) {
       addTurn("delta", `<div class="tk">diff v${row.policy_version || "?"} &rarr; v${row.candidate_version || "?"}</div><div class="delta">${esc(row.diff)}</div>`);
     }
@@ -561,12 +562,13 @@ function handleAttackEvent(a) {
   } else {
     setSys("orch", true, "replaying candidate / checking robust");
   }
-  addTurn("task", `<div class="tk">attack ${esc(a.attack_id)}</div><div class="main">Adversary attacked with <b>${esc(a.category)}</b> (severity ${a.severity}) &rarr; <b>${esc(a.outcome)}</b><br><span class="replay-link" data-attack="${esc(a.attack_id)}">Open in Replay</span></div>`);
+  addTurn("task", `<div class="tk">attack ${esc(a.attack_id)}</div><div class="main">Adversary attacked with <b>${esc(a.category)}</b> (severity ${Number(a.severity).toFixed(2)}) &rarr; <b>${esc(a.outcome)}</b><br><span class="replay-link" data-attack="${esc(a.attack_id)}">Open in Replay</span></div>`);
 }
 
 function handleDone(payload) {
   setStatus("done", "done");
-  runBtn.disabled = false;
+  const rf = document.getElementById("run-folder");
+  rf.textContent = rf.textContent.replace(/^saving to/, "saved in");
   resetSys();
   if (DATA.mode === "loop") {
     const blocked = ["budget", "escalate", "no_working_policy"].includes(payload.stopped);
@@ -588,7 +590,8 @@ function handleDone(payload) {
 
 function handleError(payload) {
   setStatus("error", "error");
-  runBtn.disabled = false;
+  const rf = document.getElementById("run-folder");
+  rf.textContent = rf.textContent.replace(/^saving to/, "saved in");
   addTurn("error", `<div class="tk">error</div><div class="main">${esc(payload.message)}</div>`);
 }
 
@@ -641,6 +644,8 @@ function restoreUiState() {
   turnsEl.parentElement.insertBefore(note, turnsEl);
 }
 
+const BACKEND_NAME = { mock: "offline test world, no simulator", cap_harness: "real simulator" };
+
 function openStream() {
   // One persistent connection for the whole page session (the server never closes it after a
   // run's "done" -- see console_server.py's /events handler). Reconnects on its own via
@@ -655,12 +660,20 @@ function openStream() {
     else if (data.kind === "loop_event") handleLoopEvent(data.row);
     else if (data.kind === "attack_event") handleAttackEvent(data);
     else if (data.kind === "run_started") {
-      document.getElementById("run-folder").textContent = "saving to " + data.run_dir;
-      addTurn("task", `<div class="tk">run started</div><div class="main">saving this run to <b>${esc(data.run_dir)}</b> (backend: ${esc(data.backend)})</div>`);
+      setStatus("running", "running");
+      rewriteTokenTotal = 0;
+      rewriteCount = 0;
+      hideBanner();
+      setSys("orch", true, "starting");
+      const rf = document.getElementById("run-folder");
+      rf.textContent = "saving to \u2026/" + data.run_dir.split("/").slice(-2).join("/");
+      rf.title = data.run_dir;
+      addTurn("task", `<div class="tk">run started</div><div class="main">saving this run to <b>${esc(data.run_dir)}</b> (${esc(BACKEND_NAME[data.backend] || data.backend)})</div>`);
       currentRunName = data.run_dir.split("/").pop();
+      refreshRunList();
     }
     else if (data.kind === "session_reset") { resetSessionUi(); return; }
-    else if (data.kind === "done") handleDone(data);
+    else if (data.kind === "done") { handleDone(data); refreshRunList(); }
     else if (data.kind === "error") handleError(data);
     else if (data.kind === "awaiting_answer") handleAwaitingAnswer(data);
     else if (data.kind === "chat_muse_event") handleChatMuseEvent(data.event);
@@ -669,32 +682,6 @@ function openStream() {
     saveUiState();
   };
 }
-
-runBtn.addEventListener("click", () => {
-  // no confirmation dialog: the run starts immediately (the server still needs the confirmed flag the client sends)
-  document.getElementById("restored-note")?.remove();
-  rewriteTokenTotal = 0;
-  cycleDetails = [];
-  currentRunName = null;
-  runBtn.disabled = true;
-  turnCount = 0;
-  turnsEl.innerHTML = "";
-  document.getElementById("col-center").classList.remove("idle"); // leaving the empty/centered state the moment a run starts, not waiting for the first turn
-  hideBanner();
-  setSys("sys1", DATA.mode === "single", "active (muse exec)");
-  setSys("escalate", false, "none");
-  if (DATA.mode === "loop") { setSys("sys2", false, "idle"); setSys("orch", true, "starting"); }
-  setStatus("running", "running");
-  document.getElementById("reply-box").textContent = "(waiting)";
-  saveUiState();
-  fetch("/run", {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({confirmed: true}),
-  }).then(r => r.json()).then(r => {
-    if (!r.ok) { handleError({message: r.error}); }
-  });
-});
 
 /* ---------- chat composer: three cases (see docs/studio/chat-field-design.md) ---------- */
 let chatMode = "idle"; // "idle" | "awaiting_answer" | "queued"
@@ -726,11 +713,15 @@ function handleChatMuseEvent(event) {
   if (pt === "run.output.delta" && chatTurnEl) {
     chatBuffer += (event.payload || {}).text || "";
     chatTurnEl.textContent = chatBuffer;
+    refreshClamp(chatTurnEl.closest(".turn"));
   }
 }
 
 function handleChatDone(payload) {
-  if (chatTurnEl) chatTurnEl.textContent = payload.text || chatBuffer || "(empty reply)";
+  if (chatTurnEl) {
+    chatTurnEl.textContent = payload.text || chatBuffer || "(empty reply)";
+    refreshClamp(chatTurnEl.closest(".turn"));
+  }
   chatMode = "idle";
   document.getElementById("chat-input").placeholder = "Message the agent...";
   document.getElementById("chat-input").disabled = false;

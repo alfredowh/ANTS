@@ -91,9 +91,10 @@
   function onEvent(d) {
     const k = d.kind;
     if (k === "session_reset") { clearTimer(); S = fresh(); path = []; sel = null; }
+    else if (k === "pipeline_start") { clearTimer(); S = fresh(); S.pipeline = true; S.active = true; }
     else if (k === "pipeline_stage") {
       if (byId[d.stage] === undefined && G) return;
-      if (!S.pipeline && d.status === "started" && PRE.includes(d.stage)) { clearTimer(); S = fresh(); S.pipeline = true; S.active = true; }
+      if (!S.pipeline && PRE.includes(d.stage)) { clearTimer(); S = fresh(); S.pipeline = true; S.active = true; }
       if (d.stage === "attack" && d.status === "started") { clearTimer(); S.looping = true; }
       const st = { started: "running", done: "done", failed: "failed", skipped: "skipped" }[d.status];
       if (!st) return;

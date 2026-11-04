@@ -1,8 +1,8 @@
 """Live orchestrator console: a stdlib HTTP server around the Phase A closed loop.
 
 Static viewers in this repo (`dashboard.py`, `ants.studio.run`) all read a saved JSONL trace after
-a run finished. This module is the live counterpart: a person clicks Run, confirms a gate ("ready
-to run the policy development phase?"), and the loop's turns -- attacks, rewrites, gate verdicts --
+a run finished. This module is the live counterpart: `/policy-dev` in the chat starts the pipeline
+(POST /run the loop alone), and the loop's turns -- attacks, rewrites, gate verdicts --
 stream into the browser as they happen.
 
 Two modes, picked by `--mode`:
@@ -148,9 +148,9 @@ TOOLS_RIGHT = [
         "desc": "no worse on every case seen, better on at least one",
     },
     {
-        "name": "escalation (W=3)",
+        "name": "escalation (W stalled cycles)",
         "role": "Orchestrator",
-        "desc": "same failure signature stalls 3 cycles -> ask a human",
+        "desc": "same failure signature stalls W cycles -> ask a human (W is in the loop config)",
     },
 ]
 
@@ -460,7 +460,7 @@ def stream_muse_exec(
 
 @dataclass
 class LoopRunConfig:
-    """What the Run button drives in "loop" mode: the real closed loop, mock Adversary backend.
+    """What POST /run drives in "loop" mode: the real closed loop, mock Adversary backend.
 
     Defaults kept deliberately small (3 cycles, 1 nominal seed, W=2) so a click-through demo stays
     cheap and fast; pass the CLI flags for a fuller run.
@@ -646,7 +646,7 @@ def run_live_loop(
         return GateAnswer(channel="text", text=text)
 
     loop = Loop(observed_adv, synth, loop_cfg, on_attack=on_attack, ask_human=ask_human)
-    adversary_view.write_run_meta(run_dir, adv, policy, cfg)
+    adversary_view.write_run_meta(run_dir, adv, policy, cfg, gate_mode=loop_cfg.gate_mode)
 
     log_path = run_dir / "loop.jsonl"
     stop_tail = threading.Event()

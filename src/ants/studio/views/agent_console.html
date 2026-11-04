@@ -1,7 +1,7 @@
 <div id="tab-console" class="on">
 <main id="console-main">
   <div class="col" id="col-left">
-    <div class="h">Primitives</div>
+    <div class="h">Tools</div>
     <div class="tool-list" id="tools-left-wrap"></div>
     <div class="scene2d">
       <div class="h">Scene prompt</div>
@@ -22,8 +22,8 @@
   <div class="resize-handle" id="handle-left"></div>
 
   <div class="col" id="col-center">
-    <button class="edge-tab left" style="position:absolute!important;top:113px!important;width:38px!important;min-width:38px!important;max-width:38px!important;height:44px!important;flex:none!important;margin:0!important;left:0!important;right:auto!important" id="toggle-left" type="button" title="Show context panel (primitives, scene prompt)" aria-label="Show context panel (primitives, scene prompt)">&#9656;</button>
-    <button class="edge-tab right" style="position:absolute!important;top:113px!important;width:38px!important;min-width:38px!important;max-width:38px!important;height:44px!important;flex:none!important;margin:0!important;right:0!important;left:auto!important" id="toggle-right" type="button" title="Show run details (usage, reply, settings)" aria-label="Show run details (usage, reply, settings)">&#9666;</button>
+    <button class="edge-tab left" id="toggle-left" type="button" title="Show context panel (primitives, scene prompt)" aria-label="Show context panel (primitives, scene prompt)">&#9656;</button>
+    <button class="edge-tab right" id="toggle-right" type="button" title="Show run details (usage, reply, settings)" aria-label="Show run details (usage, reply, settings)">&#9666;</button>
     <div class="flowline" id="flowline">
       <span class="flow-loop" title="the loop repeats: Adversary attacks, a failure goes to Synthesizer, the gate decides, repeat">&#8634;</span>
       <div class="sys" id="sys2-badge" title="selector &rarr; proposer &rarr; rollout &rarr; diagnoser, all inside one call -- Loop only reports when the whole attack is done, not each inner step"><span class="dot"></span><span class="who">Adversary</span><span class="stage" id="sys2-stage">idle</span></div>
@@ -40,10 +40,10 @@
       <span style="flex:1"></span>
     </div>
     <div class="banner" id="banner"></div>
-    <div class="turns" id="turns"><div class="empty">No run yet. Click "Run policy development step" to start one Phase A repair cycle.</div></div>
+    <div class="turns" id="turns"><div class="empty">No run yet.</div></div>
     <div class="idle-tagline" id="idle-tagline">What do you want to work on?</div>
     <div class="chatbar" id="chatbar">
-      <button class="chat-icon" id="chat-attach" type="button" title="not wired yet" disabled>+</button>
+      <button class="chat-icon" id="chat-attach" type="button" title="Click /policy-dev first to attach a demo video" disabled>+</button>
       <input type="text" id="chat-input" class="chat-input" placeholder="Message the agent..." autocomplete="off">
       <button class="chat-icon" id="chat-mic" type="button" title="Voice input" aria-pressed="false" disabled><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button>
       <button class="btn sm" id="chat-send" type="button">Send</button>

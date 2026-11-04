@@ -64,8 +64,7 @@ first, then `docs/studio/live-console-handoff.md` (older, general), then this fi
 
 ## Open work, in the order the user cares about
 
-1. Remove the header "Run policy development loop" button once the user confirms `/policy-dev` in
-   the chat works for them (they said they would).
+1. Done: the header run button is gone, see `docs/studio/ui-review-2026-11-04.md`.
 2. Held subagents (rate limit reset was 18:50 Berlin): (a) Daniel-studio full-data run, owes
    `docs/studio/daniel-studio-merge-options.md` and `docs/studio/ask-daniel.md` (options for merging
    his dashboard into the viewer without changing his functionality, how to see it with full data,

@@ -55,8 +55,6 @@ main.show-left #col-left>*,main.show-right #col-right>*{visibility:visible}
 .icon-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid transparent;border-radius:8px;background:none;color:var(--muted);cursor:pointer;padding:0}
 .icon-btn:hover{color:var(--fg);background:var(--raise)}
 .icon-btn.on{color:var(--accent)}
-.console-only{display:none}
-body[data-tab="console"] .console-only{display:inline-flex}
 .resize-handle{flex:none;width:6px;cursor:col-resize;background:var(--line)}
 .resize-handle:hover,.resize-handle.dragging{background:var(--accent)}
 .scene2d{margin-bottom:18px}
@@ -191,7 +189,8 @@ body[data-tab="console"] .console-only{display:inline-flex}
 @media (prefers-reduced-motion:reduce){#chat-mic.listening{animation:none}}
 
 .turn .main{line-height:1.5;max-height:7.5em;overflow:hidden}
-.turn.expanded .main{max-height:none}
+.turn > .delta{max-height:7.5em;overflow:hidden}
+.turn.expanded .main,.turn.expanded > .delta{max-height:none}
 .turn-more{background:none;border:0;padding:2px 0;margin-top:2px;font-size:13.7px;color:var(--accent);cursor:pointer}
 .turn-more:hover{text-decoration:underline}
 .navsess{display:flex;flex-direction:column;gap:6px;align-items:flex-start;padding:0 4px 10px}
@@ -202,15 +201,17 @@ body[data-tab="console"] .console-only{display:inline-flex}
 .chip-row{display:flex;flex-direction:row;gap:6px;align-self:center;width:100%;margin:2px 0 0 0;padding:0 16px;box-sizing:border-box}
 #col-center.idle .chip-row{align-self:center;max-width:640px;margin:10px auto 0;padding:0}
 .wizard-chip:hover{border-color:var(--accent,#1877F2)}
-.turn.wizard-turn .main{white-space:pre-wrap}
+.turn.wizard-turn .main,.chat-turn:not(.you) .main{white-space:pre-wrap}
 .turn.wizard-turn.needs .tk{color:#d9534f}
 #chat-attach.wizard-ask{border-color:var(--accent,#1877F2);color:var(--accent,#1877F2);box-shadow:0 0 0 3px rgba(24,119,242,.2)}
 
-#col-center{position:relative}
-.edge-tab{position:absolute;top:113px;transform:none;z-index:5;display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:18px;min-width:18px;max-width:18px;height:56px;padding:0;border:1px solid var(--line);background:var(--raise);color:var(--muted);cursor:pointer;font-size:12px;line-height:1}
-.edge-tab:hover{color:var(--accent);border-color:var(--accent)}
-.edge-tab.left{left:0;right:auto;border-left:0;border-radius:0 8px 8px 0}
-.edge-tab.right{right:0;left:auto;border-right:0;border-radius:8px 0 0 8px}
+#col-center{position:relative;padding-inline:44px} /* room for the edge tabs when the columns are open */
+/* #col-center>*{width:100%;max-width:780px} outranks a plain class, so the id is needed here:
+   without it the tabs stretch to 780px, which is what the earlier inline !important styles hid */
+#col-center>.edge-tab{position:absolute;top:113px;z-index:5;display:flex;align-items:center;justify-content:center;box-sizing:border-box;width:38px;max-width:38px;height:44px;margin:0;padding:0;border:1px solid var(--line);background:var(--raise);color:var(--muted);cursor:pointer;font-size:12px;line-height:1}
+#col-center>.edge-tab:hover{color:var(--accent);border-color:var(--accent)}
+#col-center>.edge-tab.left{left:0;right:auto;border-left:0;border-radius:0 8px 8px 0}
+#col-center>.edge-tab.right{right:0;left:auto;border-right:0;border-radius:8px 0 0 8px}
 
 .stop-btn{background:#d9342b;border-color:#d9342b;color:#fff;margin-left:8px}
 .stop-btn:hover{background:#b72a22;border-color:#b72a22}

@@ -162,7 +162,10 @@
         ${Object.keys(spec).map((k) => fieldHtml(k, spec[k])).join("")}
         <div class="set-note" id="set-note"></div>
         <div class="set-error" id="set-error"></div>
-        <div class="set-actions"><button class="btn" id="set-run" type="button">Run</button></div>`);
+        <div class="set-actions"><button class="btn" id="set-cancel" type="button">Cancel</button> <button class="btn" id="set-run" type="button">Run</button></div>`);
+      // dismissing the dialog keeps what was typed, so nothing has to be retyped
+      modalOnClose = () => { input.value = "/policy-dev " + task; syncAttach(); input.focus(); };
+      document.getElementById("set-cancel").addEventListener("click", closeModal);
       const el = (k) => document.getElementById("set-" + k);
       function refresh() {
         const synth = el("synthesizer").checked, adv = el("adversary").checked;
@@ -199,6 +202,7 @@
         for (const k of Object.keys(spec)) settings[k] = spec[k].type === "bool" ? el(k).checked : el(k).value;
         post("/policy-dev", {task, video: video ? video.path : null, settings}).then((r) => {
           if (!r.ok) { document.getElementById("set-error").textContent = r.error; return; }
+          modalOnClose = null;
           closeModal();
           userBubble("/policy-dev " + task + (video ? "\n[video: " + video.name + "]" : ""));
           video = null;
@@ -243,12 +247,19 @@
     }
     outLines.push(d.line);
     outEl.textContent = outLines.slice(-5).join("\n");
+    refreshClamp(outEl.closest(".turn"));
   }
   window.wizardEvent = (d) => {
-    if (d.kind === "pipeline_start") {
+    if (d.kind === "session_reset") {
+      video = null;
+      runTokenCap = null;
+      renderChosen();
+      syncAttach();
+    } else if (d.kind === "pipeline_start") {
       setStatus("running", "running");
-      const rb = document.getElementById("run-btn");
-      if (rb) rb.disabled = true;
+      runTokenCap = (d.settings && d.settings.synthesizer && d.settings.token_cap) || null;
+      hideBanner();
+      document.getElementById("incumbent-name").textContent = "task: " + d.task;
     } else if (d.kind === "pipeline_stage") onStage(d);
     else if (d.kind === "pipeline_note") onNote(d);
     else if (d.kind === "pipeline_output") onOutput(d);
@@ -256,8 +267,8 @@
 
   /* reload during a run: the server still runs it; say so, and keep Stop reachable */
   fetch("/policy-dev").then((r) => r.json()).then((s) => {
+    if (s.running) setStatus("running", "running");
     if (s.running && s.current) {
-      setStatus("running", "running");
       agentTurn("policy-dev", "A run is in progress: " + s.current.task + "\n" + s.current.run_dir);
     }
   }).catch(() => {});
