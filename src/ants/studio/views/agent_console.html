@@ -1,0 +1,91 @@
+<div id="tab-console" class="on">
+<div class="sysbar">
+  <span class="flow-loop" title="the loop repeats: System 2 attacks, a failure goes to System 1, the gate decides, repeat">&#8634;</span>
+  <div class="sys" id="sys2-badge" title="selector &rarr; proposer &rarr; rollout &rarr; diagnoser, all inside one call -- Loop only reports when the whole attack is done, not each inner step"><span class="dot"></span><span class="who">System 2</span><span class="stage" id="sys2-stage">idle</span></div>
+  <span class="flow-arrow">&rarr;</span>
+  <div class="sys" id="sys1-badge" title="muse_orchestrator.py -&gt; muse exec, one blocking call per repair"><span class="dot"></span><span class="who">System 1</span><span class="stage" id="sys1-stage">idle</span></div>
+  <span class="flow-arrow">&rarr;</span>
+  <div class="sys" id="orch-badge" title="orchestrator/gate.py: no worse on every case seen, better on at least one"><span class="dot"></span><span class="who">Orchestrator</span><span class="stage" id="orch-stage">idle</span></div>
+  <span class="flow-arrow">&rarr;</span>
+  <div class="sys" id="escalate-badge" title="W stalled cycles on one signature, or the token budget runs out"><span class="dot"></span><span class="who">Escalation</span><span class="stage" id="escalate-stage">none</span></div>
+</div>
+
+<main>
+  <div class="col" id="col-left">
+    <div class="h">Primitives</div>
+    <div class="tool-list" id="tools-left-wrap"></div>
+    <div class="scene2d">
+      <div class="h">Scene prompt</div>
+      <div class="scene2d-head">
+        <button class="btn sm on" id="scene-gen-btn">generation</button>
+        <button class="btn sm" id="scene-repair-btn">repair</button>
+        <button class="btn sm" id="scene-graph-btn" title="The scene graph: objects (nodes) and their spatial relations (edges, gap in mm) from the same scene file the prompt is built from">scene graph</button>
+        <span class="asof" id="scene-asof"></span>
+      </div>
+      <svg id="scene2d-svg" viewBox="0 0 240 240"></svg>
+      <div class="scene2d-head" style="margin-top:6px">
+        <button class="btn sm" id="scene-arm-e1" title="E1: repair evidence = contact log only">E1 Contact log</button>
+        <button class="btn sm" id="scene-arm-e2" title="E2: contact log + scene description">E2 Scene</button>
+        <button class="btn sm" id="scene-arm-e3" title="E3: contact log + scene + stall readings">E3 Stall readings</button>
+      </div>
+      <div id="scene-graph" style="display:none;font-size:11px"></div>
+      <div class="scene2d-legend">
+        <span><i style="background:#6fb2e0"></i>task object</span>
+        <span><i style="background:#e8a553"></i>wine rack</span>
+        <span><i style="background:#8a8a8a"></i>other object</span>
+        <span><i style="background:#ff4d4d"></i>gripper</span>
+      </div>
+      <div class="scene2d-note" id="scene2d-note"></div>
+    </div>
+    <div class="sam3">
+      <div class="h">SAM 3 output</div>
+      <div class="sam3-note" id="sam3-note"></div>
+      <div class="sam3-grid" id="sam3-grid"></div>
+    </div>
+    <div class="agentview">
+      <div class="h">Agentview frames</div>
+      <div class="agentview-note" id="agentview-note"></div>
+      <div class="agentview-grid" id="agentview-grid"></div>
+      <button class="btn sm" id="perception-btn" style="margin-top:8px">Open Perception tab</button>
+    </div>
+  </div>
+  <div class="resize-handle" id="handle-left"></div>
+
+  <div class="col" id="col-center">
+    <div class="center-top">
+      <span class="incumbent" id="incumbent-name"></span>
+      <span style="flex:1"></span>
+      <button class="btn sm" id="collapse-all" type="button" title="Minimize every log card below">Collapse all</button>
+      <button class="btn sm" id="expand-all" type="button" title="Expand every log card below">Expand all</button>
+    </div>
+    <div class="banner" id="banner"></div>
+    <div class="turns" id="turns"><div class="empty">No run yet. Click "Run policy development step" to start one Phase A repair cycle.</div></div>
+  </div>
+  <div class="resize-handle" id="handle-right"></div>
+
+  <div class="col" id="col-right">
+    <button class="btn sm" id="run-settings-btn" style="width:100%;margin-bottom:12px" type="button">Run settings &amp; tools &rarr;</button>
+    <div class="h">Usage</div>
+    <div class="tiles" id="usage-tiles"></div>
+    <div class="h">Reply / summary (output text)</div>
+    <div class="reply" id="reply-box">(waiting)</div>
+  </div>
+</main>
+
+<div class="chatbar">
+  <button class="chat-icon" id="chat-attach" type="button" title="not wired yet" disabled>+</button>
+  <input type="text" id="chat-input" class="chat-input" placeholder="Message the agent..." autocomplete="off">
+  <button class="chat-icon" id="chat-mic" type="button" title="not wired yet" disabled>&#127908;</button>
+  <button class="btn sm" id="chat-send" type="button">Send</button>
+</div>
+<div class="chat-status" id="chat-status"></div>
+</div>
+
+<template id="run-settings-template">
+  <h3>Run settings &amp; tools</h3>
+  <div class="sub">Static for this server session &mdash; set by the CLI flags it was started with, not changed by any run.</div>
+  <div class="section"><div class="h">Loop config</div><div class="tiles" id="config-tiles"></div></div>
+  <div class="section"><div class="h">Orchestrator / System 2</div><div class="tool-list" id="tools-right"></div></div>
+</template>
+
+

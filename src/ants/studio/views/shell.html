@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ANTS Live Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/console.css">
+</head>
+<body>
+<header>
+  <span class="title">ANTS Live Console</span>
+  <nav class="tabbar">
+    <button class="tabbtn on" id="tabbtn-console" type="button">Console</button>
+    <button class="tabbtn" id="tabbtn-perception" type="button">Perception</button>
+    <button class="tabbtn" id="tabbtn-synthesizer" type="button">Synthesizer</button>
+    <button class="tabbtn" id="tabbtn-adversary" type="button">Adversary</button>
+  </nav>
+  <span class="phase" id="phase-summary"></span>
+  <span style="flex:1"></span>
+  <span class="status-pill" id="status-pill">idle</span>
+  <span class="phase" id="run-folder" title="Every run is saved to its own timestamped folder: loop.jsonl (the run log), history.jsonl, muse/cycleN/ (each repair's reply + token usage). Nothing is overwritten."></span>
+  <button class="btn" id="run-btn">Run policy development step</button>
+</header>
+
+<!--__AGENT_CONSOLE__-->
+<!--__PERCEPTION__-->
+<!--__SYNTHESIZER__-->
+<!--__ADVERSARY__-->
+
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal" id="modal">
+    <span class="close" id="modal-close">&times;</span>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+</script>
+<script src="/static/console.js"></script>
+</body>
+</html>

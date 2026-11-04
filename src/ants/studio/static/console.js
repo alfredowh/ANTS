@@ -1,306 +1,4 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ANTS Live Console</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
-<style>
-:root{
-  --bg:#000000; --panel:#0A0A0A; --raise:#111111; --line:#262626; --line2:#1F1F1F;
-  --fg:#EDEDED; --hi:#FFFFFF; --soft:#B5B5B5; --muted:#8A8A8A; --dim:#6E6E6E; --faint:#3D3D3D;
-  --accent:#F59342; --fail:#FF4D4D; --pass:#3D3D3D; --meta:#7AA7FF; --built:#4FD67A; --planned:#6E6E6E;
-  --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
-  --mono:'IBM Plex Mono','SF Mono',Menlo,Consolas,monospace;
-  color-scheme: dark;
-}
-*{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--fg)}
-body{font:13px/1.45 var(--sans)}
-header{display:flex;align-items:center;gap:16px;min-height:52px;border-bottom:1px solid var(--line);padding:0 20px}
-header .title{font-weight:600}
-header .phase{color:var(--muted);font-size:12px}
-.status-pill{font-size:11px;letter-spacing:.06em;text-transform:uppercase;padding:3px 9px;border:1px solid var(--line);color:var(--muted)}
-.status-pill.running{color:var(--accent);border-color:var(--accent)}
-.status-pill.done{color:var(--built);border-color:var(--built)}
-.status-pill.error{color:var(--fail);border-color:var(--fail)}
-.btn{display:inline-block;background:var(--raise);border:1px solid var(--line);color:var(--fg);padding:7px 16px;cursor:pointer;font:inherit;font-weight:500}
-.btn:hover{border-color:var(--soft)}
-.btn:disabled{opacity:.4;cursor:default}
-.btn.sm{padding:4px 10px;font-size:12px}
-.btn.on{color:var(--accent);border-color:var(--accent)}
-main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px var(--rw,300px);background:var(--bg);height:calc(100vh - 93px)}
-.col{background:var(--bg);overflow-y:auto;padding:16px;border-left:1px solid var(--line);border-right:1px solid var(--line)}
-.resize-handle{cursor:col-resize;background:var(--line)}
-.resize-handle:hover,.resize-handle.dragging{background:var(--accent)}
-.scene2d{margin-bottom:18px}
-.scene2d-head{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
-.scene2d-head .asof{font-size:10.5px;color:var(--dim);margin-left:auto}
-.scene2d svg{width:100%;height:auto;background:var(--panel);border:1px solid var(--line)}
-.scene2d svg text{font:600 13px var(--mono);fill:var(--soft)}
-.scene2d svg text.m{fill:var(--dim);font-size:11px}
-.scene2d-legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:10.5px;color:var(--muted);margin-top:6px}
-.scene2d-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
-.scene2d-note{font-size:10px;color:var(--dim);margin-top:5px;cursor:help}
-.h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500;margin-bottom:10px}
-.tool{border:1px solid var(--line);background:var(--panel);padding:8px 10px;margin-bottom:8px;border-left:3px solid var(--faint)}
-.tool .name{font-family:var(--mono);font-size:12px}
-.tool .role{font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--meta);margin-top:2px}
-.tool .desc{font-size:11px;color:var(--soft);margin-top:4px}
-.center-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
-.incumbent{font-family:var(--mono);font-size:12px;color:var(--muted)}
-.turns{display:flex;flex-direction:column;gap:6px}
-.turn{border:1px solid var(--line);background:var(--panel);padding:10px 12px}
-.turn .tk{cursor:pointer}
-.turn .tk::after{content:" \25BE";color:var(--dim)}
-.turn.collapsed .tk::after{content:" \25B8"}
-.turn.collapsed .main,.turn.collapsed .delta{display:none}
-.turn .tk{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
-.turn.task .tk{color:var(--meta)}
-.turn.task.completed{border-left:3px solid var(--built)}
-.turn.task.started{border-left:3px solid var(--accent)}
-.turn.task.proposed, .turn.task.accepted{border-left:3px solid var(--faint)}
-.turn .main{font-size:12px;margin-top:4px}
-.delta{font-family:var(--mono);font-size:12px;white-space:pre-wrap;color:var(--soft)}
-.turn.error{border-left:3px solid var(--fail)}
-.turn.done{border-left:3px solid var(--built)}
-.empty{color:var(--dim);font-size:12px;padding:20px 0}
-.tiles{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:16px}
-.tile{background:var(--panel);padding:10px 12px}
-.tile .l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em} .tile .v{font-family:var(--mono);font-size:18px}
-.reply{background:var(--panel);border:1px solid var(--line);padding:10px;font-family:var(--mono);font-size:11px;white-space:pre-wrap;max-height:420px;overflow-y:auto}
-.sysbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;min-height:40px;border-bottom:1px solid var(--line);padding:0 20px;font-size:12px}
-.sys{display:flex;align-items:center;gap:7px;border:1px solid var(--line);padding:4px 10px;cursor:help;transition:border-color .15s}
-.sys .dot{width:7px;height:7px;border-radius:50%;background:var(--faint);flex:none}
-.sys.active .dot{background:var(--accent);box-shadow:0 0 6px var(--accent);animation:pulse-dot 1.1s ease-in-out infinite}
-.sys.active{border-color:var(--accent)}
-.sys .who{font-weight:600;letter-spacing:.03em}
-.sys .stage{color:var(--muted)}
-.sys.active .stage{color:var(--fg)}
-#escalate-badge.active .dot{background:var(--fail);box-shadow:0 0 6px var(--fail)}
-#escalate-badge.active{border-color:var(--fail)}
-#escalate-badge.active .stage{color:var(--fail)}
-.flow-arrow{color:var(--dim);font-size:14px}
-.flow-loop{color:var(--dim);font-size:16px;margin-right:2px}
-@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.35}}
-@media (prefers-reduced-motion: reduce){.sys.active .dot{animation:none}}
-.banner{display:none;border:1px solid var(--fail);background:#2a0f0f;color:#ffb3b0;padding:10px 14px;margin-bottom:14px;font-size:12.5px;line-height:1.5}
-.banner.on{display:block}
-.banner b{color:#ff8884}
-.agentview{margin:16px 0}
-.agentview-note{font-size:10px;color:var(--dim);margin-bottom:6px;cursor:help}
-.agentview-grid{display:flex;flex-direction:column;gap:6px;max-height:190px;overflow-y:auto}
-.agentview-pair{border:1px solid var(--line);background:var(--panel);padding:5px}
-.agentview-pair .call{font-size:10.5px;color:var(--muted);margin-bottom:4px;font-family:var(--mono)}
-.agentview-imgs{display:flex;gap:3px}
-.agentview-imgs figure{margin:0;flex:1;min-width:0}
-.agentview-imgs img{width:100%;display:block;border-radius:2px}
-.tool-list{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
-.tool-chip{border:1px solid var(--line);background:var(--panel);padding:4px 9px;font-family:var(--mono);font-size:11px;cursor:pointer}
-.tool-chip:hover{border-color:var(--soft);color:var(--hi)}
-.sam3{margin:16px 0}
-.sam3-note{font-size:10px;color:var(--dim);margin-bottom:6px;cursor:help}
-.sam3-grid{display:flex;flex-wrap:wrap;gap:6px;max-height:190px;overflow-y:auto}
-.sam3-item{width:74px}
-.sam3-item img{width:100%;display:block;border-radius:2px}
-.sam3-item .cap{font-size:9px;color:var(--dim);text-align:center;margin-top:2px;line-height:1.3}
-.details-link{font-size:10.5px;color:var(--accent);cursor:pointer;margin-top:4px;display:inline-block}
-.details-link:hover{text-decoration:underline}
-.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:50;align-items:center;justify-content:center}
-.modal-backdrop.on{display:flex}
-.modal{background:var(--panel);border:1px solid var(--line);max-width:640px;width:92vw;max-height:82vh;overflow-y:auto;padding:18px 20px;position:relative}
-.modal.wide{max-width:980px}
-.player-frame{background:#000;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;min-height:280px}
-.player-frame img{max-width:100%;max-height:60vh;display:block}
-.player-caption{display:flex;justify-content:space-between;align-items:baseline;margin:6px 0;font-size:12px;color:var(--muted)}
-.player-caption b{color:var(--fg)}
-.player-controls{display:flex;align-items:center;gap:8px;margin-bottom:14px}
-.player-controls input[type=range]{flex:1}
-.player-ref-grid{display:flex;flex-wrap:wrap;gap:6px}
-.player-ref-grid .sam3-item{width:64px}
-.modal .close{position:absolute;top:10px;right:14px;cursor:pointer;color:var(--muted);font-size:20px;line-height:1}
-.modal .close:hover{color:var(--hi)}
-.modal h3{margin:0 0 4px;font-size:14px}
-.modal .sub{font-size:11px;color:var(--muted);margin-bottom:12px;font-family:var(--mono)}
-.modal .section{margin-bottom:14px}
-.modal .section .h{margin-bottom:6px}
-.tabbar{display:flex;gap:4px;margin-left:4px}
-.tabbtn{background:none;border:1px solid transparent;color:var(--muted);padding:6px 12px;cursor:pointer;font:inherit;font-weight:500}
-.tabbtn:hover{color:var(--fg)}
-.tabbtn.on{color:var(--hi);border-color:var(--line);background:var(--raise)}
-#tab-perception{display:none}
-#tab-perception.on{display:block}
-#tab-console{display:none}
-#tab-console.on{display:block}
-.perc-bar{display:flex;align-items:center;gap:18px;flex-wrap:wrap;padding:12px 20px;border-bottom:1px solid var(--line);font-size:12.5px}
-.perc-toggle{display:flex;align-items:center;gap:6px;cursor:pointer;color:var(--soft)}
-.perc-toggle input{accent-color:var(--accent)}
-.perc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:1px;background:var(--line);height:calc(100vh - 146px)}
-.perc-panel{background:var(--bg);padding:14px 16px;overflow-y:auto;display:flex;flex-direction:column;min-height:0}
-.perc-panel.off{display:none}
-.perc-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.perc-head .h{margin-bottom:0}
-.src-badge{font-size:10px;letter-spacing:.05em;text-transform:uppercase;padding:2px 8px;border:1px solid var(--line);color:var(--dim)}
-.src-badge.live{color:var(--built);border-color:var(--built);animation:pulse-badge 1.3s ease-in-out infinite}
-.src-badge.missing{color:var(--fail);border-color:var(--fail)}
-@keyframes pulse-badge{0%,100%{opacity:1}50%{opacity:.5}}
-@media (prefers-reduced-motion: reduce){.src-badge.live{animation:none}}
-.perc-player .player-frame{min-height:320px}
-.perc-sam3-grid{display:flex;flex-wrap:wrap;gap:8px;align-content:flex-start}
-.perc-sam3-grid .sam3-item{width:120px}
-.perc-curobo-frame{flex:1;width:100%;min-height:420px;background:#fff;border:1px solid var(--line)}
-.perc-note{font-size:11px;color:var(--dim);margin-top:8px}
-</style>
-</head>
-<body>
-<header>
-  <span class="title">ANTS Live Console</span>
-  <nav class="tabbar">
-    <button class="tabbtn on" id="tabbtn-console" type="button">Console</button>
-    <button class="tabbtn" id="tabbtn-perception" type="button">Perception</button>
-  </nav>
-  <span class="phase" id="phase-summary"></span>
-  <span style="flex:1"></span>
-  <span class="status-pill" id="status-pill">idle</span>
-  <span class="phase" id="run-folder" title="Every run is saved to its own timestamped folder: loop.jsonl (the run log), history.jsonl, muse/cycleN/ (each repair's reply + token usage). Nothing is overwritten."></span>
-  <button class="btn" id="run-btn">Run policy development step</button>
-</header>
-
-<div id="tab-console" class="on">
-<div class="sysbar">
-  <span class="flow-loop" title="the loop repeats: System 2 attacks, a failure goes to System 1, the gate decides, repeat">&#8634;</span>
-  <div class="sys" id="sys2-badge" title="selector &rarr; proposer &rarr; rollout &rarr; diagnoser, all inside one call -- Loop only reports when the whole attack is done, not each inner step"><span class="dot"></span><span class="who">System 2</span><span class="stage" id="sys2-stage">idle</span></div>
-  <span class="flow-arrow">&rarr;</span>
-  <div class="sys" id="sys1-badge" title="muse_orchestrator.py -&gt; muse exec, one blocking call per repair"><span class="dot"></span><span class="who">System 1</span><span class="stage" id="sys1-stage">idle</span></div>
-  <span class="flow-arrow">&rarr;</span>
-  <div class="sys" id="orch-badge" title="orchestrator/gate.py: no worse on every case seen, better on at least one"><span class="dot"></span><span class="who">Orchestrator</span><span class="stage" id="orch-stage">idle</span></div>
-  <span class="flow-arrow">&rarr;</span>
-  <div class="sys" id="escalate-badge" title="W stalled cycles on one signature, or the token budget runs out"><span class="dot"></span><span class="who">Escalation</span><span class="stage" id="escalate-stage">none</span></div>
-</div>
-
-<main>
-  <div class="col" id="col-left">
-    <div class="h">Primitives</div>
-    <div class="tool-list" id="tools-left-wrap"></div>
-    <div class="scene2d">
-      <div class="h">Scene prompt</div>
-      <div class="scene2d-head">
-        <button class="btn sm on" id="scene-gen-btn">generation</button>
-        <button class="btn sm" id="scene-repair-btn">repair</button>
-        <button class="btn sm" id="scene-graph-btn" title="The scene graph: objects (nodes) and their spatial relations (edges, gap in mm) from the same scene file the prompt is built from">scene graph</button>
-        <span class="asof" id="scene-asof"></span>
-      </div>
-      <svg id="scene2d-svg" viewBox="0 0 240 240"></svg>
-      <div class="scene2d-head" style="margin-top:6px">
-        <button class="btn sm" id="scene-arm-e1" title="E1: repair evidence = contact log only">E1 Contact log</button>
-        <button class="btn sm" id="scene-arm-e2" title="E2: contact log + scene description">E2 Scene</button>
-        <button class="btn sm" id="scene-arm-e3" title="E3: contact log + scene + stall readings">E3 Stall readings</button>
-      </div>
-      <div id="scene-graph" style="display:none;font-size:11px"></div>
-      <div class="scene2d-legend">
-        <span><i style="background:#6fb2e0"></i>task object</span>
-        <span><i style="background:#e8a553"></i>wine rack</span>
-        <span><i style="background:#8a8a8a"></i>other object</span>
-        <span><i style="background:#ff4d4d"></i>gripper</span>
-      </div>
-      <div class="scene2d-note" id="scene2d-note"></div>
-    </div>
-    <div class="sam3">
-      <div class="h">SAM 3 output</div>
-      <div class="sam3-note" id="sam3-note"></div>
-      <div class="sam3-grid" id="sam3-grid"></div>
-    </div>
-    <div class="agentview">
-      <div class="h">Agentview frames</div>
-      <div class="agentview-note" id="agentview-note"></div>
-      <div class="agentview-grid" id="agentview-grid"></div>
-      <button class="btn sm" id="perception-btn" style="margin-top:8px">Open Perception tab</button>
-    </div>
-  </div>
-  <div class="resize-handle" id="handle-left"></div>
-
-  <div class="col" id="col-center">
-    <div class="center-top">
-      <span class="incumbent" id="incumbent-name"></span>
-      <span style="flex:1"></span>
-      <button class="btn sm" id="collapse-all" type="button" title="Minimize every log card below">Collapse all</button>
-      <button class="btn sm" id="expand-all" type="button" title="Expand every log card below">Expand all</button>
-    </div>
-    <div class="banner" id="banner"></div>
-    <div class="turns" id="turns"><div class="empty">No run yet. Click "Run policy development step" to start one Phase A repair cycle.</div></div>
-  </div>
-  <div class="resize-handle" id="handle-right"></div>
-
-  <div class="col" id="col-right">
-    <div class="h">Loop config</div>
-    <div class="tiles" id="config-tiles"></div>
-    <div class="h">Orchestrator / System 2</div>
-    <div class="tool-list" id="tools-right"></div>
-    <div class="h">Usage</div>
-    <div class="tiles" id="usage-tiles"></div>
-    <div class="h">Reply / summary</div>
-    <div class="reply" id="reply-box">(waiting)</div>
-  </div>
-</main>
-</div>
-
-<div id="tab-perception">
-  <div class="perc-bar">
-    <label class="perc-toggle"><input type="checkbox" id="perc-toggle-agentview" checked> Agentview</label>
-    <label class="perc-toggle"><input type="checkbox" id="perc-toggle-sam3" checked> SAM 3 grounding</label>
-    <label class="perc-toggle"><input type="checkbox" id="perc-toggle-curobo" checked> cuRobo trajectory &amp; collision</label>
-    <span style="flex:1"></span>
-    <span class="perc-note">Toggle layers on/off for a cleaner or more informative view.</span>
-    <span class="perc-note">Source:</span>
-    <button class="btn sm on" id="perc-mode-auto" type="button" title="Live while a rollout is running, replay (archived) the rest of the time">Auto</button>
-    <button class="btn sm" id="perc-mode-live" type="button" title="Always show live frames (blank until a rollout with --backend cap_harness runs)">Live</button>
-    <button class="btn sm" id="perc-mode-replay" type="button" title="Always show the archived replay, even during a rollout">Replay</button>
-  </div>
-  <div class="perc-grid">
-    <section class="perc-panel perc-player" id="perc-panel-agentview">
-      <div class="perc-head"><span class="h">Agentview</span><span class="src-badge" id="perc-agentview-badge"></span></div>
-      <div class="player-frame"><img id="perc-player-img" alt=""></div>
-      <div class="player-caption">
-        <span>frame <b id="perc-player-pos">0</b> / <span id="perc-player-total">0</span></span>
-        <span><b id="perc-player-call"></b> <span style="color:var(--dim)" id="perc-player-index"></span></span>
-      </div>
-      <div class="player-controls" id="perc-controls">
-        <button class="btn sm" id="perc-player-play">play</button>
-        <button class="btn sm" id="perc-player-prev">&larr;</button>
-        <input type="range" id="perc-player-slider" min="0" max="0" value="0">
-        <button class="btn sm" id="perc-player-next">&rarr;</button>
-      </div>
-      <div class="perc-note" id="perc-agentview-note"></div>
-    </section>
-    <section class="perc-panel" id="perc-panel-sam3">
-      <div class="perc-head"><span class="h">SAM 3 grounding</span><span class="src-badge" id="perc-sam3-badge"></span></div>
-      <div class="perc-sam3-grid" id="perc-sam3-grid"></div>
-      <div class="perc-note" id="perc-sam3-note"></div>
-    </section>
-    <section class="perc-panel" id="perc-panel-curobo">
-      <div class="perc-head"><span class="h">cuRobo trajectory &amp; collision</span><span class="src-badge" id="perc-curobo-badge"></span></div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
-        <button class="btn sm on" id="curobo-tgl-collision" type="button" title="Show/hide the collision bodies (start + goal spheres) inside the 3D viewer">Collision bodies</button>
-        <button class="btn sm" id="curobo-tgl-scan" type="button" title="Show/hide the 3D scan (point cloud) inside the 3D viewer — off by default to keep the view simple">3D scan</button>
-        <button class="btn sm on" id="curobo-tgl-paths" type="button" title="Show/hide straight + cuRobo planned paths inside the 3D viewer">Paths</button>
-      </div>
-      <iframe class="perc-curobo-frame" id="perc-curobo-frame" title="cuRobo trajectory and collision-sphere plan viewer"></iframe>
-      <div class="perc-note" id="perc-curobo-note"></div>
-    </section>
-  </div>
-</div>
-
-<div class="modal-backdrop" id="modal-backdrop">
-  <div class="modal" id="modal">
-    <span class="close" id="modal-close">&times;</span>
-    <div id="modal-content"></div>
-  </div>
-</div>
-
-<script>
-const DATA = /*__DATA__*/null;
+/* DATA is a global set by the inline <script> in views/shell.html before this file loads. */
 
 function esc(s) {
   return String(s ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
@@ -332,7 +30,26 @@ function renderToolList(el, tools) {
 document.getElementById("phase-summary").textContent = DATA.phases_summary;
 document.getElementById("incumbent-name").textContent = "incumbent: " + DATA.incumbent_name;
 renderToolList(document.getElementById("tools-left-wrap"), DATA.tools_left);
-renderToolList(document.getElementById("tools-right"), DATA.tools_right);
+
+/* ---------- run settings (Loop config + Orchestrator/System 2 tools): a modal, not a column ---------- */
+function renderRunSettings() {
+  const tpl = document.getElementById("run-settings-template");
+  openModal(tpl.innerHTML);
+  renderToolList(document.getElementById("tools-right"), DATA.tools_right);
+  if (DATA.mode === "loop" && DATA.loop_config) {
+    const c = DATA.loop_config;
+    document.getElementById("config-tiles").innerHTML = [
+      ["Backend", c.backend], ["Max cycles", c.cycles], ["Severity (rho)", c.rho], ["Eta", c.eta],
+      ["Stall window (W)", c.stall_window], ["Nominal seeds", c.nominal_seeds.join(", ")],
+      ["Min tests to stop", c.min_tests], ["Adversary model", c.adversary_model],
+      ["Reasoning effort", c.reasoning_effort], ["Max model steps", c.max_model_steps],
+      ["Synth token budget", c.synth_token_budget],
+    ].map(([l, v]) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("");
+  } else {
+    document.getElementById("config-tiles").innerHTML = `<div class="empty">n/a (single-step mode)</div>`;
+  }
+}
+document.getElementById("run-settings-btn").addEventListener("click", renderRunSettings);
 
 /* ---------- resizable columns ---------- */
 (function () {
@@ -508,17 +225,20 @@ renderScene2D("generation");
     </div>`).join("") || `<div class="empty">no frames found</div>`;
 })();
 
-/* ---------- top-level tabs: Console / Perception ---------- */
+/* ---------- top-level tabs: data-driven, so adding a tab is one entry here + matching markup ---------- */
 const TAB_KEY = "ants-console-active-tab";
+const TABS = ["console", "perception", "synthesizer", "adversary"].filter(
+  (name) => document.getElementById("tab-" + name)
+);
 function switchTab(name) {
-  document.getElementById("tab-console").classList.toggle("on", name === "console");
-  document.getElementById("tab-perception").classList.toggle("on", name === "perception");
-  document.getElementById("tabbtn-console").classList.toggle("on", name === "console");
-  document.getElementById("tabbtn-perception").classList.toggle("on", name === "perception");
+  if (!TABS.includes(name)) name = "console";
+  TABS.forEach((t) => {
+    document.getElementById("tab-" + t).classList.toggle("on", t === name);
+    document.getElementById("tabbtn-" + t).classList.toggle("on", t === name);
+  });
   try { localStorage.setItem(TAB_KEY, name); } catch (e) {}
 }
-document.getElementById("tabbtn-console").addEventListener("click", () => switchTab("console"));
-document.getElementById("tabbtn-perception").addEventListener("click", () => switchTab("perception"));
+TABS.forEach((t) => document.getElementById("tabbtn-" + t).addEventListener("click", () => switchTab(t)));
 document.getElementById("perception-btn").addEventListener("click", () => switchTab("perception"));
 
 /* ---------- source badge: LIVE (green, pulsing) or ARCHIVED (muted) or MISSING ---------- */
@@ -751,20 +471,6 @@ function percRolloutEnded() {
 })();
 
 switchTab((() => { try { return localStorage.getItem(TAB_KEY) || "console"; } catch (e) { return "console"; } })());
-
-if (DATA.mode === "loop" && DATA.loop_config) {
-  const c = DATA.loop_config;
-  document.getElementById("config-tiles").innerHTML = [
-    ["Max cycles", c.cycles], ["Severity (rho)", c.rho], ["Eta", c.eta],
-    ["Stall window (W)", c.stall_window], ["Nominal seeds", c.nominal_seeds.join(", ")],
-    ["Min tests to stop", c.min_tests], ["Adversary model", c.adversary_model],
-    ["Reasoning effort", c.reasoning_effort], ["Max model steps", c.max_model_steps],
-    ["Synth token budget", c.synth_token_budget],
-  ].map(([l, v]) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("");
-  runBtnLabel();
-} else {
-  document.getElementById("config-tiles").innerHTML = `<div class="empty">n/a (single-step mode)</div>`;
-}
 
 function runBtnLabel() {
   document.getElementById("run-btn").textContent =
@@ -1024,6 +730,9 @@ function restoreUiState() {
 }
 
 function openStream() {
+  // One persistent connection for the whole page session (the server never closes it after a
+  // run's "done" -- see console_server.py's /events handler). Reconnects on its own via
+  // EventSource's built-in retry if the server restarts; no manual close/reopen needed here.
   const es = new EventSource("/events");
   es.onmessage = (ev) => {
     const data = JSON.parse(ev.data);
@@ -1042,11 +751,14 @@ function openStream() {
     else if (data.kind === "perception_run") percGoLive(data.run_id);
     else if (data.kind === "perception_keyframe") percPushKeyframe(data);
     else if (data.kind === "perception_sam3") percPushSam3(data);
-    else if (data.kind === "done") { handleDone(data); es.close(); }
-    else if (data.kind === "error") { handleError(data); es.close(); }
+    else if (data.kind === "done") handleDone(data);
+    else if (data.kind === "error") handleError(data);
+    else if (data.kind === "awaiting_answer") handleAwaitingAnswer(data);
+    else if (data.kind === "chat_muse_event") handleChatMuseEvent(data.event);
+    else if (data.kind === "chat_done") handleChatDone(data);
+    else if (data.kind === "chat_error") handleChatError(data);
     saveUiState();
   };
-  es.onerror = () => es.close();
 }
 
 runBtn.addEventListener("click", () => {
@@ -1079,7 +791,6 @@ runBtn.addEventListener("click", () => {
   setStatus("running", "running");
   document.getElementById("reply-box").textContent = "(waiting)";
   saveUiState();
-  openStream();
   fetch("/run", {
     method: "POST",
     headers: {"Content-Type": "application/json"},
@@ -1089,7 +800,87 @@ runBtn.addEventListener("click", () => {
   });
 });
 
+/* ---------- chat composer: three cases (see docs/studio/chat-field-design.md) ---------- */
+let chatMode = "idle"; // "idle" | "awaiting_answer" | "queued"
+let chatBuffer = ""; // accumulates chat_muse_event output.delta text for the current chat turn
+let chatTurnEl = null;
+
+function setChatStatus(text, pending) {
+  const el = document.getElementById("chat-status");
+  el.textContent = text || "";
+  el.classList.toggle("pending", !!pending);
+}
+
+function handleAwaitingAnswer(data) {
+  chatMode = "awaiting_answer";
+  document.getElementById("chat-input").placeholder = "Answer the escalation...";
+  setChatStatus("Waiting for your answer to the escalation above.", true);
+  addTurn("chat-turn answer", `<div class="tk">escalation (needs your answer)</div><div class="main">${esc((data.escalation || {}).request || "")}</div>`);
+}
+
+function newAgentChatTurn() {
+  chatBuffer = "";
+  const idx = turnCount; // addTurn increments turnCount; capture the element it creates
+  addTurn("chat-turn", `<div class="tk">agent</div><div class="main" id="chat-out-${idx}">...</div>`);
+  chatTurnEl = document.getElementById("chat-out-" + idx);
+}
+
+function handleChatMuseEvent(event) {
+  const pt = event.payload_type || "";
+  if (pt === "run.output.delta" && chatTurnEl) {
+    chatBuffer += (event.payload || {}).text || "";
+    chatTurnEl.textContent = chatBuffer;
+  }
+}
+
+function handleChatDone(payload) {
+  if (chatTurnEl) chatTurnEl.textContent = payload.text || chatBuffer || "(empty reply)";
+  chatMode = "idle";
+  document.getElementById("chat-input").placeholder = "Message the agent...";
+  document.getElementById("chat-input").disabled = false;
+  setChatStatus("");
+}
+
+function handleChatError(payload) {
+  addTurn("chat-turn error", `<div class="tk">chat error</div><div class="main">${esc(payload.message)}</div>`);
+  chatMode = "idle";
+  document.getElementById("chat-input").disabled = false;
+  setChatStatus("");
+}
+
+function sendChat() {
+  const input = document.getElementById("chat-input");
+  const message = input.value.trim();
+  if (!message) return;
+  input.value = "";
+  if (chatMode === "awaiting_answer") {
+    addTurn("chat-turn", `<div class="tk">you (answering)</div><div class="main">${esc(message)}</div>`);
+  } else {
+    addTurn("chat-turn", `<div class="tk">you</div><div class="main">${esc(message)}</div>`);
+    newAgentChatTurn();
+  }
+  fetch("/chat", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({message}),
+  }).then(r => r.json()).then(r => {
+    if (!r.ok) { setChatStatus(r.error || "failed to send", false); return; }
+    if (r.case === "answer") {
+      chatMode = "idle";
+      document.getElementById("chat-input").placeholder = "Message the agent...";
+      setChatStatus("Answer sent — the loop will resume.");
+    } else if (r.case === "queued") {
+      chatMode = "queued";
+      setChatStatus("A run is active — this will send automatically once it finishes.", true);
+    } else if (r.case === "oneshot") {
+      setChatStatus("Sent.", true);
+    }
+  }).catch(() => setChatStatus("failed to send", false));
+}
+document.getElementById("chat-send").addEventListener("click", sendChat);
+document.getElementById("chat-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") sendChat();
+});
+
+openStream();
 restoreUiState();
-</script>
-</body>
-</html>
