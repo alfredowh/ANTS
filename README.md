@@ -1,51 +1,36 @@
+<p align="center"><img src="docs/images/banner.svg" alt="ants" width="100%"></p>
+
 # ANTS: Agentic Task Synthesis
 
-**Teach a robot a skill from one demo. Let an adversary break it. Fix it with context, not training.**
+**Show a robot a task once. An adversary breaks it in simulation. Every failure becomes a readable fix, kept only if nothing got worse.** No model weights are trained.
 
-Our entry for the [Meta Global AI Developer Hackathon 2026](https://dev.meta.ai/events/global-hackathon): *ANTS, One-Shot Robot Learning via Video-to-Program Synthesis and Adversarial Refinement.*
+Our entry for the [Meta Global AI Developer Hackathon 2026](https://dev.meta.ai/events/global-hackathon).
 
 ![ANTS architecture](docs/images/architecture.png)
 
-- **System 1, write the skill:** SAM 3.1 tracks hand, object and gripper in one demo video; Muse Wonder (via Muse Code) turns it into a policy.
-- **System 2, break the skill:** Muse Spark plans perturbations on the weakest category, a LIBERO simulation runs them, and Muse Spark diagnoses each failure.
-- **Closed loop:** each failure goes back to the generator as context, never as a weight update. A regression gate accepts a rewrite only if it is no worse on every case seen so far and better on at least one. If stuck after N cycles, ANTS asks for one targeted demo.
-- **Deliverable:** one closed loop on one pick-and-place task with a Franka arm in LIBERO.
-
-**What is new.** Turning one demo into a robot program has been published ([RAPID](https://arxiv.org/abs/2609.30249)), and so has a frozen coding agent that improves through a skill library ([ASPIRE](https://arxiv.org/abs/2607.00272), [CaP-X](https://arxiv.org/abs/2603.22435)). ANTS adds the parts they lack: an adversary that chooses where to test, a gate that never regresses on any case seen so far, and escalation to one targeted human demo. See [positioning](docs/concept.md#positioning).
+- **System 1 writes the skill:** one demonstration becomes a short robot program (Muse).
+- **System 2 breaks it:** Muse Spark picks where to attack, LIBERO runs the attack, Muse Spark explains the failure.
+- **The gate keeps only real fixes:** a rewrite is accepted only if it is no worse on every case seen so far and better on at least one. When stuck, ANTS asks for one targeted demonstration.
 
 ## Results
 
-*Coming soon.* Numbers will come from logged runs on a held-out test set.
-
-## Repository layout
-
-```
-src/ants/
-├── contracts/      shared types: Demo, Policy, Perturbation, Failure, Constraint
-├── synthesizer/    System 1: SAM 3.1 tracking, Muse Wonder policy synthesis, experience memory
-├── adversary/      System 2: Muse Spark planner + diagnoser, LIBERO rollouts, failure history
-├── orchestrator/   closed loop, regression gate, escalation
-└── evalkit/        acceptance / held-out split, metrics, logs
-```
-
-`synthesizer` and `adversary` import only `contracts`; only `orchestrator` knows both.
+*Coming soon,* from logged LIBERO runs on a held-out test set.
 
 ## Quick start
 
-Requires [uv](https://docs.astral.sh/uv/getting-started/installation/) (Windows, Ubuntu, macOS).
+Requires [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 ```
 uv sync
-uv run pytest
+uv run python -m ants.orchestrator.run --cycles 30 --out data/runs/mock_loop
 ```
+
+This runs the closed loop in an offline test world (no GPU, no API key) and writes `data/runs/mock_loop/studio.html`. Open it in a browser.
 
 ## Docs
 
-- [Concept and evaluation](docs/concept.md)
-- [System 1 discussion: stack, method, policy format](docs/synthesizer/discussion.md)
-- [Should System 1 build on ASPIRE? Assessment, checklist and build plan](docs/synthesizer/aspire-assessment.md)
-- [Instructions for AI coding agents](AGENTS.md)
+[Concept](docs/concept.md) · [Architecture](docs/architecture.md) · [Context and decisions](docs/context.md) · [For coding agents](AGENTS.md)
 
 ## License
 
-[Apache-2.0](LICENSE). Third-party models (SAM 3.1, Muse) and datasets keep their own licenses.
+[Apache-2.0](LICENSE). Third-party models (SAM 3, Muse) and datasets keep their own licenses.
