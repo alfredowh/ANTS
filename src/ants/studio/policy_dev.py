@@ -147,6 +147,10 @@ def worst_case_note(settings: dict, skill: dict) -> str:
     )
     if need > cap - b["one_call_headroom_tokens"]:
         note += " That can pass the cap; the run then ends as a budget stop."
+    if settings.get("spark") and settings["adversary"]:
+        spark = settings["spark_token_cap"]
+        spark_usd = spark / 1e6 * b["usd_per_million_tokens"]
+        note += f" Muse Spark adds up to {spark:,} tokens, about ${spark_usd:.2f}."
     return note
 
 
@@ -494,7 +498,10 @@ def execution_record(req: Request, skill: dict, root: Path = REPO_ROOT) -> dict:
         "adversary": {
             "enabled": cfg["adversary"],
             "backend": scene["backend"],
-            "proposer_model": skill["loop"]["proposer_model"],
+            "proposer_model": "muse-spark-1.3"
+            if cfg.get("spark")
+            else skill["loop"]["proposer_model"],
+            "spark_token_cap": cfg.get("spark_token_cap") if cfg.get("spark") else 0,
             "strategy": cfg["strategy"],
             "eta": cfg["eta"],
             "attacks": cfg["attacks"],

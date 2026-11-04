@@ -175,7 +175,7 @@ def deploy_latest(session_dir: Path | None, incumbent: Path, deploy_dir: Path) -
 def session_tokens(session_dir: Path | None, usd_per_mtok: float = 13.5) -> dict:
     """New model tokens this session spent, from its own run and event logs, never from the shared
     ledger, which other sessions and experiments also write. A call counts when it has finished."""
-    generation = rewrites = chat = 0
+    generation = rewrites = chat = spark = 0
     if session_dir is not None:
         for log in session_dir.glob("runs/run-*/generation/events.jsonl"):
             for row in _jsonl(log):
@@ -184,17 +184,19 @@ def session_tokens(session_dir: Path | None, usd_per_mtok: float = 13.5) -> dict
         for run in session_dir.glob("runs/run-*"):
             spent = [_json_or_none(u) or {} for u in run.glob("muse/cycle*/usage.json")]
             rewrites += max((int(u.get("spent_total") or 0) for u in spent), default=0)
+            spark += int((_json_or_none(run / "spark_usage.json") or {}).get("spent") or 0)
         for row in _jsonl(session_dir / "events.jsonl"):
             if row.get("kind") == "chat_done":
                 usage = row.get("usage") or {}
                 chat += int(usage.get("input_tokens") or 0) + int(usage.get("output_tokens") or 0)
-    total = generation + rewrites + chat
+    total = generation + rewrites + chat + spark
     return {
         "total": total,
         "usd": round(total * usd_per_mtok / 1e6, 2),
         "generation": generation,
         "rewrites": rewrites,
         "chat": chat,
+        "spark": spark,
     }
 
 
@@ -519,11 +521,19 @@ class LoopRunConfig:
     stall_window: int = 2  # W: cycles one failure signature may stall before escalation
     nominal_seeds: tuple[int, ...] = (51,)  # acceptance seeds for the nominal cases
     synth_token_budget: int = 200_000
+    spark_token_budget: int | None = None  # None keeps the adapter's default
     video_dir: Path | None = None  # where /policy-dev's file dialog opens (None: the skill file's)
     pipeline_token_budget: int | None = None  # /policy-dev total Muse cap (None: the skill file's)
     reasoning_effort: str = "high"
     max_model_steps: int = 20
     out_dir: Path = field(default_factory=lambda: REPO_ROOT / "data" / "console_runs")
+
+
+def _record_spark(adv, run_dir: Path) -> None:
+    """The Adversary model's new tokens for this run, for the session's token count."""
+    spent = getattr(getattr(adv, "model", None), "run_spent", 0)
+    if spent:
+        (run_dir / "spark_usage.json").write_text(json.dumps({"spent": spent}), encoding="utf-8")
 
 
 def _adversary_from(cfg: LoopRunConfig, run_dir: Path):
@@ -543,6 +553,8 @@ def _adversary_from(cfg: LoopRunConfig, run_dir: Path):
         "tau": cfg.tau,
         "history_path": run_dir / "history.jsonl",
     }
+    if cfg.spark_token_budget is not None:
+        kwargs["token_budget"] = cfg.spark_token_budget
     if cfg.categories:
         kwargs["categories"] = cfg.categories
     if (
@@ -570,6 +582,7 @@ def run_attacks_only(state: RunState, program: Path, cfg: LoopRunConfig, run_dir
             break
         report = adv.attack(policy)
         append_row(run_dir / "attacks.jsonl", attack_row(adv, report, policy))
+        _record_spark(raw_adv, run_dir)
         failures += report.failure is not None
         state.broadcast(
             {
@@ -665,6 +678,7 @@ def run_live_loop(
             from ants.studio.run import append_row, attack_row
 
             append_row(run_dir / "attacks.jsonl", attack_row(adv, report, attacked_policy))
+            _record_spark(adv, run_dir)
         except Exception as exc:  # noqa: BLE001 -- logging must never break the loop
             state.broadcast({"kind": "error", "message": f"attacks.jsonl logging failed: {exc}"})
 
@@ -875,7 +889,10 @@ def make_handler(
         return dataclasses.replace(
             loop_cfg or LoopRunConfig(),
             backend="cap_harness",
-            adversary_model=skill["loop"]["proposer_model"],
+            adversary_model="muse-spark"
+            if settings.get("spark")
+            else skill["loop"]["proposer_model"],
+            spark_token_budget=settings.get("spark_token_cap") if settings.get("spark") else None,
             eta=settings["eta"],
             cycles=settings["attacks"],
             stall_window=skill["loop"]["stall_window"],
@@ -1044,7 +1061,11 @@ def make_handler(
                         "current": pipeline.current,
                         "settings": skill["settings"],
                         "budget": skill["budget"],
-                        "proposer_model": skill["loop"]["proposer_model"],
+                        "proposer_model": (
+                            "muse-spark"
+                            if (pipeline.current or {}).get("settings", {}).get("spark")
+                            else skill["loop"]["proposer_model"]
+                        ),
                     }
                 )
                 return

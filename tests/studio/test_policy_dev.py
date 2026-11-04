@@ -562,3 +562,16 @@ def test_generation_asks_for_the_models_reason_and_the_scene_context(tmp_path):
     assert "--explain" in cmd
     assert cmd[cmd.index("--evidence") + 1] == "e3"
     assert "S4" in cmd[cmd.index("--scene-text-file") + 1]
+
+
+def test_muse_spark_setting_defaults_off_and_is_logged(tmp_path):
+    skill = pd.load_skill()
+    settings, _ = pd.parse_settings({}, skill)
+    assert settings["spark"] is False
+    assert "Muse Spark" not in pd.worst_case_note(settings, skill)
+    on, _ = pd.parse_settings({"spark": True, "spark_token_cap": 50000}, skill)
+    assert "50,000" in pd.worst_case_note(on, skill)
+    req = pd.Request("put the bowl on the plate", None, tmp_path, on)
+    record = pd.execution_record(req, skill, tmp_path)
+    assert record["adversary"]["proposer_model"] == "muse-spark-1.3"
+    assert record["adversary"]["spark_token_cap"] == 50000

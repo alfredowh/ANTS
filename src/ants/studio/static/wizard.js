@@ -176,7 +176,8 @@
         document.getElementById("row-main_script").style.display = synth ? "none" : "";
         document.getElementById("row-max_retries").style.display = synth ? "" : "none";
         document.getElementById("row-token_cap").style.display = synth ? "" : "none";
-        for (const k of ["strategy", "attacks", "seeds"]) document.getElementById("row-" + k).style.display = adv ? "" : "none";
+        for (const k of ["strategy", "attacks", "seeds", "spark"]) document.getElementById("row-" + k).style.display = adv ? "" : "none";
+        document.getElementById("row-spark_token_cap").style.display = adv && el("spark").checked ? "" : "none";
         const cap = +el("token_cap").value || 0;
         const usd = (cap / 1e6 * budget.usd_per_million_tokens).toFixed(2);
         const calls = (+el("max_retries").value || 0) + 1 + (adv ? (+el("attacks").value || 0) : 0);

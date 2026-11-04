@@ -96,7 +96,7 @@
       clearTimer(); S = fresh(); path = []; sel = null;
       try { if (d.session) localStorage.setItem("ants-flow-session", d.session); } catch (e) {}
     }
-    else if (k === "pipeline_start") { clearTimer(); S = fresh(); S.pipeline = true; S.active = true; }
+    else if (k === "pipeline_start") { sparkOn = !!(d.settings && d.settings.spark); clearTimer(); S = fresh(); S.pipeline = true; S.active = true; }
     else if (k === "pipeline_stage") {
       if (byId[d.stage] === undefined && G) return;
       if (!S.pipeline && PRE.includes(d.stage)) { clearTimer(); S = fresh(); S.pipeline = true; S.active = true; }

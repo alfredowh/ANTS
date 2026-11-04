@@ -294,3 +294,6 @@ def test_session_tokens_counts_this_sessions_logs_only(tmp_path):
     (tmp_path / "events.jsonl").write_text(json.dumps(chat), encoding="utf-8")
     out = session_tokens(tmp_path)
     assert (out["generation"], out["rewrites"], out["chat"], out["total"]) == (100, 70, 5, 175)
+    (run / "spark_usage.json").write_text(json.dumps({"spent": 25}), encoding="utf-8")
+    assert session_tokens(tmp_path)["spark"] == 25
+    assert session_tokens(tmp_path)["total"] == 200
