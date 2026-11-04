@@ -8,6 +8,7 @@
   "prompt",
   "generate",
   "nominal",
+  "review",
   "attack",
   "diagnose",
   "rewrite",
@@ -317,6 +318,29 @@
     "row": 1
    },
    "model": "LIBERO, no perturbation"
+  },
+  {
+   "id": "review",
+   "label": "Human check",
+   "owner": "orchestrator",
+   "status": "built",
+   "summary": "The run holds with the rollout of candidate v0 on screen. The Adversary starts only when the person continues.",
+   "details": "",
+   "code": [
+    "src/ants/studio/policy_dev.py"
+   ],
+   "docs": [],
+   "children": [],
+   "live": {
+    "signal": "live",
+    "note": "pipeline_stage review"
+   },
+   "stage": "review",
+   "pos": {
+    "col": 4,
+    "row": 0
+   },
+   "model": "continue or stop"
   },
   {
    "id": "attack",
@@ -753,10 +777,6 @@
    "label": "π"
   },
   {
-   "from": "nominal",
-   "to": "attack"
-  },
-  {
    "from": "history",
    "to": "selector"
   },
@@ -808,6 +828,15 @@
    "to": "rewrite",
    "loop": true,
    "label": "answer"
+  },
+  {
+   "from": "nominal",
+   "to": "review",
+   "label": "v0"
+  },
+  {
+   "from": "review",
+   "to": "history"
   }
  ]
 }

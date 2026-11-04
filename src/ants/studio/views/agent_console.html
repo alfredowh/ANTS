@@ -59,8 +59,12 @@
     <div class="h">Reply / summary (output text)</div>
     <div class="reply" id="reply-box">(waiting)</div>
     <div id="media-slot">
+      <div id="candidate-box" hidden>
+        <div class="h">Candidate v0: rollout</div>
+        <video id="candidate-video" muted loop playsinline autoplay></video>
+      </div>
       <div id="demo-box" hidden>
-        <div class="h" id="demo-title">Human demonstration</div>
+        <button class="h demo-toggle" id="demo-toggle" type="button" aria-expanded="true" aria-controls="demo-video"><span class="demo-arrow" aria-hidden="true">&#9662;</span><span id="demo-title">Human demonstration</span><span class="demo-hint" id="demo-hint">Hide</span></button>
         <video id="demo-video" muted loop playsinline autoplay></video>
         <div class="demo-note" id="demo-note"></div>
       </div>

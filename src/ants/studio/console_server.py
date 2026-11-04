@@ -26,6 +26,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlparse
 
 from ants.studio import adversary_view, attempts_view, live_view, policy_dev
+from ants.studio.token_live import InFlight
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 STUDIO_DIR = Path(__file__).parent
@@ -349,9 +350,11 @@ class RunState:
     queued_chat: str | None = None
     session: Session | None = None
     picked_video: Path | None = None  # chosen in the file dialog, shown before a run starts
+    in_flight: InFlight = field(default_factory=InFlight)  # the token tracker's running call
     live: live_view.LiveView | None = None  # the rollout-in-progress panel (live_view.py)
 
     def broadcast(self, event: dict) -> None:
+        self.in_flight.observe(event)
         if self.live is not None:
             self.live.observe(event)
         if self.session is not None:
@@ -1000,7 +1003,8 @@ def make_handler(
             # ---- human demo video and generation attempts of the current run ----
             current_run = Path(pipeline.current["run_dir"]) if pipeline.current else None
             if path == "/session/tokens":
-                self._send_json(session_tokens(state.session.dir if state.session else None))
+                totals = session_tokens(state.session.dir if state.session else None)
+                self._send_json({**totals, "in_flight": state.in_flight.snapshot()})
                 return
             if path == "/demo-video/status":
                 overlay = current_run / "demo" / "overlay.mp4" if current_run else None
@@ -1008,8 +1012,19 @@ def make_handler(
                     {
                         "raw": self._demo_raw() is not None,
                         "overlay": bool(overlay and overlay.is_file()),
+                        "candidate": bool(
+                            current_run and (current_run / "candidate_v0.mp4").is_file()
+                        ),
                     }
                 )
+                return
+            if path == "/demo-video/candidate":
+                file = current_run / "candidate_v0.mp4" if current_run else None
+                if file is None or not file.is_file():
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                self._send_ranged(file, "video/mp4")
                 return
             if path in ("/demo-video/raw", "/demo-video/overlay"):
                 file = (
@@ -1061,6 +1076,7 @@ def make_handler(
                         "current": pipeline.current,
                         "settings": skill["settings"],
                         "budget": skill["budget"],
+                        "waiting": pipeline.waiting,
                         "proposer_model": (
                             "muse-spark"
                             if (pipeline.current or {}).get("settings", {}).get("spark")
@@ -1099,6 +1115,9 @@ def make_handler(
                 return
             if path == "/session/new":
                 self._handle_new_session()
+                return
+            if path == "/policy-dev/continue":
+                self._send_json(pipeline.resume())
                 return
             if path == "/policy-dev":
                 self._handle_policy_dev()

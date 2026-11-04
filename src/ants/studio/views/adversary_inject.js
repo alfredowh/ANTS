@@ -10,7 +10,7 @@
   function theme() {
     let t = null;
     try { t = localStorage.getItem("ants-studio-theme"); } catch (e) {}
-    if (t === "light") document.documentElement.dataset.theme = "light";
+    if (t !== "dark") document.documentElement.dataset.theme = "light";
     else delete document.documentElement.dataset.theme;
   }
   theme();

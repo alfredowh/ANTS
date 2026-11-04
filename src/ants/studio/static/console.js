@@ -313,16 +313,27 @@ function refreshRunList() {
 }
 refreshRunList();
 
-/* ---------- tokens this session has spent, from its own logs; a call counts once it has finished ---------- */
+/* ---------- tokens this session has spent. The number is real: it comes from the session's logs and
+   grows when a call ends. A running call is shown after it, with ~ on any rough size, and is never
+   added to the number. ---------- */
+function tokenInFlightText(c) {
+  const clock = `${Math.floor(c.elapsed_s / 60)}:${String(c.elapsed_s % 60).padStart(2, "0")}`;
+  const sizes = [];
+  if (c.approx_input_tokens) sizes.push(`~${c.approx_input_tokens.toLocaleString()} in`);
+  if (c.approx_output_tokens) sizes.push(`~${c.approx_output_tokens.toLocaleString()} out`);
+  return ` + ${sizes.length ? sizes.join(", ") + ", " : ""}model call running ${clock}`;
+}
 function refreshTokens() {
   fetch("/session/tokens").then((r) => r.json()).then((t) => {
-    const el = document.getElementById("token-pill");
-    el.textContent = `${t.total.toLocaleString()} tokens · $${t.usd.toFixed(2)}`;
-    el.title = `This session, new tokens at the observed $13.5 per million:\ngeneration ${t.generation.toLocaleString()}\nrewrites ${t.rewrites.toLocaleString()}\nMuse Spark ${t.spark.toLocaleString()}\nchat ${t.chat.toLocaleString()}\nUpdates when a model call finishes; Muse Spark after each attack.`;
+    const el = document.getElementById("token-pill"), c = t.in_flight;
+    el.textContent = `${t.total.toLocaleString()} tokens · $${t.usd.toFixed(2)}` + (c ? tokenInFlightText(c) : "");
+    el.classList.toggle("in-flight", !!c);
+    el.title = `Exact, this session's new tokens at the observed $13.5 per million:\ngeneration ${t.generation.toLocaleString()}\nrewrites ${t.rewrites.toLocaleString()}\nMuse Spark ${t.spark.toLocaleString()}\nchat ${t.chat.toLocaleString()}\n` +
+      (c ? `\nRunning now: ${c.label}. Its real count arrives when the call ends and is not in the total yet.` + (c.approx_input_tokens || c.approx_output_tokens ? " ~ is a rough size from the text, about 4 characters per token." : " Its size is unknown until then.") : "\nNo model call is running. Muse Spark updates after each attack.");
   }).catch(() => {});
 }
 refreshTokens();
-setInterval(refreshTokens, 2000);
+setInterval(refreshTokens, 1000);
 
 /* ---------- session: one folder per session on the server (chat, events, runs); "New session" resets ---------- */
 let currentSessionId = null;

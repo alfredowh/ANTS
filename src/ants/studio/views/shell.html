@@ -14,7 +14,7 @@
 <script>
 try {
   var t = localStorage.getItem("ants-studio-theme");
-  if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+  document.documentElement.dataset.theme = t === "dark" ? "dark" : "light"; // white and blue unless the viewer chose dark
 } catch (e) {}
 </script>
 </head>

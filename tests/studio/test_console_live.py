@@ -297,3 +297,14 @@ def test_session_tokens_counts_this_sessions_logs_only(tmp_path):
     (run / "spark_usage.json").write_text(json.dumps({"spent": 25}), encoding="utf-8")
     assert session_tokens(tmp_path)["spark"] == 25
     assert session_tokens(tmp_path)["total"] == 200
+
+
+def test_demo_video_can_collapse_without_touching_the_live_view():
+    from pathlib import Path
+
+    studio = Path(__file__).resolve().parents[2] / "src" / "ants" / "studio"
+    page = (studio / "views" / "agent_console.html").read_text(encoding="utf-8")
+    script = (studio / "static" / "demo_media.js").read_text(encoding="utf-8")
+    assert 'id="demo-toggle"' in page and 'aria-controls="demo-video"' in page
+    assert "video.pause()" in script and "ants-demo-collapsed" in script
+    assert "live" not in script.split("function applyCollapsed")[1].split("toggle.addEvent")[0]
