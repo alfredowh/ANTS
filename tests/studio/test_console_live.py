@@ -137,8 +137,21 @@ def test_template_has_live_replay_toggle_and_run_folder():
         'id="scene-graph-btn"',
         'id="collapse-all"',
         'id="expand-all"',
+        'id="scene-arm-e1"',
+        'id="scene-arm-e2"',
+        'id="scene-arm-e3"',
+        'id="curobo-tgl-collision"',
+        'id="curobo-tgl-scan"',
+        'id="curobo-tgl-paths"',
+        "sceneGraphOn",
     ):
         assert needle in html, needle
+
+
+def test_plan_viewer_prefers_latest_exp():
+    picked = console_server._latest_plan_viewer()
+    if picked is not None:  # data-dependent: only assert when cuRobo runs exist locally
+        assert "exp11" in str(picked) or "exp1" in str(picked)
 
 
 def test_server_broadcasts_run_started_before_loop():

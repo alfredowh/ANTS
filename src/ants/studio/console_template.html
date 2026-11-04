@@ -39,8 +39,8 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
 .scene2d-head{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap}
 .scene2d-head .asof{font-size:10.5px;color:var(--dim);margin-left:auto}
 .scene2d svg{width:100%;height:auto;background:var(--panel);border:1px solid var(--line)}
-.scene2d svg text{font:500 9px var(--mono);fill:var(--soft)}
-.scene2d svg text.m{fill:var(--dim);font-size:8px}
+.scene2d svg text{font:600 13px var(--mono);fill:var(--soft)}
+.scene2d svg text.m{fill:var(--dim);font-size:11px}
 .scene2d-legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:10.5px;color:var(--muted);margin-top:6px}
 .scene2d-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:4px;vertical-align:-1px}
 .scene2d-note{font-size:10px;color:var(--dim);margin-top:5px;cursor:help}
@@ -193,6 +193,11 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
         <span class="asof" id="scene-asof"></span>
       </div>
       <svg id="scene2d-svg" viewBox="0 0 240 240"></svg>
+      <div class="scene2d-head" style="margin-top:6px">
+        <button class="btn sm" id="scene-arm-e1" title="E1: repair evidence = contact log only">E1 Contact log</button>
+        <button class="btn sm" id="scene-arm-e2" title="E2: contact log + scene description">E2 Scene</button>
+        <button class="btn sm" id="scene-arm-e3" title="E3: contact log + scene + stall readings">E3 Stall readings</button>
+      </div>
       <div id="scene-graph" style="display:none;font-size:11px"></div>
       <div class="scene2d-legend">
         <span><i style="background:#6fb2e0"></i>task object</span>
@@ -276,6 +281,11 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
     </section>
     <section class="perc-panel" id="perc-panel-curobo">
       <div class="perc-head"><span class="h">cuRobo trajectory &amp; collision</span><span class="src-badge" id="perc-curobo-badge"></span></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">
+        <button class="btn sm on" id="curobo-tgl-collision" type="button" title="Show/hide the collision bodies (start + goal spheres) inside the 3D viewer">Collision bodies</button>
+        <button class="btn sm on" id="curobo-tgl-scan" type="button" title="Show/hide the 3D scan (point cloud) inside the 3D viewer">3D scan</button>
+        <button class="btn sm on" id="curobo-tgl-paths" type="button" title="Show/hide straight + cuRobo planned paths inside the 3D viewer">Paths</button>
+      </div>
       <iframe class="perc-curobo-frame" id="perc-curobo-frame" title="cuRobo trajectory and collision-sphere plan viewer"></iframe>
       <div class="perc-note" id="perc-curobo-note"></div>
     </section>
@@ -370,7 +380,7 @@ function renderScene2D(kind) {
   const noteEl = document.getElementById("scene2d-note");
   const asofEl = document.getElementById("scene-asof");
   const s2d = DATA.scene2d || {};
-  const scene = s2d[kind];
+  const scene = (DATA.scene_arms && DATA.scene_arms[kind]) || s2d[kind];
   if (!scene) {
     svg.innerHTML = "";
     asofEl.textContent = "";
@@ -404,15 +414,20 @@ function renderScene2D(kind) {
     const a = byLabel[r.a], b = byLabel[r.b];
     if (!a || !b) continue;
     const x1 = cx(a), y1 = cy(a), x2 = cx(b), y2 = cy(b);
-    parts.push(`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#444" stroke-dasharray="2,2" stroke-width="0.6"/>`);
-    parts.push(`<text class="m" x="${((x1+x2)/2).toFixed(1)}" y="${((y1+y2)/2).toFixed(1)}">${r.mm} mm</text>`);
+    parts.push(`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#666" stroke-dasharray="4,3" stroke-width="2"/>`);
+    parts.push(`<text class="m" x="${((x1+x2)/2).toFixed(1)}" y="${((y1+y2)/2 - 3).toFixed(1)}">${r.mm} mm</text>`);
   }
   for (const o of scene.objects) {
+    const color = SCENE_COLOR[o.cat] || "#8a8a8a";
+    if (sceneGraphOn) {
+      parts.push(`<circle cx="${cx(o).toFixed(1)}" cy="${cy(o).toFixed(1)}" r="10" fill="${color}" fill-opacity="0.85" stroke="#222" stroke-width="2"/>`);
+      parts.push(`<text x="${(cx(o) + 13).toFixed(1)}" y="${(cy(o) + 4).toFixed(1)}">${esc(o.label)}</text>`);
+      continue;
+    }
     const x = toX(o.y1), y = toY(o.x1); // y1/x1 give the top-left corner under this axis mapping
     const bw = (o.y1 - o.y0) * scale, bh = (o.x1 - o.x0) * scale;
-    const color = SCENE_COLOR[o.cat] || "#8a8a8a";
-    parts.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${color}" fill-opacity="0.35" stroke="${color}" stroke-width="1"/>`);
-    parts.push(`<text x="${(x + 2).toFixed(1)}" y="${(y + 9).toFixed(1)}">${esc(o.label)}</text>`);
+    parts.push(`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${color}" fill-opacity="0.35" stroke="${color}" stroke-width="2"/>`);
+    parts.push(`<text x="${(x + 3).toFixed(1)}" y="${(y + 14).toFixed(1)}">${esc(o.label)}</text>`);
   }
   if (scene.gripper) {
     const gx = toX(scene.gripper.y), gy = toY(scene.gripper.x);
@@ -428,16 +443,30 @@ let sceneGraphOn = false;
 document.getElementById("scene-graph-btn").addEventListener("click", (e) => {
   sceneGraphOn = !sceneGraphOn;
   e.target.classList.toggle("on", sceneGraphOn);
-  document.getElementById("scene2d-svg").style.display = sceneGraphOn ? "none" : "";
+  e.target.textContent = sceneGraphOn ? "layout view" : "scene graph";
+  renderScene2D(sceneKind);
   const el = document.getElementById("scene-graph");
   el.style.display = sceneGraphOn ? "" : "none";
   if (!sceneGraphOn) return;
-  const scene = (DATA.scene2d || {})[sceneKind];
+  const scene = currentScene();
   if (!scene) { el.innerHTML = `<div class="empty">no scene data</div>`; return; }
-  const nodes = scene.objects.map((o) => `<div><b>${esc(o.label)}</b> <span style="color:var(--dim)">${esc(o.cat)}</span></div>`).join("");
-  const edges = scene.relations.map((r) => `<div>${esc(r.a)} &mdash; ${esc(r.b)}: <b>${r.mm} mm</b> gap</div>`).join("");
-  el.innerHTML = `<div class="h">Objects (nodes)</div>${nodes || '<div class="empty">none</div>'}<div class="h" style="margin-top:8px">Relations (edges)</div>${edges || '<div class="empty">none</div>'}`;
+  el.innerHTML = `<b>Legend:</b> ${scene.objects.length} objects (nodes), ${scene.relations.length} relations (edges, gap in mm) &middot; ` +
+    scene.objects.map((o) => `${esc(o.label)} (${esc(o.cat)})`).join(", ") +
+    (scene.relations.length ? `<br>` + scene.relations.map((r) => `${esc(r.a)}&ndash;${esc(r.b)} ${r.mm} mm`).join(" &middot; ") : "");
 });
+function currentScene() {
+  if (DATA.scene_arms && DATA.scene_arms[sceneKind]) return DATA.scene_arms[sceneKind];
+  return (DATA.scene2d || {})[sceneKind];
+}
+for (const arm of ["E1", "E2", "E3"]) {
+  document.getElementById("scene-arm-" + arm.toLowerCase()).addEventListener("click", () => {
+    sceneKind = arm;
+    for (const a of ["E1", "E2", "E3"]) document.getElementById("scene-arm-" + a.toLowerCase()).classList.toggle("on", a === arm);
+    document.getElementById("scene-gen-btn").classList.remove("on");
+    document.getElementById("scene-repair-btn").classList.remove("on");
+    renderScene2D(arm);
+  });
+}
 renderScene2D("generation");
 
 /* ---------- archived SAM 3 output (reference, not live) ---------- */
@@ -674,8 +703,41 @@ function percRolloutEnded() {
     "built by a separate offline script (dev/curobo/make_viewer.py), not produced by an ordinary " +
     "rollout, so this stays archived even with --backend cap_harness -- there is no live path for it.");
   if (planViewer.available) {
-    document.getElementById("perc-curobo-frame").src = "/perception/planviewer";
-    document.getElementById("perc-curobo-note").textContent = "Archived plan viewer (exp10) embedded as-is, not rebuilt; no live trajectory source exists yet.";
+    const frame = document.getElementById("perc-curobo-frame");
+    frame.src = "/perception/planviewer";
+    document.getElementById("perc-curobo-note").textContent =
+      "Latest archived cuRobo 3D viewer (" + (planViewer.name || "exp11") + "), embedded as-is; no live trajectory source exists yet. " +
+      "Collision bodies / 3D scan / Paths buttons above toggle the viewer's own layers.";
+    // The viewer is same-origin, so the console toggles click its own layer buttons
+    // (data-l="cloud|start|goal|straight|planned"). If a future viewer changes those,
+    // the buttons degrade to no-ops and the viewer's own controls still work.
+    const layerGroups = {
+      "curobo-tgl-collision": ["start", "goal"],
+      "curobo-tgl-scan": ["cloud"],
+      "curobo-tgl-paths": ["straight", "planned"],
+    };
+    const clickLayers = (layers, on) => {
+      try {
+        const doc = frame.contentDocument;
+        if (!doc) return;
+        for (const l of layers) {
+          const b = doc.querySelector(`[data-l="${l}"]`);
+          if (b && b.classList.contains("on") !== on) b.click();
+        }
+      } catch (e) { /* viewer changed; its own layer buttons still work */ }
+    };
+    for (const [btnId, layers] of Object.entries(layerGroups)) {
+      document.getElementById(btnId).addEventListener("click", (e) => {
+        const on = !e.target.classList.contains("on");
+        e.target.classList.toggle("on", on);
+        clickLayers(layers, on);
+      });
+    }
+    frame.addEventListener("load", () => {
+      for (const [btnId, layers] of Object.entries(layerGroups)) {
+        clickLayers(layers, document.getElementById(btnId).classList.contains("on"));
+      }
+    });
   } else {
     document.getElementById("perc-curobo-frame").remove();
     document.getElementById("perc-curobo-note").textContent = "No archived cuRobo plan viewer found.";

@@ -48,16 +48,23 @@ def _find_agentview_keyframes() -> dict[str, Path]:
 
 # Archived cuRobo trajectory/collision-sphere viewer (exp09-11, the held-bowl-attached work), a
 # separate pre-built static page -- reused by linking out to it, not rebuilt here.
-PLAN_VIEWER_PATH = next(
-    iter(
-        sorted(
-            (REPO_ROOT / "data" / "runs" / "curobo").glob(
-                "exp10/*/plan_viewer/index_compare_*.html"
-            )
-        )
-    ),
-    None,
-)
+def _latest_plan_viewer() -> Path | None:
+    """Newest cuRobo plan viewer (exp11 preferred over exp10), by experiment number then mtime."""
+    base = REPO_ROOT / "data" / "runs" / "curobo"
+    candidates = sorted(base.glob("exp*/**/plan_viewer/index*.html"))
+    if not candidates:
+        return None
+
+    def rank(p: Path) -> tuple[int, float]:
+        import re
+
+        m = re.search(r"exp(\d+)", str(p))
+        return (int(m.group(1)) if m else 0, p.stat().st_mtime)
+
+    return max(candidates, key=rank)
+
+
+PLAN_VIEWER_PATH = _latest_plan_viewer()
 
 
 def _find_sam3_overlays() -> dict[str, Path]:
@@ -611,6 +618,19 @@ def make_handler(
         "plan_viewer": {
             "available": PLAN_VIEWER_PATH is not None,
             "live": False,  # same reason: no live cuRobo call happens in this console's loop
+            "name": str(PLAN_VIEWER_PATH.relative_to(REPO_ROOT)) if PLAN_VIEWER_PATH else None,
+        },
+        "scene_arms": {
+            arm: _scene2d_or_none(
+                REPO_ROOT
+                / "data"
+                / "runs"
+                / "exp04_scene"
+                / f"E-{arm}"
+                / "sample0"
+                / "contacts_scene.json"
+            )
+            for arm in ("E1", "E2", "E3")
         },
     }
     page = TEMPLATE.read_text(encoding="utf-8").replace("/*__DATA__*/null", json.dumps(data))
