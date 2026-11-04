@@ -1,10 +1,18 @@
 :root{
   --bg:#000000; --panel:#0A0A0A; --raise:#111111; --line:#262626; --line2:#1F1F1F;
   --fg:#EDEDED; --hi:#FFFFFF; --soft:#B5B5B5; --muted:#8A8A8A; --dim:#6E6E6E; --faint:#3D3D3D;
-  --accent:#F59342; --fail:#FF4D4D; --pass:#3D3D3D; --meta:#7AA7FF; --built:#4FD67A; --planned:#6E6E6E;
+  --accent:#1877F2; --fail:#FF4D4D; --pass:#3D3D3D; --meta:#7AA7FF; --built:#4FD67A; --planned:#6E6E6E;
+  --fail-bg:#2a0f0f; --fail-fg:#ffb3b0; --fail-strong:#ff8884;
   --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
   --mono:'IBM Plex Mono','SF Mono',Menlo,Consolas,monospace;
   color-scheme: dark;
+}
+:root[data-theme="light"]{
+  --bg:#FFFFFF; --panel:#F5F6F8; --raise:#EEF1F5; --line:#DFE3E8; --line2:#D2D7DE;
+  --fg:#14171A; --hi:#000000; --soft:#3C4248; --muted:#636B74; --dim:#899199; --faint:#C7CCD2;
+  --accent:#1877F2; --fail:#D92D20; --pass:#D7DAE0; --meta:#3E63DD; --built:#157F4B; --planned:#9AA1A9;
+  --fail-bg:#FBE9E7; --fail-fg:#8A1C12; --fail-strong:#B3261E;
+  color-scheme: light;
 }
 *{box-sizing:border-box}
 html,body{margin:0;background:var(--bg);color:var(--fg)}
@@ -76,9 +84,11 @@ main{display:grid;grid-template-columns:var(--lw,280px) 6px minmax(0,1fr) 6px va
 .flow-loop{color:var(--dim);font-size:16px;margin-right:2px}
 @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.35}}
 @media (prefers-reduced-motion: reduce){.sys.active .dot{animation:none}}
-.banner{display:none;border:1px solid var(--fail);background:#2a0f0f;color:#ffb3b0;padding:10px 14px;margin-bottom:14px;font-size:12.5px;line-height:1.5}
+.banner{display:none;border:1px solid var(--fail);background:var(--fail-bg);color:var(--fail-fg);padding:10px 14px;margin-bottom:14px;font-size:12.5px;line-height:1.5}
 .banner.on{display:block}
-.banner b{color:#ff8884}
+.banner b{color:var(--fail-strong)}
+.theme-toggle{border:1px solid var(--line);background:var(--raise);color:var(--muted);padding:5px 9px;cursor:pointer;font:inherit;font-size:13px;line-height:1}
+.theme-toggle:hover{color:var(--fg);border-color:var(--soft)}
 .agentview{margin:16px 0}
 .agentview-note{font-size:10px;color:var(--dim);margin-bottom:6px;cursor:help}
 .agentview-grid{display:flex;flex-direction:column;gap:6px;max-height:190px;overflow-y:auto}

@@ -17,6 +17,23 @@ document.getElementById("modal-backdrop").addEventListener("click", (e) => {
   if (e.target.id === "modal-backdrop") closeModal();
 });
 
+/* ---------- light/dark theme toggle (shell.html's inline <script> applies the saved choice
+   before first paint; this just handles the button and keeps localStorage in sync) ---------- */
+const THEME_KEY = "ants-studio-theme";
+const themeBtn = document.getElementById("theme-toggle");
+function applyThemeIcon() {
+  const dark = document.documentElement.dataset.theme !== "light";
+  themeBtn.textContent = dark ? "☽" : "☀"; // moon when dark (switch to light), sun when light
+  themeBtn.title = dark ? "Switch to light theme" : "Switch to dark theme";
+}
+themeBtn.addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+  applyThemeIcon();
+});
+applyThemeIcon();
+
 function renderToolList(el, tools) {
   el.innerHTML = tools.map((t, i) => `<span class="tool-chip" data-i="${i}">${esc(t.name)}</span>`).join("");
   el.querySelectorAll(".tool-chip").forEach((chip) => {
