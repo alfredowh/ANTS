@@ -266,22 +266,6 @@ uv run python -m ants.orchestrator.exp_curobo \
     --token-budget 250000
 ```
 
-## Scene reconstruction probe: cuRobo Mapper TSDF/ESDF on the LIBERO scene
-
-Can ANTS fuse a multi-view camera scan of the LIBERO scene into a persistent 3D reconstruction (cuRobo's Mapper: TSDF to ESDF to mesh), as a step toward a policy planning against a reconstructed scene instead of a single-frame point cloud? Details: `docs/perception/scene-reconstruction-probe.md`.
-
-**Orbit-scan a LIBERO scene (RGB-D + camera pose per frame)**
-
-```bash
-LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py
-```
-
-**Real arm-driven scan: sweep the Franka's wrist camera (not a teleport)**
-
-```bash
-LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
-```
-
 ## Demo vs no demo on cuRobo (simulator robot mask, attached bowl)
 
 With cuRobo planning and the held bowl attached, does one human demonstration (plus S4 scene text and E3 repair evidence) beat task text only? Details: `docs/synthesizer/show-once-vs-task-only/demo_vs_no_demo_analysis.ipynb`.
