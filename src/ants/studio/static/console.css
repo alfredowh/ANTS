@@ -47,8 +47,13 @@ main{display:flex;background:var(--bg);height:100%}
 #col-left{flex:none;width:var(--lw,280px);border-right:1px solid var(--line)}
 #col-right{flex:none;width:var(--rw,300px);border-left:1px solid var(--line)}
 #col-center{flex:1;min-width:0}
-#col-left,#handle-left,#col-right,#handle-right{display:none}
-main.show-left #col-left,main.show-left #handle-left,main.show-right #col-right,main.show-right #handle-right{display:block}
+#handle-left,#handle-right{display:none}
+#col-left,#col-right{width:11px;padding:0;overflow:hidden;background:var(--raise)}
+#col-left>*,#col-right>*{visibility:hidden}
+main.show-left #handle-left,main.show-right #handle-right{display:block}
+main.show-left #col-left{width:var(--lw,280px);padding:16px;overflow-y:auto;background:var(--bg)}
+main.show-right #col-right{width:var(--rw,300px);padding:16px;overflow-y:auto;background:var(--bg)}
+main.show-left #col-left>*,main.show-right #col-right>*{visibility:visible}
 .icon-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid transparent;border-radius:8px;background:none;color:var(--muted);cursor:pointer;padding:0}
 .icon-btn:hover{color:var(--fg);background:var(--raise)}
 .icon-btn.on{color:var(--accent)}
@@ -226,7 +231,7 @@ body[data-tab="console"] .console-only{display:inline-flex}
 .navsess .mono{font-family:var(--mono)}
 /* /policy-dev wizard */
 .wizard-chip{display:inline-flex;align-items:center;width:auto;min-width:0;max-width:max-content;flex:none;margin:0;border:1px solid var(--line);background:var(--raise);color:var(--accent,#1877F2);border-radius:10px;padding:1px 9px;font-size:13.7px;line-height:1.4;cursor:pointer}
-.chip-row{display:flex;flex-direction:row;gap:6px;align-self:flex-start;width:100%;margin:2px 0 0 0;padding:0 16px}
+.chip-row{display:flex;flex-direction:row;gap:6px;align-self:flex-start;width:100%;margin:4px 0 0 4px}
 #col-center.idle .chip-row{align-self:center;max-width:640px;margin:2px auto 0;padding:0}
 .wizard-chip:hover{border-color:var(--accent,#1877F2)}
 .turn.wizard-turn .main{white-space:pre-wrap}

@@ -1078,6 +1078,23 @@ def make_handler(
             if path == "/upload":
                 self._handle_upload()
                 return
+            if path == "/clientlog":
+                length = int(self.headers.get("Content-Length", "0"))
+                try:
+                    body = json.loads(self.rfile.read(min(length, 20000)) or b"{}")
+                except ValueError:
+                    body = {}
+                row = {
+                    "ts": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                    **{k: str(body.get(k))[:500] for k in ("message", "source", "line")},
+                }
+                if state.session:
+                    with (state.session.dir / "client_errors.jsonl").open(
+                        "a", encoding="utf-8"
+                    ) as fh:
+                        fh.write(json.dumps(row) + "\n")
+                self._send_json({"ok": True})
+                return
             if path == "/deploy":
                 try:
                     info = deploy_latest(

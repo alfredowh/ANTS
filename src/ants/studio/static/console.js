@@ -1,3 +1,14 @@
+/* report client-side errors to the server (session folder client_errors.jsonl) so a stuck page can be diagnosed */
+(function () {
+  function report(msg, src, line) {
+    try {
+      fetch("/clientlog", {method: "POST", headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({message: String(msg), source: String(src || ""), line: line || 0})});
+    } catch (e) {}
+  }
+  window.addEventListener("error", (e) => report(e.message, e.filename, e.lineno));
+  window.addEventListener("unhandledrejection", (e) => report("unhandled rejection: " + (e.reason && e.reason.message || e.reason)));
+})();
 /* DATA is a global set by the inline <script> in views/shell.html before this file loads. */
 
 function esc(s) {
