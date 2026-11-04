@@ -142,8 +142,6 @@ def test_template_has_live_replay_toggle_and_run_folder():
         "percRolloutEnded",
         'id="run-folder"',
         'id="scene-graph-btn"',
-        'id="collapse-all"',
-        'id="expand-all"',
         'id="curobo-tgl-collision"',
         'id="curobo-tgl-scan"',
         'id="curobo-tgl-paths"',

@@ -602,12 +602,24 @@ function setStatus(kind, text) {
   pill.textContent = text;
 }
 
-document.getElementById("collapse-all").addEventListener("click", () => {
-  turnsEl.querySelectorAll(".turn").forEach((t) => t.classList.add("collapsed"));
-});
-document.getElementById("expand-all").addEventListener("click", () => {
-  turnsEl.querySelectorAll(".turn").forEach((t) => t.classList.remove("collapsed"));
-});
+/* each turn shows at most ~10 lines; a per-turn button expands it */
+function addClampToggle(div) {
+  const main = div.querySelector(".main");
+  if (!main) return;
+  requestAnimationFrame(() => {
+    if (main.scrollHeight <= main.clientHeight + 2) return;
+    div.classList.add("clamped");
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "turn-more";
+    b.textContent = "Show more";
+    b.addEventListener("click", () => {
+      const open = div.classList.toggle("expanded");
+      b.textContent = open ? "Show less" : "Show more";
+    });
+    main.insertAdjacentElement("afterend", b);
+  });
+}
 
 function addTurn(cls, html) {
   if (turnCount === 0) turnsEl.innerHTML = "";
@@ -617,6 +629,7 @@ function addTurn(cls, html) {
   div.className = "turn " + cls;
   div.innerHTML = html;
   turnsEl.insertBefore(div, turnsEl.firstChild); // newest on top
+  addClampToggle(div);
 }
 
 /* ---------- Synthesizer / Adversary / Orchestrator status ---------- */
