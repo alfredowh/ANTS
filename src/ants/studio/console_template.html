@@ -76,11 +76,13 @@ main{display:grid;grid-template-columns:260px minmax(0,1fr) 300px;gap:1px;backgr
   </div>
 
   <div class="col" id="col-right">
+    <div class="h">Loop config</div>
+    <div class="tiles" id="config-tiles"></div>
     <div class="h">Orchestrator / System 2</div>
     <div id="tools-right"></div>
     <div class="h">Usage</div>
     <div class="tiles" id="usage-tiles"></div>
-    <div class="h">Reply</div>
+    <div class="h">Reply / summary</div>
     <div class="reply" id="reply-box">(waiting)</div>
   </div>
 </main>
@@ -109,10 +111,30 @@ renderToolList(leftWrap, DATA.tools_left);
 document.getElementById("col-left").appendChild(leftWrap);
 renderToolList(document.getElementById("tools-right"), DATA.tools_right);
 
+if (DATA.mode === "loop" && DATA.loop_config) {
+  const c = DATA.loop_config;
+  document.getElementById("config-tiles").innerHTML = [
+    ["Max cycles", c.cycles], ["Severity (rho)", c.rho], ["Eta", c.eta],
+    ["Stall window (W)", c.stall_window], ["Adversary model", c.adversary_model],
+    ["Reasoning effort", c.reasoning_effort], ["Max model steps", c.max_model_steps],
+    ["Synth token budget", c.synth_token_budget],
+  ].map(([l, v]) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("");
+  runBtnLabel();
+} else {
+  document.getElementById("config-tiles").innerHTML = `<div class="empty">n/a (single-step mode)</div>`;
+}
+
+function runBtnLabel() {
+  document.getElementById("run-btn").textContent =
+    DATA.mode === "loop" ? "Run policy development loop" : "Run policy development step";
+}
+runBtnLabel();
+
 const turnsEl = document.getElementById("turns");
 const pill = document.getElementById("status-pill");
 const runBtn = document.getElementById("run-btn");
 let turnCount = 0;
+let rewriteTokenTotal = 0;
 
 function setStatus(kind, text) {
   pill.className = "status-pill " + kind;
@@ -145,9 +167,50 @@ function handleMuseEvent(event) {
   }
 }
 
+function handleLoopEvent(row) {
+  const event = row.event;
+  if (event === "start") {
+    addTurn("task started", `<div class="tk">loop</div><div class="main">started: ${esc(row.policy && row.policy.id)} v${row.policy && row.policy.version}</div>`);
+  } else if (event === "cycle") {
+    const decision = row.decision || "?";
+    const cls = decision === "accepted" ? "task completed" : decision === "rejected" ? "error" : "task";
+    let main = `cycle ${row.cycle}: attack <b>${esc(row.category)}</b> (severity ${row.severity}) &rarr; <b>${esc(row.outcome)}</b>`;
+    if (row.decision) main += ` &rarr; <b>${esc(decision)}</b>`;
+    if (row.signature) main += `<br><span class="delta">signature: ${esc(row.signature)}</span>`;
+    if (row.rewrite_tokens) {
+      rewriteTokenTotal += row.rewrite_tokens;
+      main += `<br><span class="delta">rewrite: ${row.rewrite_tokens} tokens ($${row.rewrite_cost_usd ?? "?"})</span>`;
+      document.getElementById("usage-tiles").innerHTML = [
+        ["Rewrites so far", row.candidate_version ? "see cycles" : "-"],
+        ["Rewrite tokens (running)", rewriteTokenTotal],
+      ].map(([l, v]) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("");
+    }
+    if (row.gate) {
+      main += `<br><span class="delta">gate: ${row.gate.accepted ? "accepted" : "rejected"} (${row.gate.cases} cases, +${(row.gate.improvements||[]).length})</span>`;
+    }
+    addTurn(cls, `<div class="tk">cycle ${row.cycle}</div><div class="main">${main}</div>`);
+    if (row.diff) {
+      addTurn("delta", `<div class="tk">diff v${row.policy_version || "?"} &rarr; v${row.candidate_version || "?"}</div><div class="delta">${esc(row.diff)}</div>`);
+    }
+  } else if (event === "escalate") {
+    addTurn("error", `<div class="tk">escalate</div><div class="main">${esc(row.request)}<br><span class="delta">signature: ${esc(row.signature)}, stalled ${row.stalled_cycles} cycles</span></div>`);
+  } else if (event === "no_working_policy") {
+    addTurn("error", `<div class="tk">no working policy</div><div class="main">${esc(row.request)}</div>`);
+  } else if (event === "end") {
+    addTurn("done", `<div class="tk">loop end</div><div class="main">stopped: <b>${esc(row.stopped)}</b>, stage: ${esc(row.stage)}, final v${row.final_version}, cycles run: ${row.cycles_run}</div>`);
+  } else {
+    addTurn("other", `<div class="tk">${esc(event || "loop event")}</div>`);
+  }
+}
+
 function handleDone(payload) {
   setStatus("done", "done");
   runBtn.disabled = false;
+  if (DATA.mode === "loop") {
+    addTurn("done", `<div class="tk">run complete</div><div class="main">stopped: <b>${esc(payload.stopped)}</b>, stage: ${esc(payload.stage)}, accepted versions: ${JSON.stringify(payload.accepted_versions)}</div>`);
+    document.getElementById("reply-box").textContent = JSON.stringify(payload, null, 1);
+    return;
+  }
   addTurn("done", `<div class="tk">run complete</div><div class="main">final reply received</div>`);
   const u = payload.usage || {};
   document.getElementById("usage-tiles").innerHTML = [
@@ -168,6 +231,7 @@ function openStream() {
   es.onmessage = (ev) => {
     const data = JSON.parse(ev.data);
     if (data.kind === "muse_event") handleMuseEvent(data.event);
+    else if (data.kind === "loop_event") handleLoopEvent(data.row);
     else if (data.kind === "done") { handleDone(data); es.close(); }
     else if (data.kind === "error") { handleError(data); es.close(); }
   };
@@ -175,13 +239,19 @@ function openStream() {
 }
 
 runBtn.addEventListener("click", () => {
-  const ok = window.confirm(
-    "Ready to run the policy development phase?\n\n" +
-    "This sends one real request to muse exec (Muse Code) and spends Muse tokens " +
-    "(observed ~$0.5 per repair step). It runs one Phase A repair step against the incumbent " +
-    "program shown here, not the full loop."
-  );
+  const gateMsg = DATA.mode === "loop"
+    ? "Ready to run the policy development phase?\n\n" +
+      "This runs the real closed loop: System 2 attacks (mock backend, free) and System 1 " +
+      "rewrites for real via muse exec (Muse Code), up to " + (DATA.loop_config ? DATA.loop_config.cycles : "N") +
+      " cycles. Each rewrite spends Muse tokens (observed ~$0.5 per rewrite); the loop stops " +
+      "earlier if it becomes robust, stalls, or hits the token budget."
+    : "Ready to run the policy development phase?\n\n" +
+      "This sends one real request to muse exec (Muse Code) and spends Muse tokens " +
+      "(observed ~$0.5 per repair step). It runs one Phase A repair step against the incumbent " +
+      "program shown here, not the full loop.";
+  const ok = window.confirm(gateMsg);
   if (!ok) return;
+  rewriteTokenTotal = 0;
   runBtn.disabled = true;
   turnCount = 0;
   turnsEl.innerHTML = "";

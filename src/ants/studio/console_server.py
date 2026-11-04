@@ -1,17 +1,20 @@
-"""Live orchestrator console: a stdlib HTTP server around one `muse exec` repair step.
+"""Live orchestrator console: a stdlib HTTP server around the Phase A closed loop.
 
 Static viewers in this repo (`dashboard.py`, `ants.studio.run`) all read a saved JSONL trace after
-a run finished. This module is the live counterpart for one Phase A repair step: a person clicks
-Run, confirms a gate ("ready to run the policy development phase?"), and the Muse Code task
-lifecycle streams into the browser as it happens.
+a run finished. This module is the live counterpart: a person clicks Run, confirms a gate ("ready
+to run the policy development phase?"), and the loop's turns -- attacks, rewrites, gate verdicts --
+stream into the browser as they happen.
 
-Deliberately does not import or edit `ants.orchestrator.muse_cli` / `muse_orchestrator`: those are
-Daniel's package. This module only shells out to the same `muse exec --json` CLI those modules use,
-reading its stdout line by line instead of waiting for the whole subprocess to finish, so the
-console has no cross-package write coupling. Everything downstream (Phase A rules, the gate, the
-regression check) still lives in `orchestrator/`; one click here only runs *one* repair step, not
-the loop -- see docs/orchestrator/plan-muse-code-orchestrator.md for why that is the right scope
-for v1.
+Two modes, picked by `--mode`:
+- "loop" (default): drives the real closed loop, `ants.orchestrator.loop.Loop`, against the mock
+  System 2 backend (free, offline, already tested) with System 1's repair step real (`muse exec`
+  via `MuseOrchestrator`). Only consumes `orchestrator`'s and `adversary`'s public APIs (`Loop`,
+  `LoopConfig`, `Adversary`, `AdversaryConfig`, `GenerateSynthesizer`, `MuseOrchestrator`) the same
+  way `orchestrator/run.py` and the tests do -- nothing here edits those packages.
+- "single": the original v1 scope, one Phase A repair step with no System 2 call at all. Kept for
+  a cheaper/faster demo path. This mode shells out to `muse exec --json` directly instead of going
+  through `muse_cli.py`, reading its stdout line by line instead of waiting for the whole subprocess
+  to finish, so it has no dependency on `orchestrator/` at all.
 """
 
 from __future__ import annotations
@@ -21,6 +24,7 @@ import queue
 import subprocess
 import tempfile
 import threading
+import time
 from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -214,13 +218,154 @@ def stream_muse_exec(
     return out
 
 
-def make_handler(state: RunState, incumbent: Path, reasoning_effort: str, max_model_steps: int):
+@dataclass
+class LoopRunConfig:
+    """What the Run button drives in "loop" mode: the real closed loop, mock System 2 backend."""
+
+    cycles: int = 6
+    categories: tuple[str, ...] | None = None  # None = AdversaryConfig's own default (all)
+    rho: float = 0.8  # severity bound, Bounds(default=rho)
+    eta: float = 0.2
+    min_severity: float = 0.3
+    adversary_model: str = (
+        "mock"  # "mock" is free; "muse-spark" also spends tokens, unbudgeted here
+    )
+    n_agents: int = 4
+    stop_mode: str = "min_tests"
+    min_tests: int = 3
+    tau: float = 0.1
+    stall_window: int = 3
+    synth_token_budget: int = 200_000
+    reasoning_effort: str = "high"
+    max_model_steps: int = 20
+    out_dir: Path = field(default_factory=lambda: REPO_ROOT / "data" / "console_runs")
+
+
+def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
+    """Drive one real `Loop.run()` call, tailing `loop.jsonl` live and broadcasting each row."""
+    from ants.adversary import Adversary, AdversaryConfig
+    from ants.adversary.perturbations import Bounds
+    from ants.contracts import Policy
+    from ants.orchestrator.loop import Loop, LoopConfig
+    from ants.orchestrator.synthesis import GenerateSynthesizer
+
+    try:
+        from ants.orchestrator.muse_orchestrator import MuseOrchestrator
+    except ImportError as exc:
+        state.broadcast({"kind": "error", "message": f"MuseOrchestrator unavailable: {exc}"})
+        return
+
+    run_dir = cfg.out_dir / time.strftime("run-%Y%m%dT%H%M%S")
+    policy = Policy(
+        "bowl_on_plate", 0, "put the bowl on the plate", incumbent.read_text(encoding="utf-8")
+    )
+
+    adv_kwargs: dict = {
+        "model": cfg.adversary_model,
+        "backend": "mock",
+        "eta": cfg.eta,
+        "bounds": Bounds(default=cfg.rho),
+        "min_severity": cfg.min_severity,
+        "n_agents": cfg.n_agents,
+        "stop_mode": cfg.stop_mode,
+        "min_tests": cfg.min_tests,
+        "tau": cfg.tau,
+        "history_path": run_dir / "history.jsonl",
+    }
+    if cfg.categories:
+        adv_kwargs["categories"] = cfg.categories
+    adv = Adversary.from_config(AdversaryConfig(**adv_kwargs))
+
+    muse_orch = MuseOrchestrator(
+        out_dir=run_dir / "muse",
+        token_budget=cfg.synth_token_budget,
+        reasoning_effort=cfg.reasoning_effort,
+        max_model_steps=cfg.max_model_steps,
+    )
+    synth = GenerateSynthesizer(generate=muse_orch, workdir=run_dir / "work")
+
+    loop_cfg = LoopConfig(cycles=cfg.cycles, stall_window=cfg.stall_window, out=run_dir)
+    loop = Loop(adv, synth, loop_cfg)
+
+    log_path = run_dir / "loop.jsonl"
+    stop_tail = threading.Event()
+
+    def tail() -> None:
+        pos = 0
+        while not stop_tail.is_set():
+            if log_path.exists():
+                with log_path.open("r", encoding="utf-8") as f:
+                    f.seek(pos)
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            row = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        state.broadcast({"kind": "loop_event", "row": row})
+                    pos = f.tell()
+            time.sleep(0.3)
+
+    tailer = threading.Thread(target=tail, daemon=True)
+    tailer.start()
+    try:
+        result = loop.run(policy)
+        time.sleep(0.4)  # let the tailer pick up the final "end" row before it stops
+        state.broadcast(
+            {
+                "kind": "done",
+                "stopped": result.stopped,
+                "stage": result.stage,
+                "final_version": result.incumbent.version,
+                "accepted_versions": result.accepted_versions,
+                "escalation": result.escalation,
+            }
+        )
+    except Exception as exc:  # noqa: BLE001 -- the loop never crashes the console, log instead
+        state.broadcast({"kind": "error", "message": f"{type(exc).__name__}: {exc}"})
+    finally:
+        stop_tail.set()
+
+
+def make_handler(
+    state: RunState,
+    incumbent: Path,
+    *,
+    mode: str = "loop",
+    reasoning_effort: str = "high",
+    max_model_steps: int = 20,
+    loop_cfg: LoopRunConfig | None = None,
+):
+    tools_right = (
+        TOOLS_RIGHT if mode == "loop" else [t for t in TOOLS_RIGHT if t["role"] != "System 2"]
+    )
     data = {
         "incumbent_name": incumbent.name,
         "incumbent_code": incumbent.read_text(encoding="utf-8"),
         "tools_left": TOOLS_LEFT,
-        "tools_right": TOOLS_RIGHT,
-        "phases_summary": "Phase A only -- deployment (Phase B) is out of scope for this console.",
+        "tools_right": tools_right,
+        "mode": mode,
+        "phases_summary": (
+            "Phase A, full closed loop (mock System 2, real Muse Code rewrites)."
+            if mode == "loop"
+            else "Phase A, one repair step only -- deployment (Phase B) is out of scope."
+        ),
+        "loop_config": (
+            {
+                "cycles": loop_cfg.cycles,
+                "rho": loop_cfg.rho,
+                "eta": loop_cfg.eta,
+                "stall_window": loop_cfg.stall_window,
+                "synth_token_budget": loop_cfg.synth_token_budget,
+                "reasoning_effort": loop_cfg.reasoning_effort,
+                "max_model_steps": loop_cfg.max_model_steps,
+                "adversary_model": loop_cfg.adversary_model,
+            }
+            if loop_cfg
+            else None
+        ),
     }
     page = TEMPLATE.read_text(encoding="utf-8").replace("/*__DATA__*/null", json.dumps(data))
 
@@ -292,7 +437,7 @@ def make_handler(state: RunState, incumbent: Path, reasoning_effort: str, max_mo
                     return
                 state.running = True
 
-            def drive() -> None:
+            def drive_single() -> None:
                 prompt = build_prompt(incumbent)
                 src = stream_muse_exec(
                     prompt, reasoning_effort=reasoning_effort, max_model_steps=max_model_steps
@@ -305,7 +450,15 @@ def make_handler(state: RunState, incumbent: Path, reasoning_effort: str, max_mo
                 with state.lock:
                     state.running = False
 
-            threading.Thread(target=drive, daemon=True).start()
+            def drive_loop() -> None:
+                try:
+                    run_live_loop(state, incumbent, loop_cfg)
+                finally:
+                    with state.lock:
+                        state.running = False
+
+            target = drive_loop if (mode == "loop" and loop_cfg is not None) else drive_single
+            threading.Thread(target=target, daemon=True).start()
             self._send_json({"ok": True})
 
     return Handler
@@ -316,13 +469,22 @@ def serve(
     incumbent: Path = REPO_ROOT / "examples" / "bowl_on_plate" / "policy.py",
     host: str = "127.0.0.1",
     port: int = 8765,
+    mode: str = "loop",
     reasoning_effort: str = "high",
     max_model_steps: int = 20,
+    loop_cfg: LoopRunConfig | None = None,
 ) -> None:
     state = RunState()
-    handler = make_handler(state, incumbent, reasoning_effort, max_model_steps)
+    handler = make_handler(
+        state,
+        incumbent,
+        mode=mode,
+        reasoning_effort=reasoning_effort,
+        max_model_steps=max_model_steps,
+        loop_cfg=loop_cfg if mode == "loop" else None,
+    )
     httpd = ThreadingHTTPServer((host, port), handler)
-    print(f"ANTS live console: http://{host}:{port}  (incumbent: {incumbent})")
+    print(f"ANTS live console ({mode}): http://{host}:{port}  (incumbent: {incumbent})")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
