@@ -1,136 +1,206 @@
-# Live orchestrator console: handoff
+# Studio (live console): handoff — 2026-11-04, switching to Sonnet 5.5
 
-Written because the session that built this is about to hit its limit. Read this before touching
-`src/ants/studio/console*.py` or `console_template.html` again. Branch `observability/live-console`,
-worktree `/home/eeschner/alfredo/workspace/ANTS-live-console`. The user's day-to-day checkout is a
-**separate** directory, `/home/eeschner/alfredo/workspace/ANTS` (branch `synthesizer`) — see
-"Two checkouts" below, this is the single most important thing to get right.
+Supersedes the earlier version of this file (everything below is current as of commit `8503b00`).
+Written because the user is switching models mid-session. Read this before touching
+`src/ants/studio/*` again. Branch `observability/live-console`, worktree
+`/home/eeschner/alfredo/workspace/ANTS-live-console`. User's day-to-day checkout is a **separate**
+directory, `/home/eeschner/alfredo/workspace/ANTS` (branch `synthesizer`) — see "Two checkouts," the
+single most important thing to get right, unchanged from before.
 
-## What this is
+## Correction (2026-11-04, later): the dashboard.py edit is NOT a boundary violation
 
-A local, stdlib-only HTTP server + one self-contained HTML page: a live, in-browser console over
-one real `Loop.run()` cycle (`ants.orchestrator.loop.Loop`), built incrementally over one session on
-top of the already-merged `integration` branch (PR #13). Not part of any committed plan — built
-live, feature by feature, from the user's running commentary while they used it. Nothing here has
-been reviewed by Daniel (owns `orchestrator/`, `adversary/`) or merged past `observability/live-console`.
+An earlier version of this section claimed a subagent had edited *Daniel's* `dashboard.py`,
+`dashboard_template.html` and `tests/studio/test_dashboard.py`. **That was wrong.** `git log` shows
+those three files were authored solely by `alfredowh` (the user, commit `b24e4e3` "Add the offline
+prompt-generator and a local dashboard"). Daniel's (`psykoss`) studio files are only `template.html`,
+`build.py`, `run.py` (+ `tests/studio/test_studio.py`). The uncommitted additions in the main checkout
+(+85/+10/+33 lines: streamed-output display, event timeline) are edits to the user's own tracked
+files, so there is nothing to revert on ownership grounds — just decide whether to commit them
+(they are uncommitted, `synthesizer` branch only).
 
-Run it: `uv run python -m ants.studio.console --port <free port>` from either checkout (once synced,
-see below). Defaults: `--mode loop`, `--cycles 3`, mock System 2 backend, 1 nominal seed, `--scene
-data/scenes/L1/contacts_scene.json`.
+Still worth doing: an untracked `tests/studio/test_console_live.py` (173 lines) exists in the main
+checkout only; check it and move it into the worktree + commit if it's a real test.
+
+**Daniel's files remain off-limits to edit:** `src/ants/studio/template.html`, `build.py`, `run.py`.
+Importing from them (e.g. `attack_row`) is fine.
+
+## Daniel's latest (read 2026-11-04) and the merge
+
+His newest commits are on `origin/integration` (via PRs #14-#17, all 2026-11-04): rollout videos in
+the studio Replay view (`654c74a`), a real video player synced to the call timeline (`5e1e889`), and
+"the call timeline is the player" (`586e826`) — changes in `template.html`, `build.py`, `run.py`,
+`tests/studio/test_studio.py`, plus a README banner and a relative `--aspire` fix. Our branch is 9
+commits behind `integration`. A read-only dry run (`git merge-tree`) showed **no overlapping files
+and zero conflicts**: his changes are in his files, ours are new files. Merging
+`origin/integration` into `observability/live-console` is safe. His UIs, regenerated offline from
+`integration` (no videos in the offline world: "No video for this attack" placeholder): see
+`/tmp/ui/shot_*.png` (may be gone; regenerate with
+`uv run python -m ants.studio.run --attacks 20 --out <dir>` and
+`uv run python -m ants.orchestrator.run --cycles 30 --out <dir>`, open `<dir>/studio.html`).
 
 ## Two checkouts — keep them byte-identical
 
 - **Worktree** `/home/eeschner/alfredo/workspace/ANTS-live-console`, branch `observability/live-console`.
-  This is where every commit below actually lives. `git log --oneline -15` here for the real history.
-- **Main checkout** `/home/eeschner/alfredo/workspace/ANTS`, branch `synthesizer`. This is where the
-  user actually runs the server day to day (they don't `cd` into the worktree). The console files
-  there are **untracked copies**, manually `cp`'d over from the worktree each time something changed
-  — `synthesizer` has never had these files committed. Confirm with:
+  Every real commit lives here. `git log --oneline -20` for the full history.
+- **Main checkout** `/home/eeschner/alfredo/workspace/ANTS`, branch `synthesizer`. Where the user
+  actually runs the server day to day. The console files there are **untracked copies**,
+  hand-`cp`'d from the worktree after every change — never committed on `synthesizer`. Confirm sync
+  before trusting what's running:
   ```
-  cd /home/eeschner/alfredo/workspace/ANTS && git status --short | grep -E "console|scene[23]d"
+  for f in src/ants/studio/console_server.py src/ants/studio/console.py src/ants/studio/static/console.css src/ants/studio/static/console.js; do
+    diff -q "$f" "/path/to/ANTS-live-console/$f" || echo "OUT OF SYNC: $f"
+  done
   ```
-  If that shows `??` (untracked) for `console.py`, `console_server.py`, `console_template.html`,
-  `scene2d.py`, `scene3d.py`, `scene3d_template.html` — that's expected, not a mistake.
-  **After any edit in the worktree, `cp` the changed files into the main checkout before the user's
-  server will show them.** This bit every round of work this session; don't skip it.
+  **After any edit in the worktree, `cp` the changed files into the main checkout before the
+  server will show them.** Bit this session repeatedly; still the single most common mistake.
 
-## What's built (worktree commits, oldest first)
+## Current file layout (restructured this session, commit `0aee3bc`)
 
-1. `48ea1c0` — the server itself: stdlib `ThreadingHTTPServer`, SSE `/events`, `/run` POST with a
-   confirm-gate ("ready to run the policy development phase?") before spending any tokens. Started as
-   one Phase A repair step only (`--mode single`).
-2. `4c5e4e7` — `--mode loop` (now default): drives the real `Loop` against the mock System 2 backend,
-   System 1 real via `MuseOrchestrator`/`muse exec`. `on_attack` callback gives the only sub-cycle
-   granularity `Loop` exposes (attack result, before the blocking rewrite call) — **this is a hard
-   ceiling**, not a missing feature: `Adversary.attack()` runs selector→proposer→rollout→diagnoser
-   *synchronously inside one call*, so there is no live signal for those 4 sub-steps individually.
-   Every "live" feature built since respects this; don't build something that fakes finer granularity.
-3. `b8fdde6` — shrank defaults (3 cycles, 1 seed, W=2) so a demo run is cheap/fast.
-4. `ed30395`, `59ac77b` — `scene3d.py`/`scene2d.py`: standalone + embedded 3D/2D viewers of the
-   oracle scene (`data/scenes/L1/contacts_scene.json`, from `orchestrator/scene_context_exp.py
-   --prep`). The "Scene prompt" panel. One real bug found and fixed in `scene2d.py`: `gaps` entries
-   reference parent bodies that own zero geoms directly (only children do) — categorizing by geom
-   ownership silently dropped several relations; fixed by categorizing the gap's body name directly.
-5. `ee94f69` — System 1/System 2/Orchestrator status badges (from `on_attack` + `loop.jsonl` tailing),
-   a red "needs human intervention" banner on escalate/no_working_policy/budget_stop.
-6. `a87c5ab` — `localStorage` persistence (`saveUiState`/`restoreUiState`): reopening the page shows
-   the last session's result instead of blank, with a "restored from ..." timestamp note.
-7. `a149893` — primitives became name-only chips (click → popup with role/desc) instead of permanent
-   description cards; **SAM 3 archive panel** (archived segmentation overlays, real
-   `exp04_scene/E-E3/sample0` data, served via a whitelisted `/sam3/<name>` route); per-cycle "View
-   details" modal (WHY reasoning parsed from `reply.md`, token/cache breakdown including
-   `cached_tokens`, full diff) — wired by having the `tail()` thread in `run_live_loop` read
-   `run_dir/muse/cycleN/{reply.md,usage.json}` right when it sees a matching `loop.jsonl` row.
-8. `629baed` — archived "perception replay" **modal**: scrubbable agentview keyframe timeline (56
-   real frames), SAM 3 gallery, link to the existing cuRobo plan-viewer HTML
-   (`data/runs/curobo/exp10/*/plan_viewer/index_compare_*.html`, reused via a new
-   `/perception/planviewer` route, not rebuilt).
-9. `48b0245` — status badges reordered into actual pipeline order (System 2 → System 1 →
-   Orchestrator → Escalation) with arrows, loop-back glyph, pulse animation on the active node. Zero
-   new state logic — same `setSys()` calls, just connected visually.
-10. `4fedf2d` — the modal from (8) promoted into a real top-level **Perception tab** (Console /
-    Perception tab bar), 3 independently-togglable panels (Agentview / SAM 3 / cuRobo, state in
-    localStorage), each with its own `live` / `archived` / `missing` badge — currently all `archived`
-    since nothing in this console's loop is live yet, but the server payload already carries a `live`
-    flag per layer so wiring a real source is meant to be "flip the flag," not a rearchitecture.
+No longer one big `console_template.html`. Now:
+```
+src/ants/studio/
+  console.py                CLI entry (uv run python -m ants.studio.console)
+  console_server.py         stdlib HTTP server, SSE, run_live_loop, all GET/POST routes
+  scene2d.py, scene3d.py    oracle-scene projections (2D SVG / 3D three.js), scene3d_template.html
+  static/
+    console.css             all styling (theme tokens incl. light/dark, layout, components)
+    console.js               all client JS (SSE handling, chat, scene rendering, persistence)
+  views/
+    shell.html                page shell: header, tab bar, theme toggle, modal, assembled by
+                               _assemble_shell() via marker-comment substitution
+    agent_console.html        Console tab: Primitives, Scene prompt, turns feed, chat composer
+    perception.html           Perception tab: Agentview/SAM3/cuRobo + Synthesizer/Adversary toggle
+    synthesizer.html, synthesizer_stub.html   stub iframe onto a COPY of Daniel's dashboard_template.html
+    adversary.html, adversary_stub.html       stub iframe onto a COPY of Daniel's template.html
+  run.py, template.html, build.py   Daniel's (psykoss) studio files — DO NOT EDIT, import only
+  dashboard.py, dashboard_template.html   the user's own (alfredowh) local dashboard — not Daniel's
+```
+`console_server.py` serves static files via a new `/static/<name>` route, images via
+`/agentview/<name>`, `/sam3/<name>`, `/attacks/<run_name>` (new, see below), and the cuRobo page via
+`/perception/planviewer` — all whitelisted, follow that pattern for anything new.
 
-Read `git show <hash>` on any of these for the full reasoning and what was actually verified — every
-commit message documents real verification (headless-Chrome screenshots against the **running
-server**, never a `file://`-wrapped copy — relative routes like `/agentview/...` silently break under
-`file://` and give false negatives; bit this session twice before the convention was fixed).
+## What's built (worktree commits, oldest first; the earlier version of this file covered through
+`4fedf2d` — everything from `48b0245` on is new since then)
 
-## In progress when the session ended — may be incomplete or uncommitted
+- `48b0245` — status badges became a connected pipeline (System 2 → System 1 → Orchestrator →
+  Escalation), arrows, pulse animation. Zero new state logic, same `setSys()` calls.
+- `004a852`, `1b89267`, `bfb52af`, `0979e1b` — **opt-in real backend**: `--backend cap_harness` flag
+  (mock stays default). A real ASPIRE/LIBERO rollout can now drive the Perception tab's layers
+  instead of only archived data — needs `sam3`/`pyroki`/`curobo` services up (see below) and the GPU.
+  Verified end to end once with a real rollout. (Also where the uncommitted dashboard.py additions in the main checkout most likely came from.)
+- `0aee3bc` — the file-structure restructure described above.
+- `08aa99f` — the chat composer: pill input, `+`/mic icons, three cases from
+  `docs/studio/chat-field-design.md`, **all three verified for real**: (1) escalated→answer via the
+  real `orchestrator/human_gate.py` `ask_human`/`GateAnswer` mechanism, confirmed it becomes a real
+  constraint and the loop resumes; (2) idle→one-shot Muse call with incumbent+constraints as context;
+  (3) active→queue, auto-fires the instant the loop goes idle. Found and fixed a real bug: `/events`
+  used to close after each run's `done`, so case 3's auto-fired reply would broadcast to nobody —
+  fixed by keeping the SSE connection open for the whole page session, not just one run.
+- `12fc51f` — Daniel's pixel-ant logo (copied verbatim) in the header + as the favicon.
+- `7eddccc` — renamed "ANTS Live Console" → **"Studio"**. Removed the `phases_summary` header line
+  entirely. "mock" backend values now display as "offline (built-in)" in the UI (the underlying
+  config string is still literally `"mock"` — that's `AdversaryConfig`'s vocabulary, not ours to
+  rename). Mic icon: emoji → stroke SVG.
+- `ccfd76d` — **merged rollout/replay into the Perception tab** (not a new 5th tab): `run_live_loop`'s
+  `on_attack` now also appends one `attacks.jsonl` row per attack, in
+  `ants.studio.run.attack_row()`'s *exact* shape (imported from Daniel's `run.py`, not reimplemented
+  — reading his public function is fine, editing his files is not). Served via
+  `GET /attacks/<run_name>`. New Synthesizer/Adversary toggle in the Perception tab: Synthesizer side
+  reuses the per-cycle detail-modal data (factored into `openCycleDetailModal()` so both places share
+  it); Adversary side fetches `/attacks/<run>` live. **Graceful fallback**: a run folder with no
+  `attacks.jsonl` (every run before this, or before the first attack) shows a plain "missing" badge,
+  not an error. Rerun.io was investigated and intentionally not built — no existing integration
+  anywhere in ANTS or ASPIRE, would need its own logging pipeline first; stays a separate future
+  decision if ever pursued.
+- `6e9b1ef` — **centered chat when empty** (claude.ai/new pattern): `#col-center.idle` centers the
+  composer with a tagline ("What do you want to work on?") when `turnCount === 0`; the moment a run
+  starts or any message/turn lands, it docks to the bottom. `restoreUiState()` checks this too, so a
+  restored session with history never shows the empty centered state.
+- `91ea899` — **Meta blue** (`#1877F2`, contrast-checked both ways) replacing the orange accent
+  everywhere, including the logo/favicon. **Light/dark theme toggle** in the header (☽/☀), persisted
+  to `localStorage` (`ants-studio-theme`), applied pre-paint via an inline `<head>` script so there's
+  no flash.
+- `8503b00` — **Scene prompt panel simplified**: legend removed, same info now lives as `title`
+  tooltips directly on the SVG shapes; generation/repair toggle removed (was cosmetic — no backend
+  distinction ever existed between those two); replaced with three independent layer checkboxes —
+  **Position** (off by default, newly separable), **Size** and **Relationships** (both on by default,
+  matching what was always shown) — each its own SVG `<g>` group. Pan (drag) + zoom (scroll-to-cursor)
+  + double-click-to-reset via raw `viewBox` manipulation. SAM3/Agentview panels removed from the
+  Agent Console's left column **only** — still fully functional in the Perception tab, unaffected.
+  **Real bug found and fixed**: removing those panels left two dead IIFEs in `console.js` still
+  referencing the deleted element ids, throwing on load and silently halting every script after them
+  — including item B's centered-chat logic. Caught via screenshot + console-log grep.
 
-A background subagent was mid-task, wiring the real thing commit (10) only scaffolded: an opt-in
-`--backend cap_harness` flag (**mock stays the default** — explicit user decision, don't flip it) so
-a real ASPIRE rollout can drive the Perception tab's live layers instead of always showing archived
-data. Its brief, in full, for whoever picks this up:
+## Known environment issue this session: headless-Chrome screenshot hangs
 
-- Figure out whether `cap_harness`'s real rollout (`src/ants/adversary/rollout/aspire_backend.py`,
-  currently blocks inside one `subprocess.run()`) writes keyframe/trace directories progressively
-  *during* execution (matching the archived `media/keyframes/000NNN-*/` structure) or only once the
-  subprocess exits. If progressive: tail the live run directory the same way `run_live_loop`'s
-  existing `tail()` polls `loop.jsonl`, broadcast new frames as they appear. If not progressive: be
-  honest about it — "live" then means "refreshed the instant the rollout finishes," not frame-by-
-  frame, and the UI copy should say that, not imply more than is true.
-- Same honesty question for SAM 3 (does a real rollout produce overlay data in a readable form?) and
-  cuRobo (the archived plan-viewer came from a **separate offline experiment script**,
-  `data/runs/curobo/exp10/`, not from a single live rollout path — there may be no cheap live
-  equivalent; if so, say so and leave that layer on its archived fallback rather than forcing it).
-- **Real GPU/compute cost**: services (`sam3` :8114, `curobo` :8118, `pyroki` :8116) were started this
-  session via `cd ASPIRE && CUDA_VISIBLE_DEVICES=0 TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
-  scripts/supervise_services.sh --profile a5500 --providers sam3,curobo` (background, `nohup`). Check
-  they're still up before assuming they are: `uv run python -m ants.orchestrator.preflight` from the
-  main checkout should print `READY`. A real rollout costs ~40s+ wall-clock and real GPU time — the
-  brief was explicit: verify cheaply (file/log reads) first, spend only one real rollout to confirm
-  wiring, don't loop retries burning GPU time chasing a cosmetic bug.
+Starting around the theme/scene-panel commits, `google-chrome --headless=new ...` started hanging
+indefinitely (GCM/network-registration related, unrelated to the page itself) across many flag
+combinations (fresh `--user-data-dir`, `--disable-background-networking`, after killing stray chrome
+processes). Reproduced independently by two different subagents and by me directly. When this
+happens: don't keep fighting it past 2-3 attempts. Verify instead via direct inspection — curl the
+page, check balanced tags/ids, brace-count CSS/JS, careful manual logic review — and say so honestly
+in the commit message, same as commits `6e9b1ef` and later did. **Never run a bare `pkill chrome` or
+`pkill -9 chrome`** — the permission system denied this mid-session for being too broad (it would
+kill the user's actual browser window, not just test instances); only ever target headless test
+processes specifically (`pkill -9 -f "headless=new"` or match the exact `--user-data-dir` used).
 
-**Check `git log --oneline -3` in the worktree and `git status --short` in both checkouts before
-doing anything else** — the subagent may have finished and committed, partially finished and left
-uncommitted changes, or not gotten far. If there's uncommitted work in the worktree that looks
-sane (lint/tests passing), finish and commit it rather than discarding it.
+## Services for the real backend (`--backend cap_harness`) — currently DOWN, were up earlier
 
-## Known, accepted limitations (not bugs — don't "fix" these without re-deciding)
+```
+uv run python -m ants.orchestrator.preflight   # from the main checkout
+```
+As of the last check this session: ASPIRE/cap-harness/LIBERO config all `ok`, GPU free, but
+`sam3`/`pyroki`/`curobo` services are **not listening** (they were started once, then died —
+probably when their background shell session ended). Restart if continuing real-backend work:
+```
+cd ASPIRE && CUDA_VISIBLE_DEVICES=0 TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 \
+  nohup scripts/supervise_services.sh --profile a5500 --providers sam3,pyroki,curobo \
+  > /tmp/supervise.log 2>&1 & disown
+```
+Real rollouts cost ~40s+ wall-clock and real GPU time each — verify cheaply (file/log reads) before
+spending one, per the discipline every subagent was given this session.
 
-- Mock System 2 backend only, by default — no simulator, no camera, no real SAM3/cuRobo during a
-  normal run. Every "archived, not live" badge in the UI is honest about this on purpose.
-- This console only ever does **repairs** against a fixed incumbent (`examples/bowl_on_plate/policy.py`)
-  — it never drives System 1's *initial* generation (S4 scene-text, `generator.py`). Explicitly out
-  of scope, decided early in the session.
-- Sub-cycle granularity inside one System 2 attack (selector/proposer/rollout/diagnoser) is not
-  observable from this console and never will be without editing `adversary/`'s internals (Daniel's
-  package) — don't build UI that implies otherwise.
-- `cached_tokens` shown in the repair-detail modal is prompt-level caching (some input tokens served
-  from cache), **not** "this whole repair was skipped" — labelled as such on purpose, there is no
-  real response-level cache/reuse in this pipeline.
+## Known, accepted limitations (not bugs — don't "fix" without re-deciding)
+
+- Still true from before: mock backend is the default; this console only ever repairs a fixed
+  incumbent (`examples/bowl_on_plate/policy.py`) — it has **never** driven System 1's initial
+  generation. That's exactly what the next queued piece (item A, see below) is for.
+- Sub-cycle granularity inside one System 2 attack is still not observable and never will be without
+  editing `adversary/`'s internals (Daniel's package, needs his sign-off first).
+- `cached_tokens` in the repair-detail modal is prompt-level caching, not "this repair was skipped."
+
+## What's queued next (user's own stated order)
+
+Three big pieces were identified; built in this order **C → B → A** (confirmed by the user):
+- **C** (merged rollout/replay) — done, commit `ccfd76d`.
+- **B** (centered chat) — done, commit `6e9b1ef`.
+- **A** (not started) — the big one: a `/policy-dev` chat command/button that opens a wizard —
+  attach a human demo video (file picker), describe the task, then the "skill" asks: synthesizer-only
+  or with-adversary, budget/max-retries for each, and for the adversary specifically sampling
+  strategy (random/uniform vs. Thompson — this setting **already exists** as `--eta`, `eta=1.0` is
+  literally the uniform baseline, default `0.2` is Thompson+exploration; the wizard just needs to
+  expose it as a friendly choice, not build new backend logic). **The user explicitly confirmed they
+  want REAL initial generation** (DemoSpec extraction from the video via `tools/hurobo_demospec.py`
+  or similar, System 1's actual `generator.py`/Muse Wonder writing v0 from scratch) — not a
+  documentation-only stand-in. This is real, new, unscoped engineering — read
+  `docs/studio/chat-field-design.md` and this file's git-log section above before starting, and
+  expect to need to ask the user more clarifying questions as the shape of "attach video → generate"
+  becomes concrete (where uploads are stored, how DemoSpec extraction is triggered/awaited inside a
+  live server request, what "budget" maps to in `LoopRunConfig`/`MuseOrchestrator` terms, etc.).
+
+Also still open from the earlier TODO pass, lower priority (`docs/studio/dashboard-todo.md`):
+Synthesizer/Adversary tabs are still just stub iframes onto copied templates, not built out with
+real content (constraint history, Thompson posteriors, attack history table, etc.).
 
 ## Quick resume checklist
 
 1. `cd /home/eeschner/alfredo/workspace/ANTS-live-console && git log --oneline -5 && git status --short`
-2. `cd /home/eeschner/alfredo/workspace/ANTS && git status --short | grep -E "console|scene[23]d"` —
-   confirm what's synced vs. stale.
-3. `uv run python -m ants.orchestrator.preflight` (main checkout) — check services are still up if
-   continuing the real-backend work.
-4. `uv run ruff check . && uv run pytest -q` in the worktree before trusting anything is clean.
-5. Pick up the in-progress real-backend work above, or ask the user what's next — this was all built
-   turn-by-turn from their live feedback, there is no separate plan document to consult.
+2. `cd /home/eeschner/alfredo/workspace/ANTS && git status --short` — decide about the uncommitted
+   dashboard.py/test additions (the user's own files, see Correction above).
+3. Confirm sync between checkouts (loop above) before trusting what's running.
+4. `uv run python -m ants.orchestrator.preflight` if continuing real-backend work — services are down,
+   see restart command above.
+5. `uv run ruff check . && uv run pytest -q` in the worktree before trusting anything is clean.
+6. Start item A, or ask the user what's next — everything here was built turn-by-turn from live
+   feedback, there is no separate plan document beyond `docs/studio/dashboard-todo.md` and
+   `docs/studio/chat-field-design.md`.
