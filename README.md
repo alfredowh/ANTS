@@ -12,13 +12,9 @@ Robots learn one task at a time from lots of data, and nobody can say when they 
 
 ## Solution
 
-```
-one human video ─▶ SYSTEM 1 writes a program ─▶ SYSTEM 2 attacks it in simulation
-                          ▲                                   │ failure
-                          └── rewrite ◀── constraint ◀── diagnosis
-                                   │
-                         GATE: accept only if no worse on every case seen so far
-```
+![ANTS: System 1 writes a program from one human demo, System 2 attacks it in simulation](docs/images/architecture.png)
+
+*Figure from the paper. In this build the demo is marker-tracked (SAM 3 is the robot's perception in simulation), the experience memory is future work, and every rewrite passes a regression gate.*
 
 | Part | What it does |
 |---|---|
