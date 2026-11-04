@@ -2,12 +2,15 @@
 
     uv run python -m ants.adversary.experiments.adaptive_vs_uniform                 # mock world
     uv run python -m ants.adversary.experiments.adaptive_vs_uniform --backend cap_harness \\
-        --aspire ASPIRE --attacks 20 --seeds 0 1 2
+        --aspire ASPIRE --attacks 40 --seeds 0 1 2 3 4
 
 One fixed policy (no rewrites, so only the test planner differs), the same attack budget and the
 same seeds for both arms. The arms differ only in eta: ANTS (eta = 0.2, Thompson sampling) and the
 uniform baseline (eta = 1.0), as in the paper's evaluation protocol. Seeds are paired: seed s runs
 in both arms.
+
+Severity: every attack is drawn in [--min-severity, --severity-bound], by default 0.3 to 0.8, the
+same range as the closed loop (`orchestrator.run`) and the paper's rho. Both are logged.
 
 Reported per arm: task failures found, failures per attack, distinct failure signatures (coverage:
 adaptive testing can find more failures of fewer kinds) and crashes (ERROR, never counted as
@@ -22,6 +25,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import statistics
 import time
 from collections import Counter
@@ -33,7 +37,7 @@ from typing import Any
 from ants.adversary.adversary import Adversary
 from ants.adversary.config import AdversaryConfig
 from ants.adversary.experiments.figure import write as write_figure
-from ants.adversary.perturbations import CATEGORIES
+from ants.adversary.perturbations import CATEGORIES, Bounds
 from ants.adversary.rollout import AspireConfig
 from ants.contracts import Outcome, Policy
 
@@ -91,13 +95,24 @@ def _mean_sd(xs: Sequence[float]) -> str:
     return f"{statistics.mean(xs):.2f} ± {sd:.2f}"
 
 
-def summarize(runs: Sequence[ArmRun], backend: str) -> str:
+def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    """95% Wilson score interval for k successes in n trials (sensible for rare events)."""
+    if n == 0:
+        return 0.0, 1.0
+    p = k / n
+    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
+    half = z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n)) / (1 + z * z / n)
+    return max(0.0, centre - half), min(1.0, centre + half)
+
+
+def summarize(runs: Sequence[ArmRun], backend: str, bounds: str = "") -> str:
     seeds = sorted({r.seed for r in runs})
     attacks = runs[0].attacks if runs else 0
     lines = [
         "# Adaptive vs uniform test selection (H1a)",
         "",
         f"Backend `{backend}`, {attacks} attacks per run, seeds {seeds}, one fixed policy.",
+        *([f"Severity {bounds}."] if bounds else []),
         "Mean ± sd over seeds.",
         "",
         "| Arm | eta | Failures | Failures / attack | Distinct signatures | Crashes |",
@@ -113,6 +128,34 @@ def summarize(runs: Sequence[ArmRun], backend: str) -> str:
             f"| {_mean_sd([len(r.signatures) for r in rs])} "
             f"| {_mean_sd([r.errors for r in rs])} |"
         )
+    # Pooled over seeds with a 95% interval, and the paired per-seed difference: failures are rare,
+    # so the per-seed spread alone cannot separate a real difference from noise.
+    lines += [
+        "",
+        "| Arm | Failures / attacks (pooled) | Rate | 95% CI (Wilson) |",
+        "|---|---|---|---|",
+    ]
+    for arm in ARMS:
+        rs = [r for r in runs if r.arm == arm]
+        if rs:
+            k, n = sum(r.failures for r in rs), sum(r.attacks for r in rs)
+            lo, hi = wilson(k, n)
+            lines.append(f"| {arm} | {k} / {n} | {k / n:.3f} | {lo:.3f} to {hi:.3f} |")
+    diffs = [
+        a.failures - u.failures
+        for a in runs
+        if a.arm == "adaptive"
+        for u in runs
+        if u.arm == "uniform" and u.seed == a.seed
+    ]
+    if diffs:
+        wins = sum(d > 0 for d in diffs)
+        ties = sum(d == 0 for d in diffs)
+        lines += [
+            "",
+            f"Paired by seed, adaptive minus uniform failures: {diffs} "
+            f"(adaptive more in {wins}, tie in {ties}, of {len(diffs)} seeds).",
+        ]
     if backend == "mock":
         lines += ["", "Mock world: checks the pipeline only. These numbers are not results."]
     return "\n".join(lines) + "\n"
@@ -145,7 +188,8 @@ def run(
         "runs": [r.to_dict() for r in runs],
     }
     (out / "results.json").write_text(json.dumps(results, indent=1, default=str), encoding="utf-8")
-    (out / "summary.md").write_text(summarize(runs, base.backend), encoding="utf-8")
+    bounds = f"{base.min_severity:g} to {base.bounds.default:g}"
+    (out / "summary.md").write_text(summarize(runs, base.backend, bounds), encoding="utf-8")
     write_figure(out)
     return runs
 
@@ -160,6 +204,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--backend", default="mock", choices=["mock", "cap_harness"])
     ap.add_argument("--aspire", type=Path, default=None, help="ASPIRE checkout (cap_harness)")
     ap.add_argument("--out", type=Path, default=None)
+    ap.add_argument(
+        "--severity-bound", type=float, default=0.8, help="largest severity (rho; as the loop)"
+    )
+    ap.add_argument(
+        "--min-severity", type=float, default=0.3, help="smallest severity (as the loop)"
+    )
     args = ap.parse_args(argv)
     out = args.out or Path("data/runs") / f"adaptive_vs_uniform_{time.strftime('%Y%m%d_%H%M%S')}"
     policy = Policy(
@@ -171,10 +221,12 @@ def main(argv: list[str] | None = None) -> int:
         model=args.model,
         backend=args.backend,
         categories=tuple(args.categories),
+        bounds=Bounds(default=args.severity_bound),
+        min_severity=args.min_severity,
         aspire=AspireConfig(**root, output_root=out / "aspire") if on_gpu else None,
     )
     runs = run(out, policy, args.attacks, args.seeds, base)
-    print(summarize(runs, args.backend))
+    print(summarize(runs, args.backend, f"{args.min_severity:g} to {args.severity_bound:g}"))
     print(f"logged: {(out / 'results.json').resolve()}")
     return 0
 
