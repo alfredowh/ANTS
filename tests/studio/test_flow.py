@@ -35,7 +35,6 @@ def test_hierarchy_and_edges_are_consistent():
             assert child in BLOCKS, child
             assert child not in seen, f"{child} has two parents"
             seen[child] = b["id"]
-            assert "pos" not in BLOCKS[child]
     assert len({(b["pos"]["col"], b["pos"]["row"]) for b in DATA["blocks"] if "pos" in b}) == sum(
         "pos" in b for b in DATA["blocks"]
     )

@@ -26,6 +26,7 @@ try {
   <div class="view-switch" role="group" aria-label="View"><button type="button" data-view="adversary">Adversary</button><button type="button" data-view="synthesizer">Synthesizer</button></div>
   <span style="flex:1"></span>
   <span class="status-pill" id="status-pill">idle</span>
+  <span class="token-pill" id="token-pill" title="New model tokens this session spent">0 tokens</span>
   <button class="btn stop-btn" id="stop-btn" type="button" hidden title="Stop the whole run: kills the running model/simulator processes and ends the loop">Stop</button>
   <span class="phase" id="run-folder" title="Every run is saved to its own timestamped folder: loop.jsonl (the run log), history.jsonl, muse/cycleN/ (each repair's reply + token usage). Nothing is overwritten."></span>
   <button class="theme-toggle" id="theme-toggle" type="button" title="Toggle light/dark theme">&#9789;</button>

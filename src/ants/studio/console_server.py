@@ -172,6 +172,55 @@ def deploy_latest(session_dir: Path | None, incumbent: Path, deploy_dir: Path) -
     return policy_dev.save_deployed(src, version, deploy_dir)
 
 
+def session_tokens(session_dir: Path | None, usd_per_mtok: float = 13.5) -> dict:
+    """New model tokens this session spent, from its own run and event logs, never from the shared
+    ledger, which other sessions and experiments also write. A call counts when it has finished."""
+    generation = rewrites = chat = 0
+    if session_dir is not None:
+        for log in session_dir.glob("runs/run-*/generation/events.jsonl"):
+            for row in _jsonl(log):
+                if row.get("kind") == "program" and str(row.get("from_cache")).lower() != "true":
+                    generation += int(row.get("tokens") or 0)
+        for run in session_dir.glob("runs/run-*"):
+            spent = [_json_or_none(u) or {} for u in run.glob("muse/cycle*/usage.json")]
+            rewrites += max((int(u.get("spent_total") or 0) for u in spent), default=0)
+        for row in _jsonl(session_dir / "events.jsonl"):
+            if row.get("kind") == "chat_done":
+                usage = row.get("usage") or {}
+                chat += int(usage.get("input_tokens") or 0) + int(usage.get("output_tokens") or 0)
+    total = generation + rewrites + chat
+    return {
+        "total": total,
+        "usd": round(total * usd_per_mtok / 1e6, 2),
+        "generation": generation,
+        "rewrites": rewrites,
+        "chat": chat,
+    }
+
+
+def _jsonl(path: Path) -> list[dict]:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    rows = []
+    for line in lines:
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict):
+            rows.append(row)
+    return rows
+
+
+def _json_or_none(path: Path) -> dict | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 class Session:
     """One server/browser session = one folder holding everything relevant to it.
 
@@ -933,6 +982,9 @@ def make_handler(
             # ---- end live simulator panel ----
             # ---- human demo video and generation attempts of the current run ----
             current_run = Path(pipeline.current["run_dir"]) if pipeline.current else None
+            if path == "/session/tokens":
+                self._send_json(session_tokens(state.session.dir if state.session else None))
+                return
             if path == "/demo-video/status":
                 overlay = current_run / "demo" / "overlay.mp4" if current_run else None
                 self._send_json(
@@ -992,6 +1044,7 @@ def make_handler(
                         "current": pipeline.current,
                         "settings": skill["settings"],
                         "budget": skill["budget"],
+                        "proposer_model": skill["loop"]["proposer_model"],
                     }
                 )
                 return

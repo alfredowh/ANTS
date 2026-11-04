@@ -313,6 +313,17 @@ function refreshRunList() {
 }
 refreshRunList();
 
+/* ---------- tokens this session has spent, from its own logs; a call counts once it has finished ---------- */
+function refreshTokens() {
+  fetch("/session/tokens").then((r) => r.json()).then((t) => {
+    const el = document.getElementById("token-pill");
+    el.textContent = `${t.total.toLocaleString()} tokens · $${t.usd.toFixed(2)}`;
+    el.title = `This session, new tokens at the observed $13.5 per million:\ngeneration ${t.generation.toLocaleString()}\nrewrites ${t.rewrites.toLocaleString()}\nchat ${t.chat.toLocaleString()}\nUpdates when a model call finishes. Muse Spark is not counted; /policy-dev has it off.`;
+  }).catch(() => {});
+}
+refreshTokens();
+setInterval(refreshTokens, 2000);
+
 /* ---------- session: one folder per session on the server (chat, events, runs); "New session" resets ---------- */
 let currentSessionId = null;
 function refreshSession() {

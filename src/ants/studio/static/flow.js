@@ -11,7 +11,9 @@
   const STORE = "ants-flow-state", COLLAPSE = "ants-flow-collapsed";
   const root = document.getElementById("flow-panel");
   if (!root) return;
-  const W = 800, CELL_W = 131, NODE_W = 116, ROW_H = 80, NODE_H = 58, TOP = 20;
+  const W = 936, CELL_W = 131, NODE_W = 116, ROW_H = 80, NODE_H = 58, TOP = 42;
+  let sparkOn = false; // from the skill file: the Adversary's model in /policy-dev
+  fetch("/policy-dev").then((r) => r.json()).then((i) => { sparkOn = i.proposer_model === "muse-spark"; render(); }).catch(() => {});
   const OWNER = { synthesizer: "Synthesizer", adversary: "Adversary", orchestrator: "Orchestrator", io: "Input / output" };
   const LABEL = { idle: "idle", running: "running", done: "done", failed: "failed", skipped: "skipped" };
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -159,7 +161,7 @@
     const tip = [b.summary, b.live && b.live.note, s.detail].filter(Boolean).join(" — ");
     const badge = s.cycle ? "c" + s.cycle : hasKids ? b.children.length + " ▸" : "";
     return `<foreignObject x="${x}" y="${y}" width="${w}" height="${h}"><button xmlns="http://www.w3.org/1999/xhtml" type="button" class="${cls}" data-id="${esc(b.id)}" title="${esc(tip)}">
-      <span class="fl-o">${esc(OWNER[b.owner] || "")}</span><span class="fl-l">${esc(b.label)}</span>
+      <span class="fl-l">${esc(b.label)}</span><span class="fl-o">${esc((!sparkOn && b.off_model) || b.model || OWNER[b.owner] || "")}</span>
       <span class="fl-d">${esc(s.detail || (b.status === "planned" ? "planned" : ""))}</span>
       ${badge ? `<span class="fl-badge">${esc(badge)}</span>` : ""}</button></foreignObject>`;
   }
@@ -182,7 +184,10 @@
       return `<rect class="fl-box ${cls}" x="${o.x - pad}" y="${o.y - pad}" width="${w}" height="${h}"/>` +
         `<text class="fl-boxl ${cls}" x="${o.x - pad + 2}" y="${o.y - pad - 4}">${label}</text>`;
     };
-    const boxes = box("syn", "SYNTHESIZER", 1, 0, 3, 2) + box("adv", "ADVERSARY", 5, 1, 5, 2);
+    const whole = at({ pos: { col: 1, row: 0 } });
+    const boxes = `<rect class="fl-box orch" x="${whole.x - 13}" y="${whole.y - 28}" width="${6 * CELL_W + 26 - 15 + 2}" height="${3 * ROW_H + NODE_H + 42}"/>` +
+      `<text class="fl-boxl orch" x="${whole.x - 9}" y="${whole.y - 31}">ORCHESTRATOR: orchestrator/loop.py runs every step in code. Muse Wonder writes programs; it does not decide.</text>` +
+      box("syn", "SYNTHESIZER", 1, 0, 3, 2) + box("adv", "ADVERSARY", 5, 0, 6, 2);
     let edges = "";
     for (const e of G.edges) {
       const a = byId[e.from], b = byId[e.to];
@@ -191,11 +196,7 @@
       if (e.from === "gate" && e.to === "attack") { // up the gutter between orchestrator and Adversary
         const up = p.y - 7, side = q.x - 7, y = q.y + NODE_H * 0.8;
         d = `M${p.x + NODE_W * 0.8} ${p.y} L${p.x + NODE_W * 0.8} ${up} L${side} ${up} L${side} ${y} L${q.x} ${y}`;
-        lx = p.x + 2; ly = up - 3;
-      } else if (e.from === "escalation" && e.to === "attack") { // the human answer, around the outside
-        const low = p.y + NODE_H + 9, out = W - 4, y = q.y + NODE_H / 2;
-        d = `M${p.x + NODE_W / 2} ${p.y + NODE_H} L${p.x + NODE_W / 2} ${low} L${out} ${low} L${out} ${y} L${q.x + NODE_W} ${y}`;
-        lx = p.x + NODE_W / 2 + 6; ly = low - 3;
+        lx = p.x + NODE_W * 0.8 + 4; ly = up - 3;
       } else if (e.from === "rewrite" && e.to === "gate") { // down, then right, into the gate from above
         const y = p.y + NODE_H + 11, x = q.x + NODE_W * 0.3;
         d = `M${p.x + NODE_W / 2} ${p.y + NODE_H} L${p.x + NODE_W / 2} ${y} L${x} ${y} L${x} ${q.y}`;
@@ -203,6 +204,9 @@
         const left = q.x < p.x;
         d = `M${left ? p.x : p.x + NODE_W} ${p.y + NODE_H / 2} L${left ? q.x + NODE_W : q.x} ${q.y + NODE_H / 2}`;
         if (e.label && Math.abs(q.x - p.x) > CELL_W) { lx = (left ? q.x + NODE_W : p.x + NODE_W) + 1; ly = p.y + NODE_H / 2 - 4; }
+      } else if (q.y < p.y) { // straight up
+        d = `M${p.x + NODE_W / 2} ${p.y} L${q.x + NODE_W / 2} ${q.y + NODE_H}`;
+        if (e.label) { lx = p.x + NODE_W / 2 + 4; ly = p.y - 9; }
       } else { // straight down
         d = `M${p.x + NODE_W / 2} ${p.y + NODE_H} L${q.x + NODE_W / 2} ${q.y}`;
       }

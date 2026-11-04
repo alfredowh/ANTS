@@ -267,3 +267,30 @@ def test_scene_panel_is_labelled_with_its_real_source(tmp_path):
     assert cmd[cmd.index("--scenes") + 1] == "stock"
     text = cmd[cmd.index("--scene-text-file") + 1]  # the stock text, never the scaled S4_L* files
     assert Path(text).name == "stock_seed51_S4.txt"
+
+
+def test_session_tokens_counts_this_sessions_logs_only(tmp_path):
+    import json
+
+    from ants.studio.console_server import session_tokens
+
+    assert session_tokens(None)["total"] == 0
+    run = tmp_path / "runs" / "run-1"
+    (run / "generation").mkdir(parents=True)
+    rows = [
+        {"kind": "program", "tokens": 100, "from_cache": False},
+        {"kind": "program", "tokens": 50, "from_cache": True},
+        {"kind": "rollout"},
+    ]
+    (run / "generation" / "events.jsonl").write_text(
+        "\n".join(json.dumps(r) for r in rows), encoding="utf-8"
+    )
+    for k, spent in ((1, 40), (2, 70)):  # spent_total is cumulative within a run
+        (run / "muse" / f"cycle{k}").mkdir(parents=True)
+        (run / "muse" / f"cycle{k}" / "usage.json").write_text(
+            json.dumps({"spent_total": spent}), encoding="utf-8"
+        )
+    chat = {"kind": "chat_done", "usage": {"input_tokens": 3, "output_tokens": 2}}
+    (tmp_path / "events.jsonl").write_text(json.dumps(chat), encoding="utf-8")
+    out = session_tokens(tmp_path)
+    assert (out["generation"], out["rewrites"], out["chat"], out["total"]) == (100, 70, 5, 175)
