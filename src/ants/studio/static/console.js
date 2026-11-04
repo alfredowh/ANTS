@@ -976,6 +976,64 @@ document.getElementById("chat-input").addEventListener("keydown", (e) => {
   if (e.key === "Enter") sendChat();
 });
 
+/* ---------- voice input (Web Speech API; client-side, never auto-sends) ----------
+   Chrome/Edge send the audio to the browser vendor's speech service (not local); needs https or
+   localhost for the mic permission. Language: navigator.language, override with
+   localStorage "ants-studio-voice-lang". */
+(function () {
+  const btn = document.getElementById("chat-mic");
+  const input = document.getElementById("chat-input");
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!btn) return;
+  if (!SR) { btn.disabled = true; btn.title = "Voice input needs a Chromium-based browser"; return; }
+  btn.disabled = false;
+  const IDLE_TITLE = "Voice input (Chrome sends the audio to Google's speech service; it is not processed locally)";
+  btn.title = IDLE_TITLE;
+  let rec = null, listening = false, base = "";
+  function lang() { try { return localStorage.getItem("ants-studio-voice-lang") || navigator.language || "en-US"; } catch (e) { return navigator.language || "en-US"; } }
+  function setUi(on) {
+    listening = on;
+    btn.classList.toggle("listening", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+    btn.title = on ? "Stop listening" : IDLE_TITLE;
+  }
+  function stop() { if (rec) { try { rec.stop(); } catch (e) {} } }
+  function start() {
+    if (input.disabled) return;
+    rec = new SR();
+    rec.lang = lang(); rec.interimResults = true; rec.continuous = true;
+    base = input.value;
+    let finals = "";
+    rec.onresult = (ev) => {
+      let interim = "";
+      for (let i = ev.resultIndex; i < ev.results.length; i++) {
+        const r = ev.results[i];
+        if (r.isFinal) finals += r[0].transcript; else interim += r[0].transcript;
+      }
+      const spoken = (finals + interim).trim();
+      input.value = (base && spoken ? base.replace(/\s+$/, "") + " " : base) + spoken;
+    };
+    rec.onerror = (ev) => {
+      const err = ev.error;
+      if (err === "not-allowed" || err === "service-not-allowed") setChatStatus("Microphone blocked — allow it in the browser's site settings", false);
+      else if (err === "network") setChatStatus("Voice input needs internet: Chrome's speech service is unreachable.", false);
+      else if (err !== "no-speech" && err !== "aborted") setChatStatus("Voice input error: " + err, false);
+      setUi(false);
+    };
+    rec.onend = () => { if (listening) setUi(false); if (document.getElementById("chat-status").textContent === "Listening…") setChatStatus(""); rec = null; };
+    try { rec.start(); setUi(true); setChatStatus("Listening…", true); }
+    catch (e) { setUi(false); rec = null; }
+  }
+  btn.addEventListener("click", () => (listening ? stop() : start()));
+  document.getElementById("chat-send").addEventListener("click", stop, true);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") stop(); }, true);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) stop(); });
+  new MutationObserver(() => {
+    btn.disabled = input.disabled;
+    if (input.disabled) stop();
+  }).observe(input, {attributes: true, attributeFilter: ["disabled"]});
+})();
+
 /* ---------- Perception tab: Synthesizer / Adversary detail toggle ----------
    Merges the loop's own rollout/result logging into one place: the Synthesizer side reuses
    cycleDetails (same data the per-cycle "View details" modal already uses), the Adversary side

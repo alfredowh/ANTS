@@ -199,7 +199,7 @@ body[data-tab="console"] .console-only{display:inline-flex}
 #col-center.idle .chat-icon{width:38px;height:38px;font-size:17px}
 #col-center.idle .chat-status{text-align:center;max-width:640px;margin:0 auto}
 .chatbar{display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--line);background:var(--bg)}
-.chat-icon{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--raise);color:var(--muted);cursor:not-allowed;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;flex:none}
+.chat-icon{width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--raise);color:var(--muted);cursor:pointer;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;flex:none}
 .chat-input{flex:1;border:1px solid var(--line);background:var(--panel);color:var(--fg);border-radius:999px;padding:9px 16px;font:inherit;outline:none}
 .chat-input:focus{border-color:var(--accent)}
 .chat-input:disabled{opacity:.5}
@@ -212,3 +212,7 @@ body[data-tab="console"] .console-only{display:inline-flex}
 .chat-turn.you .tk{display:none}
 .chat-turn.you .main{margin-top:0;font-size:13px;white-space:pre-wrap}
 .turn.task,.turn.error,.turn.done{padding-left:12px}
+.chat-icon:disabled{cursor:not-allowed;opacity:.5}
+#chat-mic.listening{background:var(--accent);border-color:var(--accent);color:#fff;animation:mic-pulse 1.4s ease-out infinite}
+@keyframes mic-pulse{0%{box-shadow:0 0 0 0 rgba(24,119,242,.55)}100%{box-shadow:0 0 0 10px rgba(24,119,242,0)}}
+@media (prefers-reduced-motion:reduce){#chat-mic.listening{animation:none}}
