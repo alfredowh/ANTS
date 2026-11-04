@@ -46,6 +46,7 @@ def nominal_events(adv: Adversary, policy: Policy, seed: int) -> dict:
     return {
         "outcome": nominal.outcome.value,
         "events": [{"kind": e.kind, **dict(e.detail)} for e in nominal.events],
+        "video_path": nominal.video_path,
     }
 
 

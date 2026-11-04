@@ -76,6 +76,9 @@ table.log{width:100%;border-collapse:collapse;min-width:640px}
 .badge{font:500 10.5px/1 var(--mono);padding:3px 6px;border:1px solid var(--line);color:var(--muted);text-transform:uppercase;letter-spacing:.05em;width:fit-content}
 .badge.acc{border-color:var(--accent);color:var(--accent)} .badge.meta{border-color:var(--meta);color:var(--meta)} .badge.fail{border-color:var(--fail);color:var(--fail)}
 .tl{border:1px solid var(--line);background:var(--panel)}
+.vids{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+.vid{background:var(--panel);padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.vid video{width:100%;background:#000;display:block}
 .tlhead{display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:8px 12px;border-bottom:1px solid var(--line);color:var(--muted);font-size:11.5px}
 .tlbody{display:grid;grid-template-columns:92px minmax(0,1fr)}
 .tlnames>div{display:flex;align-items:center;padding:0 12px;border-bottom:1px solid var(--line2);font-size:11.5px;color:var(--muted)}
@@ -298,6 +301,15 @@ function timeline(a){
       </div>
     </div></section>`;
 }
+function videos(a){
+  const clip = (src, label, color) => `<div class="vid"><span class="mono" style="color:${color}">${label}</span>
+    <video src="${esc(src)}" controls muted loop playsinline preload="metadata"></video></div>`;
+  if (!a.video && !D.nominal_video) return `<div class="empty">No video for this attack: the test world records none; on the simulator, videos sit next to studio.html in the run folder.</div>`;
+  return `<section style="display:flex;flex-direction:column;gap:10px"><span class="h">Rollout video</span><div class="vids">
+    ${a.video ? clip(a.video, "Attack #" + a.n + " · " + esc(a.category) + " · " + (failed(a) ? "failed" : a.outcome === "error" ? "program error" : "passed"), failed(a) ? "var(--fail)" : "var(--hi)") : '<div class="vid empty">No video recorded for this attack.</div>'}
+    ${D.nominal_video ? clip(D.nominal_video, "Nominal run · no perturbation", "var(--muted)") : ""}
+  </div><span class="note">Videos load from the run folder: keep studio.html next to its aspire/ folder when copying.</span></section>`;
+}
 function why(a){
   const draws = Object.entries(a.draws || {}).sort((x, y) => y[1] - x[1]);
   const mx = Math.max(...draws.map(d => d[1]), 0.01);
@@ -373,6 +385,7 @@ function replay(id){
       <div><h1>Attack #${a.n} · ${esc(a.category)} <span style="color:${failed(a)?"var(--fail)":"var(--muted)"};font-weight:400">${failed(a)?"failed":a.outcome==="error"?"program error":"passed"}</span></h1>
       <span class="mono note">${esc(params(a.params))} · severity ${fx(a.severity)} · seed ${esc(a.seed)}</span></div></div>
     ${a.rationale && a.proposal.source==="model" ? `<p style="color:var(--soft);font-size:14px;max-width:80ch">“${esc(a.rationale)}”</p>` : ""}
+    ${videos(a)}
     ${timeline(a)}
     ${why(a)}
   </main>
