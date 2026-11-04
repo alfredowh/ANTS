@@ -659,6 +659,8 @@ turnsEl.addEventListener("click", (e) => {
 function setStatus(kind, text) {
   pill.className = "status-pill " + kind;
   pill.textContent = text;
+  const sb = document.getElementById("stop-btn");
+  if (sb) { sb.hidden = kind !== "running"; sb.disabled = false; sb.textContent = "Stop"; }
 }
 
 /* each turn shows at most ~10 lines; a per-turn button expands it */
@@ -1181,3 +1183,13 @@ renderAdvPanel();
 
 openStream();
 restoreUiState();
+
+document.getElementById("stop-btn").addEventListener("click", () => {
+  const sb = document.getElementById("stop-btn");
+  sb.disabled = true;
+  sb.textContent = "Stopping...";
+  fetch("/stop", {method: "POST", headers: {"Content-Type": "application/json"}, body: "{}"})
+    .then((r) => r.json())
+    .then((r) => { if (!r.ok) { sb.disabled = false; sb.textContent = "Stop"; handleError({message: r.error}); } })
+    .catch(() => { sb.disabled = false; sb.textContent = "Stop"; });
+});

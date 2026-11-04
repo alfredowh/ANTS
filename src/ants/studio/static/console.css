@@ -243,3 +243,7 @@ body[data-tab="console"] .console-only{display:inline-flex}
 .edge-tab:hover{color:var(--accent);border-color:var(--accent)}
 .edge-tab.left{left:0;right:auto;border-left:0;border-radius:0 8px 8px 0}
 .edge-tab.right{right:0;left:auto;border-right:0;border-radius:8px 0 0 8px}
+
+.stop-btn{background:#d9342b;border-color:#d9342b;color:#fff;margin-left:8px}
+.stop-btn:hover{background:#b72a22;border-color:#b72a22}
+.stop-btn[hidden]{display:none}

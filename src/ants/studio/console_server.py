@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import os
 import queue
+import signal
 import subprocess
 import tempfile
 import threading
@@ -409,10 +411,47 @@ def start_session(
     return session
 
 
+class StopRequested(Exception):
+    """Raised inside the loop thread when the user pressed Stop."""
+
+
+def kill_child_processes() -> int:
+    """SIGTERM every descendant of this server process (muse exec, ASPIRE rollouts, wizard
+    generation). Linux /proc based; elsewhere it does nothing and the loop still stops at the next
+    attack boundary."""
+    proc = Path("/proc")
+    if not proc.is_dir():
+        return 0
+    children: dict[int, list[int]] = {}
+    for entry in proc.iterdir():
+        if not entry.name.isdigit():
+            continue
+        try:
+            stat = (entry / "stat").read_text(encoding="utf-8")
+            ppid = int(stat.rsplit(")", 1)[1].split()[1])
+        except (OSError, ValueError, IndexError):
+            continue
+        children.setdefault(ppid, []).append(int(entry.name))
+    todo, victims = [os.getpid()], []
+    while todo:
+        for pid in children.get(todo.pop(), []):
+            victims.append(pid)
+            todo.append(pid)
+    killed = 0
+    for pid in victims:
+        try:
+            os.kill(pid, signal.SIGTERM)
+            killed += 1
+        except OSError:
+            pass
+    return killed
+
+
 @dataclass
 class RunState:
     lock: threading.Lock = field(default_factory=threading.Lock)
     running: bool = False
+    stop_requested: threading.Event = field(default_factory=threading.Event)
     events: queue.Queue[dict] = field(default_factory=queue.Queue)
     subscribers: list[queue.Queue[dict]] = field(default_factory=list)
     # Chat: at most one of these is meaningful at a time.
@@ -663,6 +702,8 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
     )
 
     def on_attack(report, attacked_policy) -> None:
+        if state.stop_requested.is_set():
+            raise StopRequested
         # fires right after Adversary attacks, before Synthesizer's rewrite call (which blocks on
         # the real muse exec call) -- the only sub-cycle granularity Loop exposes, so the console
         # can
@@ -696,6 +737,8 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
         text = answer_q.get()  # blocks the loop thread until /chat delivers a reply
         with state.lock:
             state.awaiting_answer = None
+        if state.stop_requested.is_set():
+            raise StopRequested
         return GateAnswer(channel="text", text=text)
 
     loop = Loop(adv, synth, loop_cfg, on_attack=on_attack, ask_human=ask_human)
@@ -755,7 +798,7 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
         state.broadcast(
             {
                 "kind": "done",
-                "stopped": result.stopped,
+                "stopped": "user_stop" if state.stop_requested.is_set() else result.stopped,
                 "stage": result.stage,
                 "final_version": result.incumbent.version,
                 "accepted_versions": result.accepted_versions,
@@ -763,7 +806,20 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
             }
         )
     except Exception as exc:  # noqa: BLE001 -- the loop never crashes the console, log instead
-        state.broadcast({"kind": "error", "message": f"{type(exc).__name__}: {exc}"})
+        if state.stop_requested.is_set():
+            time.sleep(0.4)
+            state.broadcast(
+                {
+                    "kind": "done",
+                    "stopped": "user_stop",
+                    "stage": "stopped",
+                    "final_version": None,
+                    "accepted_versions": [],
+                    "escalation": None,
+                }
+            )
+        else:
+            state.broadcast({"kind": "error", "message": f"{type(exc).__name__}: {exc}"})
     finally:
         stop_tail.set()
 
@@ -1078,6 +1134,20 @@ def make_handler(
             if path == "/upload":
                 self._handle_upload()
                 return
+            if path == "/stop":
+                with state.lock:
+                    running = state.running
+                    waiting = state.awaiting_answer
+                if not running:
+                    self._send_json({"ok": False, "error": "nothing is running"})
+                    return
+                state.stop_requested.set()
+                if waiting is not None:
+                    waiting.put("")  # unblock a pending escalation question
+                killed = kill_child_processes()
+                state.broadcast({"kind": "stop_requested", "killed": killed})
+                self._send_json({"ok": True, "killed": killed})
+                return
             if path == "/clientlog":
                 length = int(self.headers.get("Content-Length", "0"))
                 try:
@@ -1156,6 +1226,8 @@ def make_handler(
                 with state.lock:
                     state.running = False
                 fire_queued_chat()
+
+            state.stop_requested.clear()
 
             def drive_loop() -> None:
                 try:
