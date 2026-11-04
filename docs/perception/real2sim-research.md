@@ -103,8 +103,8 @@ the 3D World Simulator (no code), Isaac Sim migration.
 
 | Have | Missing |
 |---|---|
-| TSDF, ESDF, mesh from posed RGB-D (works on the 112-frame sim scan, 122,122 vertices) | real RGB-D: phone clips have no depth, so depth must come from splat render, MoGe-like monocular depth, or stereo |
-| ESDF as a collision world for `MotionPlanner` (parity check passed) | the discriminating wine-rack plan test, online incremental updates, robot self-mask |
+| TSDF, ESDF, mesh from posed RGB-D (works on the 82-frame sim scan, 122,122 vertices) | real RGB-D: phone clips have no depth, so depth must come from splat render, MoGe-like monocular depth, or stereo |
+| Mesh as a collision world for `MotionPlanner` (accepted; the wine-rack test reproduced the carve bug, see the probe doc; the earlier parity baseline was invalid) | resolving why the fused mesh rejects near starts, online incremental updates, robot self-mask |
 | Persistent map independent of the robot pose | physical properties, per-object segmentation, articulation, any dynamics |
 
 ## 6. Recommendation
