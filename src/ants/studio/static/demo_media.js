@@ -3,8 +3,26 @@
 (function () {
   const box = document.getElementById("demo-box"), video = document.getElementById("demo-video");
   const title = document.getElementById("demo-title"), note = document.getElementById("demo-note");
+  const toggle = document.getElementById("demo-toggle"), hint = document.getElementById("demo-hint");
   if (!box) return;
   let shown = null;
+  const KEY = "ants-demo-collapsed";
+  let collapsed = false;
+  try { collapsed = localStorage.getItem(KEY) === "1"; } catch (e) {}
+
+  function applyCollapsed() {
+    video.hidden = collapsed;
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    toggle.querySelector(".demo-arrow").innerHTML = collapsed ? "&#9656;" : "&#9662;";
+    hint.textContent = collapsed ? "Show" : "Hide";
+    if (collapsed) video.pause();
+    else if (video.getAttribute("src")) video.play().catch(() => {});
+  }
+  toggle.addEventListener("click", () => {
+    collapsed = !collapsed;
+    try { localStorage.setItem(KEY, collapsed ? "1" : "0"); } catch (e) {}
+    applyCollapsed();
+  });
 
   function show(kind) {
     if (shown === kind) return;
@@ -13,7 +31,7 @@
     title.textContent = kind === "overlay" ? "Human demonstration: extracted overlay" : "Human demonstration";
     video.src = `/demo-video/${kind}?t=${Date.now()}`;
     video.playbackRate = 1;
-    video.play().catch(() => {});
+    applyCollapsed();
     if (window.studioForceRight) window.studioForceRight("demo", true);
   }
   function hide() {
@@ -40,6 +58,7 @@
       else if (d.state === "failed") note.textContent = "Overlay could not be rendered: " + (d.detail || "");
     }
   };
+  applyCollapsed();
   window.addEventListener("demo-video-picked", () => { shown = null; refresh(); });
   refresh();
 })();

@@ -836,6 +836,7 @@ class Pipeline:
             f"{'with' if preview['has_demo'] else 'without'} the demonstration, "
             f"{'with' if preview.get('has_scene') else 'without'} the stock scene",
             path=preview["path"],
+            chars=preview["chars"],
         )  # fmt: skip
         out = req.run_dir / "generation"
         program, spent, record = self.generate(out, spec, req.video is not None)
