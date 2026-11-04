@@ -1,66 +1,51 @@
-# Process-flow viewer: design spec
+# Live process-flow panel
 
-Builder-ready spec for a Studio view that shows the ANTS architecture and where a run currently is. Data: [`process-flow-blocks.json`](process-flow-blocks.json). Vocabulary: Synthesizer, Adversary, Orchestrator (never System 1/2).
+The panel above the chat feed in the Synthesizer view of ANTS Studio. It shows the policy dev pipeline as blocks, in the style of the `#dev-flow` view of the ANTS Dev artifact, but driven by real events instead of scripted playback. Code: `src/ants/studio/static/flow.js`, `flow.css`. Data: [`process-flow-blocks.json`](process-flow-blocks.json), served as `/static/flow_blocks.json`. Vocabulary: Synthesizer, Adversary, Orchestrator.
 
-## 1. Reference design (artifact `#dev-flow`)
+## Layout
 
-- Nodes (`.nd`) on a grid (column/row), edges (`.ed`) between them, loop-back edges drawn distinct.
-- Each node has sub-chips (`.dp-sub`) with `.act` (active) and `.past` (done) states.
-- Playback is stepped: `scenariosDev()` defines steps, `buildCanvas()` lays out, `applyStep()` toggles states.
-- Respects `prefers-reduced-motion`.
-- Our version replaces scripted playback with real events, and the grid with the `layout` map in the JSON (x, y, w, h per mode).
+Top row: Human video, Extract demo, DemoSpec, Build prompt, Muse writes program, Nominal check. Second row, right to left: Adversary attack, Diagnose failure, Muse rewrites, Regression gate, Save to deploy. Third row: Experience memory (planned), Ask a human. The dashed loop edge goes from the gate back to the attack and moves while the loop is active.
 
-## 2. Event to block activation
+Block states: idle grey, running pulsing accent, running inferred (dashed), done green, failed red, skipped dim, planned dashed (never lights up). A block shows the cycle it last ran in (`c2`) and its last detail. The panel collapses to one 36 px line with a state dot per stage; the choice is remembered.
 
-Console events: `loop_event` (rows from `loop.jsonl`: start, cycle, escalate, human_answer, no_working_policy, end), `attack_event` (fires after `Adversary.attack()` returns), Muse task events (`task_*`), `chat_*`, `done`, `error`, and `perception_*` (cap_harness only).
+## Drill-down
 
-| Signal | Block state | Honesty |
+A block with `▸` opens its sub-blocks, with a breadcrumb back. Clicking any block shows its description, "how we know", code and docs under the canvas.
+
+- Extract demo: hand tracking, marker poses, grasp and release.
+- Muse writes program: model call, static checks, debug rollout.
+- Adversary attack: selector, proposer, sandboxed rollout, failure history.
+  - Sandboxed rollout: mock world, cap_harness backend.
+    - cap_harness backend: `localize_object`, `generate_grasps`, `move_to_pose`.
+
+## What each event proves
+
+| Event | Effect | Strength |
 |---|---|---|
-| `start` | orchestrator active | live |
-| cycle begins (previous cycle row, or start) | adversary active until `attack_event` | live at block level only |
-| `attack_event` | adversary done; if failure, synthesizer (repair) active | live |
-| Muse `muse_event` (payload_type task.lifecycle.started) / `muse_event` (payload_type task.lifecycle.completed) | repair active / done | live |
-| `cycle` with `decision` | gate flashes accepted / rejected / no_failure / budget_stop | after the fact (the gate runs inside `Loop`) |
-| `escalate`, `human_answer` | escalation active, waiting on human | live |
-| `end`, `done` | report | after the fact |
-| `perception_*` | perception active | live, cap_harness only |
-| adversary children (selector, proposer, rollout, diagnoser) | filled in from the attack record | after the fact |
-| memory, admission, all production blocks | never active | static |
+| `pipeline_stage` `{stage, status, detail, cycle}` | that block's state; ids `video extract demospec prompt generate nominal attack diagnose rewrite gate deploy` | live |
+| `run_started` | new run. Without earlier `pipeline_stage` events the pre-loop blocks show "skipped: not in this run" | live |
+| `loop_event` `start` | Nominal check running (the row is logged just before the nominal rollouts) | live |
+| `attack_event` | attack done and nominal passed; failure: diagnosis done, rewrite running (fires just before the rewrite call) | live at the end of the call |
+| `loop_event` `cycle` | rewrite result and gate verdict; attack and diagnose confirmed | after the fact |
+| after a `cycle` row, no `end` row within 0.8 s | next attack running, dashed | **inferred** |
+| `loop_event` `no_working_policy` | Nominal check failed | live |
+| `loop_event` `escalate`, `awaiting_answer`, `human_answer` | Ask a human running, then done | live |
+| `stop_requested`, `done` with `user_stop` | running blocks fail with "stopped by user" | live |
+| `done`, `loop_event` `end` | nothing runs any more | live |
+| `error` (except logging failures) | running blocks fail | live |
+| `session_reset` | panel clears | live |
 
-Each block's `live.signal` in the JSON carries this classification; render `after_the_fact` and `static` visibly different (e.g. hatched border, "static" tag).
+## Honest limits
 
-## 3. Drill-down
+1. `Adversary.attack()` is one synchronous call, so selector, proposer, rollout and history share one grouped state. Diagnose can only be shown once the call returned.
+2. No event marks the end of the nominal check or the start of an attack. Between `start` and the first `attack_event`, Nominal check stays lit even when the first attack is already running.
+3. The gate replay runs inside `Loop` with no event, so the rewrite block stays lit through it and the gate shows only its verdict.
+4. In the loop, `muse exec` lifecycle events are not forwarded (only single mode has them), so a rewrite is one long running state.
+5. A verdict stays visible during the next inferred attack, and clears at the next `attack_event`.
+6. SSE does not replay. After a reload the panel restores its snapshot from `localStorage`; if the server is idle, running blocks are cleared. Events missed during the reload are not recovered.
+7. The cap_harness sub-blocks never light up: nothing reports the primitive calls live. Which backend ran is only in `run_started`.
+8. There is no production view, because no deployment runtime exists (decision D18).
 
-- Top level shows blocks with `parent: null`. Click a block with `children` to replace the canvas with its children (breadcrumb above: Overview > Adversary). Click a leaf to open the detail popup.
-- Parent activity = any child active.
-- Child layout: auto grid if the JSON `layout` has no entry for them.
+## Checks
 
-## 4. Description and popup
-
-- While a block is active, show its `summary` (at most 2 sentences) in a strip under the canvas, with a "More" button.
-- "More" opens a popup: `details`, status chip (built / partial / planned), branches, code paths, and doc links.
-- Docs: list `docs[]`. The server serves a whitelisted route `GET /docs/<path>` that returns only files listed in the JSON, read from the working tree (the doc may live on another branch, see section 7). Render the heading section as plain text.
-
-## 5. Dev / Production switch
-
-A segmented toggle in the view header selects `mode`. Production shows only the `production` layout and a banner: "Concept only, no runtime exists (D18)". It never shows live state.
-
-## 6. Links from the main console
-
-- A "Process flow" button in the nav (next to Perception).
-- The flowline badges (Adversary, Synthesizer, Orchestrator, Escalation) become links that open the viewer drilled into that block.
-- The viewer subscribes to the same `/events` SSE stream, so it needs no new data.
-
-## 7. Honest limitations
-
-1. `Adversary.attack()` is one synchronous call: selector, proposer, rollout and diagnoser cannot be shown live separately.
-2. No production runtime exists. Production is a static concept diagram.
-3. The gate, stall and stop decisions are only visible from the cycle row, after the fact.
-4. Initial generation, memory and skill admission are not driven by the console.
-5. Some docs and code exist only on other branches (`synthesizer`, `integration`, `feature/orchestrator`, `feature/system2`); the JSON lists the branch. Verify the paths before linking. A doc missing from the working tree must show "not on this branch".
-
-## 8. Recommended minimal server additions (separate from the viewer)
-
-- `GET /docs/<path>`: whitelisted from the JSON, UTF-8 text, 404 otherwise.
-- `GET /process-flow/blocks.json`: serves the JSON.
-- Optional: `cycle_start` SSE event emitted before `Adversary.attack()` so the adversary activates at the true start. This is a change to the loop call site, so ask Daniel first.
+`tests/studio/test_flow.py` keeps the data truthful: every stage has a block, the hierarchy is consistent, planned blocks cannot light up, attack steps are grouped, and code and doc references exist (`hurobo/` is a submodule and is skipped). The state logic in `flow.js` has no unit test because there is no JS runner in this repo; it was checked by driving a real server's `/events` stream in headless Chrome.

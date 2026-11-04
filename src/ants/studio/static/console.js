@@ -648,6 +648,7 @@ function openStream() {
   es.onmessage = (ev) => {
     const data = JSON.parse(ev.data);
     if (window.studioEvent) window.studioEvent(data); // Adversary view refresh
+    if (window.flowEvent) window.flowEvent(data); // live process-flow panel
     if (window.wizardEvent) window.wizardEvent(data); // one shared connection (browsers allow only ~6 per site)
     if (data.kind === "muse_event") handleMuseEvent(data.event);
     else if (data.kind === "loop_event") handleLoopEvent(data.row);

@@ -1,128 +1,706 @@
 {
-  "version": 1,
-  "note": "Block hierarchy for the Studio process-flow viewer. Status and doc paths come from the repo docs (architecture.md, orchestrator/spec.md, adversary/spec.md, context.md D18/D19); verify code paths against the branch before relying on them.",
-  "modes": {
-    "dev": {"label": "Policy development", "runtime": "exists (Loop, console)"},
-    "production": {"label": "Production / deployment", "runtime": "none: concept only (D18), static diagram, never shows a live state"}
+ "version": 2,
+ "note": "Block hierarchy of the live process-flow panel (static/flow.js). The top-level blocks with a 'stage' are driven by SSE events; see process-flow-design.md. status: built or planned. live.signal: live, after_the_fact, grouped or static. There is no production view (D18).",
+ "stages": [
+  "video",
+  "extract",
+  "demospec",
+  "prompt",
+  "generate",
+  "nominal",
+  "attack",
+  "diagnose",
+  "rewrite",
+  "gate",
+  "deploy"
+ ],
+ "blocks": [
+  {
+   "id": "video",
+   "label": "Human video",
+   "owner": "io",
+   "status": "built",
+   "summary": "One marker clip and a task sentence enter the pipeline.",
+   "details": "Marker clips only: table, bowl and plate carry ArUco markers. Bowl-on-plate only.",
+   "code": [
+    "hurobo/data/raw/e1/clips"
+   ],
+   "docs": [
+    "docs/dev/reuse-from-hurobo.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "live",
+    "note": "pipeline_stage video"
+   },
+   "stage": "video",
+   "pos": {
+    "col": 0,
+    "row": 0
+   }
   },
-  "blocks": [
-    {"id": "demo", "label": "Human demo + task", "owner": "io", "status": "partial", "branch": ["synthesizer"], "parent": null, "children": [],
-     "summary": "One video demo and a task text enter the system. DemoSpecs come from hurobo markers or LIBERO demo files.",
-     "details": "SAM 3.1 tracking is a stretch goal (D14). The console does not yet drive initial generation; it repairs examples/bowl_on_plate/policy.py.",
-     "docs": [{"path": "docs/architecture.md", "branch": "integration", "heading": "System 1: synthesizer"}],
-     "code": ["tools/hurobo_demospec.py"],
-     "live": {"signal": "static", "events": [], "notes": "No console event until the /policy-dev wizard exists."}},
-
-    {"id": "synthesizer", "label": "Synthesizer", "owner": "synthesizer", "status": "built", "branch": ["synthesizer", "integration"], "parent": null,
-     "children": ["perception", "demospec", "generator", "static_checks", "nominal_replay", "repair"],
-     "summary": "Frozen Muse model turns a demo into a program and rewrites it from failure feedback. Nothing is trained.",
-     "details": "Entry point synthesize()/rewrite(). A spent token budget raises BudgetExceeded, mapped to a budget stop.",
-     "docs": [{"path": "docs/architecture.md", "branch": "integration", "heading": "System 1: synthesizer"}],
-     "code": ["src/ants/synthesizer/"],
-     "live": {"signal": "live", "events": ["muse_event:task.lifecycle.started", "muse_event:task.lifecycle.completed", "loop_event:cycle(rewrite_tokens)"], "notes": "Active while a Muse repair call is in flight; only the whole call is visible."}},
-    {"id": "perception", "label": "Perception", "owner": "synthesizer", "status": "partial", "branch": ["synthesizer"], "parent": "synthesizer", "children": [],
-     "summary": "Masks, point clouds and scene graph from SAM 3 and depth. Real only with the cap_harness backend and services up.",
-     "details": "Console Perception tab shows live/archived/missing layers.",
-     "docs": [], "code": ["src/ants/studio/scene2d.py", "src/ants/studio/scene3d.py"],
-     "live": {"signal": "live", "events": ["perception_*"], "notes": "Only with --backend cap_harness. The perception_* SSE path had an unresolved bug."}},
-    {"id": "demospec", "label": "DemoSpec", "owner": "synthesizer", "status": "partial", "branch": ["synthesizer"], "parent": "synthesizer", "children": [],
-     "summary": "Keyframes, object tracks and gripper aperture extracted from the demo.", "details": "Converters exist for hurobo and LIBERO demos.",
-     "docs": [], "code": ["tools/hurobo_demospec.py"], "live": {"signal": "static", "events": [], "notes": "Not run by the console."}},
-    {"id": "generator", "label": "Program generator (Muse)", "owner": "synthesizer", "status": "built", "branch": ["synthesizer"], "parent": "synthesizer", "children": [],
-     "summary": "Muse writes a plain cap_harness script from the DemoSpec, API signatures and constraints.", "details": "Context only: constraints and retrieved guidance.",
-     "docs": [], "code": ["src/ants/synthesizer/"], "live": {"signal": "static", "events": [], "notes": "Initial generation is not driven by the console."}},
-    {"id": "static_checks", "label": "Static checks", "owner": "synthesizer", "status": "built", "branch": ["synthesizer"], "parent": "synthesizer", "children": [],
-     "summary": "AST pre-flight: syntax, call whitelist, only math imports.", "details": "",
-     "docs": [], "code": [], "live": {"signal": "after_the_fact", "events": [], "notes": "Not separately reported."}},
-    {"id": "nominal_replay", "label": "Nominal replay", "owner": "synthesizer", "status": "built", "branch": ["synthesizer"], "parent": "synthesizer", "children": [],
-     "summary": "Develop-and-repair on the nominal seed; only a passing policy becomes attackable.", "details": "Otherwise the run ends as no_working_policy and escalates.",
-     "docs": [], "code": [], "live": {"signal": "after_the_fact", "events": ["loop_event:no_working_policy"], "notes": ""}},
-    {"id": "repair", "label": "Repair rewrite", "owner": "synthesizer", "status": "built", "branch": ["synthesizer", "integration"], "parent": "synthesizer", "children": [],
-     "summary": "MuseOrchestrator runs one blocking muse exec per rewrite with the failure constraint.", "details": "About 43k tokens per rewrite observed.",
-     "docs": [{"path": "docs/orchestrator/phases.md", "branch": "integration", "heading": "Phase A"}], "code": ["src/ants/orchestrator/synthesis.py"],
-     "live": {"signal": "live", "events": ["muse_event:task.lifecycle.started", "muse_event:task.lifecycle.completed", "loop_event:cycle"], "notes": "Active between an attack_event with a failure and the cycle row."}},
-
-    {"id": "adversary", "label": "Adversary", "owner": "adversary", "status": "built", "branch": ["integration", "feature/system2"], "parent": null,
-     "children": ["selector", "proposer", "rollout", "diagnoser", "history"],
-     "summary": "Picks a category, proposes a bounded perturbation, rolls out the policy and diagnoses the failure.",
-     "details": "Attack() runs all inner steps synchronously, so the inner blocks cannot be shown live individually.",
-     "docs": [{"path": "docs/adversary/spec.md", "branch": "integration", "heading": "Architecture"}], "code": ["src/ants/adversary/"],
-     "live": {"signal": "live", "events": ["attack_event"], "notes": "Block-level only: active from the cycle start until attack_event."}},
-    {"id": "selector", "label": "Category selector", "owner": "adversary", "status": "built", "branch": ["integration"], "parent": "adversary", "children": [],
-     "summary": "Thompson sampling over categories with eta-uniform exploration.", "details": "eta=1.0 is the uniform baseline.",
-     "docs": [{"path": "docs/adversary/spec.md", "branch": "integration", "heading": "Components"}], "code": ["src/ants/adversary/planner/selector.py"],
-     "live": {"signal": "after_the_fact", "events": ["attack_event"], "notes": "Draws are in the attack record."}},
-    {"id": "proposer", "label": "Perturbation proposer", "owner": "adversary", "status": "built", "branch": ["integration"], "parent": "adversary", "children": [],
-     "summary": "M agents propose parameters; severity is clamped to rho in code.", "details": "",
-     "docs": [], "code": ["src/ants/adversary/planner/proposer.py"], "live": {"signal": "after_the_fact", "events": ["attack_event"], "notes": ""}},
-    {"id": "rollout", "label": "Sandboxed rollout", "owner": "adversary", "status": "built", "branch": ["integration"], "parent": "adversary", "children": [],
-     "summary": "Runs the program in mock or cap_harness backend; a crash is ERROR, never a task failure.", "details": "Real LIBERO rollouts take about 40 s each.",
-     "docs": [], "code": ["src/ants/adversary/rollout/"], "live": {"signal": "after_the_fact", "events": ["attack_event", "perception_*"], "notes": "With cap_harness, perception frames stream during the rollout."}},
-    {"id": "diagnoser", "label": "Diagnoser", "owner": "adversary", "status": "built", "branch": ["integration"], "parent": "adversary", "children": [],
-     "summary": "Model or rule diagnosis into mode, root cause and a constraint.", "details": "",
-     "docs": [], "code": ["src/ants/adversary/diagnoser/"], "live": {"signal": "after_the_fact", "events": ["attack_event"], "notes": ""}},
-    {"id": "history", "label": "Failure history", "owner": "adversary", "status": "built", "branch": ["integration"], "parent": "adversary", "children": [],
-     "summary": "Append-only attack log and per-category counts.", "details": "",
-     "docs": [], "code": ["src/ants/adversary/history/store.py"], "live": {"signal": "after_the_fact", "events": ["attack_event"], "notes": ""}},
-
-    {"id": "orchestrator", "label": "Orchestrator", "owner": "orchestrator", "status": "built", "branch": ["integration", "feature/orchestrator"], "parent": null,
-     "children": ["gate", "stall", "escalation", "stop", "admission"],
-     "summary": "Runs the closed loop: attack, feedback, rewrite, gate, stall and escalation.", "details": "Only package that knows both systems.",
-     "docs": [{"path": "docs/orchestrator/spec.md", "branch": "integration", "heading": "One cycle"}], "code": ["src/ants/orchestrator/loop.py"],
-     "live": {"signal": "live", "events": ["loop_event:start", "loop_event:cycle", "loop_event:end"], "notes": ""}},
-    {"id": "gate", "label": "Regression gate", "owner": "orchestrator", "status": "built", "branch": ["integration"], "parent": "orchestrator", "children": [],
-     "summary": "Accept a candidate only if no worse on every case and better on at least one.", "details": "A crash where the incumbent passed is a regression.",
-     "docs": [{"path": "docs/orchestrator/spec.md", "branch": "integration", "heading": "Hard rules"}], "code": ["src/ants/orchestrator/gate.py"],
-     "live": {"signal": "after_the_fact", "events": ["loop_event:cycle(decision, gate)"], "notes": ""}},
-    {"id": "stall", "label": "Stall counter", "owner": "orchestrator", "status": "built", "branch": ["integration"], "parent": "orchestrator", "children": [],
-     "summary": "Counts rejected cycles per failure signature (W=3 default, console uses 2).", "details": "",
-     "docs": [], "code": ["src/ants/orchestrator/loop.py"], "live": {"signal": "after_the_fact", "events": ["loop_event:cycle"], "notes": ""}},
-    {"id": "escalation", "label": "Escalation / human gate", "owner": "orchestrator", "status": "built", "branch": ["integration"], "parent": "orchestrator", "children": [],
-     "summary": "After W stalled cycles, ask a person for one targeted answer that becomes a constraint.", "details": "",
-     "docs": [], "code": ["src/ants/orchestrator/human_gate.py"], "live": {"signal": "live", "events": ["loop_event:escalate", "loop_event:human_answer"], "notes": "Waits on the human, so it is truly live."}},
-    {"id": "stop", "label": "Stop rule", "owner": "orchestrator", "status": "built", "branch": ["integration"], "parent": "orchestrator", "children": [],
-     "summary": "min_tests or posterior mode; also budget stop.", "details": "",
-     "docs": [], "code": [], "live": {"signal": "after_the_fact", "events": ["loop_event:end", "loop_event:cycle(budget_stop)"], "notes": ""}},
-    {"id": "admission", "label": "Skill admission and memory", "owner": "orchestrator", "status": "planned", "branch": [], "parent": "orchestrator", "children": [],
-     "summary": "Promote skills after a gate pass; experience memory. Cut for the hackathon (D18).", "details": "Concept slide only.",
-     "docs": [{"path": "docs/context.md", "branch": "integration", "heading": "Decisions log"}], "code": [], "live": {"signal": "static", "events": [], "notes": ""}},
-
-    {"id": "report", "label": "Certified skill / report", "owner": "io", "status": "partial", "branch": ["integration"], "parent": null, "children": [],
-     "summary": "summary.json, studio.html and held-out evaluation of v0 vs final.", "details": "",
-     "docs": [], "code": ["src/ants/orchestrator/heldout.py"], "live": {"signal": "after_the_fact", "events": ["done"], "notes": ""}},
-
-    {"id": "p_request", "label": "Task request", "owner": "io", "status": "planned", "branch": [], "parent": null, "children": [],
-     "summary": "Production entry: a task arrives and a stored policy is chosen.", "details": "Concept only (D18).", "docs": [{"path": "docs/context.md", "branch": "integration", "heading": "Decisions log"}], "code": [], "live": {"signal": "static", "events": [], "notes": "No production runtime."}},
-    {"id": "p_run", "label": "Run policy on robot", "owner": "io", "status": "planned", "branch": [], "parent": null, "children": [],
-     "summary": "Execute the certified program on the target.", "details": "No real-robot driver exists.", "docs": [], "code": [], "live": {"signal": "static", "events": [], "notes": ""}},
-    {"id": "p_monitor", "label": "Failure monitor + recovery", "owner": "io", "status": "planned", "branch": [], "parent": null, "children": [],
-     "summary": "Detect failures at runtime, run a recovery skill or ask a human.", "details": "Concept slide.", "docs": [], "code": [], "live": {"signal": "static", "events": [], "notes": ""}}
-  ],
-  "edges": [
-    {"from": "demo", "to": "synthesizer", "label": "DemoSpec", "loop": false, "modes": ["dev"]},
-    {"from": "synthesizer", "to": "orchestrator", "label": "policy / candidate", "loop": false, "modes": ["dev"]},
-    {"from": "orchestrator", "to": "adversary", "label": "attack incumbent", "loop": false, "modes": ["dev"]},
-    {"from": "adversary", "to": "orchestrator", "label": "AttackReport", "loop": true, "modes": ["dev"]},
-    {"from": "orchestrator", "to": "synthesizer", "label": "feedback + constraints", "loop": true, "modes": ["dev"]},
-    {"from": "orchestrator", "to": "report", "label": "certified", "loop": false, "modes": ["dev"]},
-    {"from": "report", "to": "p_request", "label": "certified skill", "loop": false, "modes": ["production"]},
-    {"from": "p_request", "to": "p_run", "label": "task", "loop": false, "modes": ["production"]},
-    {"from": "p_run", "to": "p_monitor", "label": "result", "loop": false, "modes": ["production"]},
-    {"from": "p_monitor", "to": "p_run", "label": "recovery", "loop": true, "modes": ["production"]}
-  ],
-  "layout": {
-    "dev": {
-      "demo": {"x": 20, "y": 120, "w": 160, "h": 80},
-      "synthesizer": {"x": 240, "y": 120, "w": 180, "h": 80},
-      "orchestrator": {"x": 480, "y": 120, "w": 180, "h": 80},
-      "adversary": {"x": 480, "y": 280, "w": 180, "h": 80},
-      "report": {"x": 720, "y": 120, "w": 160, "h": 80}
-    },
-    "production": {
-      "report": {"x": 20, "y": 120, "w": 160, "h": 80},
-      "p_request": {"x": 240, "y": 120, "w": 160, "h": 80},
-      "p_run": {"x": 460, "y": 120, "w": 160, "h": 80},
-      "p_monitor": {"x": 680, "y": 120, "w": 180, "h": 80}
-    }
+  {
+   "id": "extract",
+   "label": "Extract demo",
+   "owner": "synthesizer",
+   "status": "built",
+   "summary": "hurobo turns the clip into metric hand and object data (HumanDemo .npz).",
+   "details": "Controlled setup: one static camera, known intrinsics, markers. A rejected clip stops the pipeline.",
+   "code": [
+    "hurobo/scripts/02_extract_demos.py",
+    "hurobo/src/hurobo/extract.py"
+   ],
+   "docs": [
+    "docs/dev/reuse-from-hurobo.md"
+   ],
+   "children": [
+    "x_hand",
+    "x_markers",
+    "x_segment"
+   ],
+   "live": {
+    "signal": "live",
+    "note": "pipeline_stage extract; inner steps are not reported"
+   },
+   "stage": "extract",
+   "flow": true,
+   "pos": {
+    "col": 1,
+    "row": 0
+   }
+  },
+  {
+   "id": "x_hand",
+   "label": "Hand tracking",
+   "owner": "synthesizer",
+   "status": "built",
+   "summary": "Per-frame hand TCP (thumb and index midpoint) and pinch aperture.",
+   "details": "",
+   "code": [
+    "hurobo/src/hurobo/hand.py"
+   ],
+   "docs": [
+    "docs/dev/reuse-from-hurobo.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "grouped",
+    "note": "Part of the extract stage: only the stage as a whole reports."
+   },
+   "inherit": true
+  },
+  {
+   "id": "x_markers",
+   "label": "Marker poses",
+   "owner": "synthesizer",
+   "status": "built",
+   "summary": "ArUco poses of table, bowl and plate; static camera averaged over the clip.",
+   "details": "Objects are assumed static within a demo: start pose only.",
+   "code": [
+    "hurobo/src/hurobo/markers.py"
+   ],
+   "docs": [
+    "docs/dev/reuse-from-hurobo.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "grouped",
+    "note": "Part of the extract stage: only the stage as a whole reports."
+   },
+   "inherit": true
+  },
+  {
+   "id": "x_segment",
+   "label": "Grasp and release",
+   "owner": "synthesizer",
+   "status": "built",
+   "summary": "Grasp and release frames from the aperture, with hysteresis thresholds.",
+   "details": "",
+   "code": [
+    "hurobo/src/hurobo/extract.py"
+   ],
+   "docs": [
+    "docs/dev/reuse-from-hurobo.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "grouped",
+    "note": "Part of the extract stage: only the stage as a whole reports."
+   },
+   "inherit": true
+  },
+  {
+   "id": "demospec",
+   "label": "DemoSpec",
+   "owner": "synthesizer",
+   "status": "built",
+   "summary": "Object-relative JSON: keyframes, end-effector path, aperture, summary for the prompt.",
+   "details": "Distances in metres and as a fraction of the object radius, so they carry over to a simulator object of a different size.",
+   "code": [
+    "tools/hurobo_demospec.py"
+   ],
+   "docs": [
+    "docs/architecture.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "live",
+    "note": "pipeline_stage demospec"
+   },
+   "stage": "demospec",
+   "pos": {
+    "col": 2,
+    "row": 0
+   }
+  },
+  {
+   "id": "prompt",
+   "label": "Build prompt",
+   "owner": "synthesizer",
+   "status": "built",
+   "summary": "Rules, API reference, example, demo summary, scene and constraints.",
+   "details": "Improvement happens only through this context; nothing is trained.",
+   "code": [
+    "src/ants/synthesizer/prompt_generator.py"
+   ],
+   "docs": [
+    "docs/architecture.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "live",
+    "note": "pipeline_stage prompt"
+   },
+   "stage": "prompt",
+   "pos": {
+    "col": 3,
+    "row": 0
+   }
+  },
+  {
+   "id": "generate",
+   "label": "Muse writes program",
+   "owner": "synthesizer",
+   "status": "built",
+   "summary": "The frozen model writes a plain cap_harness script, then repairs it on the debug seed.",
+   "details": "Develop-and-repair runs up to the retry limit, under a hard token cap.",
+   "code": [
+    "src/ants/orchestrator/demo_vs_nodemo.py",
+    "src/ants/synthesizer/generator.py"
+   ],
+   "docs": [
+    "docs/architecture.md"
+   ],
+   "children": [
+    "g_model",
+    "g_static",
+    "g_debug"
+   ],
+   "live": {
+    "signal": "live",
+    "note": "pipeline_stage generate; inner steps are not reported"
+   },
+   "stage": "generate",
+   "flow": true,
+   "pos": {
+    "col": 4,
+    "row": 0
+   }
+  },
+  {
+   "id": "g_model",
+   "label": "Model call",
+   "owner": "synthesizer",
+   "status": "built",
+   "summary": "Muse Wonder returns the program text; replies are cached and tokens logged.",
+   "details": "",
+   "code": [
+    "src/ants/synthesizer/llm.py"
+   ],
+   "docs": [
+    "docs/architecture.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "grouped",
+    "note": "Part of the generate stage: only the stage as a whole reports."
+   },
+   "inherit": true
+  },
+  {
+   "id": "g_static",
+   "label": "Static checks",
+   "owner": "synthesizer",
+   "status": "built",
+   "summary": "Pre-flight AST check: syntax, call whitelist, no imports except math.",
+   "details": "",
+   "code": [],
+   "docs": [
+    "docs/architecture.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "grouped",
+    "note": "Part of the generate stage: only the stage as a whole reports."
+   },
+   "inherit": true
+  },
+  {
+   "id": "g_debug",
+   "label": "Debug rollout",
+   "owner": "synthesizer",
+   "status": "built",
+   "summary": "The program runs on the debug seed; a failure feeds the next repair attempt.",
+   "details": "",
+   "code": [
+    "src/ants/orchestrator/demo_vs_nodemo.py"
+   ],
+   "docs": [
+    "docs/architecture.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "grouped",
+    "note": "Part of the generate stage: only the stage as a whole reports."
+   },
+   "inherit": true
+  },
+  {
+   "id": "nominal",
+   "label": "Nominal check",
+   "owner": "orchestrator",
+   "status": "built",
+   "summary": "The policy must pass its nominal cases before it may be attacked.",
+   "details": "Otherwise the run ends as no_working_policy and escalates.",
+   "code": [
+    "src/ants/orchestrator/loop.py"
+   ],
+   "docs": [
+    "docs/orchestrator/spec.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "live",
+    "note": "Started by the loop's start row, which is logged just before the nominal rollouts. No event marks its end: the first attack result proves it passed."
+   },
+   "stage": "nominal",
+   "pos": {
+    "col": 5,
+    "row": 0
+   }
+  },
+  {
+   "id": "attack",
+   "label": "Adversary attack",
+   "owner": "adversary",
+   "status": "built",
+   "summary": "Pick a category, propose a bounded perturbation, roll the policy out.",
+   "details": "Adversary.attack() runs selector, proposer, rollout and diagnoser in one synchronous call.",
+   "code": [
+    "src/ants/adversary/adversary.py"
+   ],
+   "docs": [
+    "docs/adversary/spec.md"
+   ],
+   "children": [
+    "selector",
+    "proposer",
+    "rollout",
+    "history"
+   ],
+   "live": {
+    "signal": "live",
+    "note": "attack_event fires when the call returns. A dashed pulse means inferred: the previous cycle ended and the loop goes on, so the next attack is running, but no event marks its start."
+   },
+   "stage": "attack",
+   "flow": true,
+   "pos": {
+    "col": 5,
+    "row": 1
+   }
+  },
+  {
+   "id": "selector",
+   "label": "Category selector",
+   "owner": "adversary",
+   "status": "built",
+   "summary": "Thompson sampling over categories with eta-uniform exploration.",
+   "details": "eta=1.0 is the uniform baseline.",
+   "code": [
+    "src/ants/adversary/planner/selector.py"
+   ],
+   "docs": [
+    "docs/adversary/spec.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "grouped",
+    "note": "Inside Adversary.attack(): one synchronous call, no per-step events. All inner steps show the same grouped state; their order and timing are not observed live."
+   },
+   "inherit": true
+  },
+  {
+   "id": "proposer",
+   "label": "Perturbation proposer",
+   "owner": "adversary",
+   "status": "built",
+   "summary": "M agents propose parameters; severity is clamped to rho in code.",
+   "details": "",
+   "code": [
+    "src/ants/adversary/planner/proposer.py",
+    "src/ants/adversary/perturbations/space.py"
+   ],
+   "docs": [
+    "docs/adversary/spec.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "grouped",
+    "note": "Inside Adversary.attack(): one synchronous call, no per-step events. All inner steps show the same grouped state; their order and timing are not observed live."
+   },
+   "inherit": true
+  },
+  {
+   "id": "rollout",
+   "label": "Sandboxed rollout",
+   "owner": "adversary",
+   "status": "built",
+   "summary": "Runs the program under the perturbation; a crash is ERROR, never a task failure.",
+   "details": "About 40 s per run on the real simulator.",
+   "code": [
+    "src/ants/adversary/rollout/runner.py"
+   ],
+   "docs": [
+    "docs/adversary/spec.md"
+   ],
+   "children": [
+    "r_mock",
+    "r_aspire"
+   ],
+   "live": {
+    "signal": "grouped",
+    "note": "Inside Adversary.attack(): one synchronous call, no per-step events. All inner steps show the same grouped state; their order and timing are not observed live."
+   },
+   "inherit": true
+  },
+  {
+   "id": "r_mock",
+   "label": "Mock world",
+   "owner": "adversary",
+   "status": "built",
+   "summary": "Offline toy world with one failure mechanism per category.",
+   "details": "Default backend; free and instant.",
+   "code": [
+    "src/ants/adversary/rollout/mock_backend.py"
+   ],
+   "docs": [
+    "docs/adversary/spec.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "static",
+    "note": "Which backend ran is in the run_started event, not per step."
+   }
+  },
+  {
+   "id": "r_aspire",
+   "label": "cap_harness backend",
+   "owner": "adversary",
+   "status": "built",
+   "summary": "Real LIBERO rollout in ASPIRE, run as a subprocess; writes trace and video.",
+   "details": "",
+   "code": [
+    "src/ants/adversary/rollout/aspire_backend.py",
+    "tools/aspire_launch.py"
+   ],
+   "docs": [
+    "docs/adversary/spec.md"
+   ],
+   "children": [
+    "p_perception",
+    "p_grasp",
+    "p_motion"
+   ],
+   "live": {
+    "signal": "static",
+    "note": "Which backend ran is in the run_started event, not per step."
+   }
+  },
+  {
+   "id": "p_perception",
+   "label": "localize_object",
+   "owner": "adversary",
+   "status": "built",
+   "summary": "Harness perception from SAM 3 and RGB-D.",
+   "details": "Service on port 8114.",
+   "code": [],
+   "docs": [
+    "docs/adversary/spec.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "static",
+    "note": "Called by the program inside the rollout; not reported live."
+   }
+  },
+  {
+   "id": "p_grasp",
+   "label": "generate_grasps",
+   "owner": "adversary",
+   "status": "built",
+   "summary": "Harness grasp generation (Contact-GraspNet).",
+   "details": "",
+   "code": [],
+   "docs": [
+    "docs/adversary/spec.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "static",
+    "note": "Called by the program inside the rollout; not reported live."
+   }
+  },
+  {
+   "id": "p_motion",
+   "label": "move_to_pose",
+   "owner": "adversary",
+   "status": "built",
+   "summary": "Harness motion planning (PyRoki, cuRobo).",
+   "details": "Services on ports 8116 and 8118.",
+   "code": [],
+   "docs": [
+    "docs/adversary/spec.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "static",
+    "note": "Called by the program inside the rollout; not reported live."
+   }
+  },
+  {
+   "id": "history",
+   "label": "Failure history",
+   "owner": "adversary",
+   "status": "built",
+   "summary": "Append-only attack log and per-category counts; F_n for the gate.",
+   "details": "",
+   "code": [
+    "src/ants/adversary/history/store.py"
+   ],
+   "docs": [
+    "docs/adversary/spec.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "grouped",
+    "note": "Inside Adversary.attack(): one synchronous call, no per-step events. All inner steps show the same grouped state; their order and timing are not observed live."
+   },
+   "inherit": true
+  },
+  {
+   "id": "diagnose",
+   "label": "Diagnose failure",
+   "owner": "adversary",
+   "status": "built",
+   "summary": "Rules or model name the mode, root cause and a constraint.",
+   "details": "Runs inside attack(), so it finishes with it. Skipped when the attack did not fail the policy.",
+   "code": [
+    "src/ants/adversary/diagnoser/rules.py",
+    "src/ants/adversary/diagnoser/model.py"
+   ],
+   "docs": [
+    "docs/adversary/spec.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "after_the_fact",
+    "note": "Proven by attack_event with a failure outcome: the report carries the diagnosis. No live running state exists."
+   },
+   "stage": "diagnose",
+   "pos": {
+    "col": 4,
+    "row": 1
+   }
+  },
+  {
+   "id": "rewrite",
+   "label": "Muse rewrites",
+   "owner": "synthesizer",
+   "status": "built",
+   "summary": "One blocking muse exec per failure, with the constraint in context.",
+   "details": "About 46k tokens per rewrite in the logged test runs.",
+   "code": [
+    "src/ants/orchestrator/muse_orchestrator.py",
+    "src/ants/orchestrator/synthesis.py"
+   ],
+   "docs": [
+    "docs/orchestrator/spec.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "live",
+    "note": "Running from attack_event with a failure, which fires just before the rewrite call, until the cycle row."
+   },
+   "stage": "rewrite",
+   "pos": {
+    "col": 3,
+    "row": 1
+   }
+  },
+  {
+   "id": "gate",
+   "label": "Regression gate",
+   "owner": "orchestrator",
+   "status": "built",
+   "summary": "Accept a candidate only if no worse on every case and better on at least one.",
+   "details": "A crash on a case the incumbent passed is a regression. The candidate replays every case seen so far.",
+   "code": [
+    "src/ants/orchestrator/gate.py"
+   ],
+   "docs": [
+    "docs/orchestrator/spec.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "after_the_fact",
+    "note": "The replay runs inside Loop with no event, so the block only shows the verdict from the cycle row. Its replay time counts toward Muse rewrites."
+   },
+   "stage": "gate",
+   "pos": {
+    "col": 2,
+    "row": 1
+   }
+  },
+  {
+   "id": "deploy",
+   "label": "Save to deploy",
+   "owner": "io",
+   "status": "built",
+   "summary": "/deploy copies the highest accepted version to data/deploy/.",
+   "details": "",
+   "code": [
+    "src/ants/studio/console_server.py"
+   ],
+   "docs": [],
+   "children": [],
+   "live": {
+    "signal": "live",
+    "note": "pipeline_stage deploy only."
+   },
+   "stage": "deploy",
+   "pos": {
+    "col": 1,
+    "row": 1
+   }
+  },
+  {
+   "id": "memory",
+   "label": "Experience memory",
+   "owner": "orchestrator",
+   "status": "planned",
+   "summary": "Store policies and retrieve by similarity. Cut for the hackathon (D18).",
+   "details": "Concept slide only, no code. Never lights up.",
+   "code": [],
+   "docs": [
+    "docs/context.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "static",
+    "note": "Planned: no runtime exists."
+   },
+   "pos": {
+    "col": 1,
+    "row": 2
+   }
+  },
+  {
+   "id": "escalation",
+   "label": "Ask a human",
+   "owner": "orchestrator",
+   "status": "built",
+   "summary": "After W stalled cycles, ask a person for one targeted answer that becomes a constraint.",
+   "details": "",
+   "code": [
+    "src/ants/orchestrator/human_gate.py"
+   ],
+   "docs": [
+    "docs/orchestrator/spec.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "live",
+    "note": "loop_event escalate and human_answer, and awaiting_answer. It waits on the person, so this is truly live."
+   },
+   "stage": "escalation",
+   "pos": {
+    "col": 2,
+    "row": 2
+   }
   }
+ ],
+ "edges": [
+  {
+   "from": "video",
+   "to": "extract"
+  },
+  {
+   "from": "extract",
+   "to": "demospec"
+  },
+  {
+   "from": "demospec",
+   "to": "prompt"
+  },
+  {
+   "from": "prompt",
+   "to": "generate"
+  },
+  {
+   "from": "generate",
+   "to": "nominal"
+  },
+  {
+   "from": "nominal",
+   "to": "attack"
+  },
+  {
+   "from": "attack",
+   "to": "diagnose"
+  },
+  {
+   "from": "diagnose",
+   "to": "rewrite"
+  },
+  {
+   "from": "rewrite",
+   "to": "gate"
+  },
+  {
+   "from": "gate",
+   "to": "deploy"
+  },
+  {
+   "from": "gate",
+   "to": "attack",
+   "loop": true,
+   "label": "next cycle"
+  },
+  {
+   "from": "gate",
+   "to": "memory",
+   "planned": true
+  },
+  {
+   "from": "gate",
+   "to": "escalation",
+   "label": "stalled"
+  },
+  {
+   "from": "escalation",
+   "to": "attack",
+   "loop": true,
+   "label": "answer"
+  }
+ ]
 }

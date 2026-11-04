@@ -47,6 +47,9 @@ STATIC_FILES = {
     "console.js": STATIC_DIR / "console.js",
     "wizard.js": STATIC_DIR / "wizard.js",
     "studio_switch.js": STATIC_DIR / "studio_switch.js",
+    "flow.js": STATIC_DIR / "flow.js",
+    "flow.css": STATIC_DIR / "flow.css",
+    "flow_blocks.json": REPO_ROOT / "docs" / "studio" / "process-flow-blocks.json",
 }
 
 
