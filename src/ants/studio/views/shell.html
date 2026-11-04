@@ -38,6 +38,12 @@ try {
       <button class="tabbtn" id="tabbtn-synthesizer" type="button">Synthesizer</button>
       <button class="tabbtn" id="tabbtn-adversary" type="button">Adversary</button>
     </nav>
+    <div class="h navh">Session</div>
+    <div class="navsess">
+      <div class="navnote mono" id="session-id" title="Everything from this session (chat, events, runs) is stored in data/console_sessions/&lt;id&gt;/">&hellip;</div>
+      <button class="btn sm" id="new-session" type="button" title="Start a fresh session: clears the page and the server's chat state, and opens a new storage folder. The old session folder is kept.">New session</button>
+      <div class="navnote" id="session-msg"></div>
+    </div>
     <div class="h navh">Runs</div>
     <div class="navruns" id="navruns"><div class="navnote">loading&hellip;</div></div>
   </aside>

@@ -221,3 +221,6 @@ body[data-tab="console"] .console-only{display:inline-flex}
 .turn.expanded .main{max-height:none}
 .turn-more{background:none;border:0;padding:2px 0;margin-top:2px;font-size:13.7px;color:var(--accent);cursor:pointer}
 .turn-more:hover{text-decoration:underline}
+.navsess{display:flex;flex-direction:column;gap:6px;align-items:flex-start;padding:0 4px 10px}
+.navsess .navnote{padding:0}
+.navsess .mono{font-family:var(--mono)}

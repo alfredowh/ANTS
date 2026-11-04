@@ -131,6 +131,20 @@ src/ants/studio/
   referencing the deleted element ids, throwing on load and silently halting every script after them
   — including item B's centered-chat logic. Caught via screenshot + console-log grep.
 
+## Sessions (added 2026-11-04)
+
+One server start = one session folder `data/console_sessions/<sess-YYYYmmdd-HHMMSS>/` (git-ignored):
+`session.json` (id, started, CLI config, incumbent; no secrets), `chat.jsonl` (every chat message:
+role, case, ts; the agent reply is one row when it finishes), `events.jsonl` (every SSE event
+broadcast) and `runs/run-<ts>/` (the loop's per-run folders, formerly `data/console_runs/`). The
+navigator has a **New session** button: `POST /session/new` (409 while a run or an escalation
+answer is pending) starts a fresh folder, clears the server's queued chat, broadcasts
+`session_reset`; the page clears turns, usage, reply and the saved snapshot but keeps theme, column
+and panel prefs. The old folder is kept. `--session <id>` resumes a folder. `GET /session` returns
+the current id; `/runs` lists this session's runs plus older `data/console_runs/` ones read-only.
+The incumbent program is a fixed file and the loop never writes it, so there is no incumbent state
+to reset server-side.
+
 ## Known environment issue this session: headless-Chrome screenshot hangs
 
 Starting around the theme/scene-panel commits, `google-chrome --headless=new ...` started hanging
