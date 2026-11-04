@@ -1007,6 +1007,7 @@ function sendChat() {
   const message = input.value.trim();
   if (!message) return;
   input.value = "";
+  if (window.wizardHandle && window.wizardHandle(message)) return; // /policy-dev wizard
   if (chatMode === "awaiting_answer") {
     addTurn("chat-turn you", `<div class="tk">you (answering)</div><div class="main">${esc(message)}</div>`);
   } else {

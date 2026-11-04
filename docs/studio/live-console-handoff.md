@@ -218,3 +218,9 @@ real content (constraint history, Thompson posteriors, attack history table, etc
 6. Start item A, or ask the user what's next — everything here was built turn-by-turn from live
    feedback, there is no separate plan document beyond `docs/studio/dashboard-todo.md` and
    `docs/studio/chat-field-design.md`.
+
+## `/policy-dev` wizard (plan A)
+
+Type `/policy-dev` in the chat (or click the chip next to the composer, then Enter). The questions, defaults and limits are plain data in `docs/studio/skills/policy-dev.json`; `src/ants/studio/policy_wizard.py` walks them as a state machine (no model call); `static/wizard.js` renders turns. Routes: `GET/POST /wizard` (`action` = start | message | cancel) and `POST /upload` (raw body, `X-Filename`; video extensions only, max 200 MB, stored under `<data/console_sessions or data/console_uploads>/wizard-<ts>/uploads/`, never executed). Every step and answer goes to that folder's `wizard.jsonl`. "go with defaults" fills the remaining steps but never the final confirmation: nothing launches without an explicit "yes" (Muse costs about $13.5 per million tokens; above 100k tokens the summary says so).
+
+Launch is real but gated: it runs `ants.orchestrator.demo_vs_nodemo` (one sample, `demo` or `nodemo` arm, `--repairs` and `--token-budget` from the answers) and, for Synthesizer + Adversary, then `run_live_loop` on the generated program with the chosen cycles, stall window and eta (random = 1.0, Thompson = 0.2). Before launching it checks what is missing and shows it in the console: ASPIRE checkout, `META_API_KEY`, and the demonstration. **An uploaded video cannot be turned into a DemoSpec yet** (no extractor; SAM 3.1 tracking is a stretch goal, decision D14), so the wizard says so and asks for an existing DemoSpec (`data/demospecs/*.json`) or none. Tests: `tests/studio/test_policy_wizard.py` (stubbed launcher, no tokens). Not exercised end to end: a real paid generation run.

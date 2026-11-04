@@ -224,3 +224,9 @@ body[data-tab="console"] .console-only{display:inline-flex}
 .navsess{display:flex;flex-direction:column;gap:6px;align-items:flex-start;padding:0 4px 10px}
 .navsess .navnote{padding:0}
 .navsess .mono{font-family:var(--mono)}
+/* /policy-dev wizard */
+.wizard-chip{border:1px solid var(--line);background:var(--raise);color:var(--accent,#1877F2);border-radius:14px;padding:3px 10px;font-size:12px;cursor:pointer;flex:none}
+.wizard-chip:hover{border-color:var(--accent,#1877F2)}
+.turn.wizard-turn .main{white-space:pre-wrap}
+.turn.wizard-turn.needs .tk{color:#d9534f}
+#chat-attach.wizard-ask{border-color:var(--accent,#1877F2);color:var(--accent,#1877F2);box-shadow:0 0 0 3px rgba(24,119,242,.2)}
