@@ -219,8 +219,22 @@ real content (constraint history, Thompson posteriors, attack history table, etc
    feedback, there is no separate plan document beyond `docs/studio/dashboard-todo.md` and
    `docs/studio/chat-field-design.md`.
 
-## `/policy-dev` wizard (plan A)
+## `/policy-dev`: the full pipeline
 
-Type `/policy-dev` in the chat (or click the chip next to the composer, then Enter). The questions, defaults and limits are plain data in `docs/studio/skills/policy-dev.json`; `src/ants/studio/policy_wizard.py` walks them as a state machine (no model call); `static/wizard.js` renders turns. Routes: `GET/POST /wizard` (`action` = start | message | cancel) and `POST /upload` (raw body, `X-Filename`; video extensions only, max 200 MB, stored under `<data/console_sessions or data/console_uploads>/wizard-<ts>/uploads/`, never executed). Every step and answer goes to that folder's `wizard.jsonl`. "go with defaults" fills the remaining steps but never the final confirmation: nothing launches without an explicit "yes" (Muse costs about $13.5 per million tokens; above 100k tokens the summary says so).
+Click the `/policy-dev` chip (it fills the input and enables `+`), choose a human demo video, type the task, press Enter. No question is asked and there is no confirmation; the cap below is shown when it starts. `+` opens the server's native dialog (`POST /pick-video`, zenity, at `hurobo/data/raw/e1/clips` or `--video-dir`) and returns a path with no upload. Without zenity or a DISPLAY it says so and uses the browser picker (`POST /upload`, stored in the session's `uploads/`), which cannot open at a chosen folder.
 
-Launch is real but gated: it runs `ants.orchestrator.demo_vs_nodemo` (one sample, `demo` or `nodemo` arm, `--repairs` and `--token-budget` from the answers) and, for Synthesizer + Adversary, then `run_live_loop` on the generated program with the chosen cycles, stall window and eta (random = 1.0, Thompson = 0.2). Before launching it checks what is missing and shows it in the console: ASPIRE checkout, `META_API_KEY`, and the demonstration. **An uploaded video cannot be turned into a DemoSpec yet** (no extractor; SAM 3.1 tracking is a stretch goal, decision D14), so the wizard says so and asks for an existing DemoSpec (`data/demospecs/*.json`) or none. Tests: `tests/studio/test_policy_wizard.py` (stubbed launcher, no tokens). Not exercised end to end: a real paid generation run.
+Defaults and limits: `docs/studio/skills/policy-dev.json`. Code: `src/ants/studio/policy_dev.py`, client `static/wizard.js`, route `POST/GET /policy-dev`. Stages, all in `<session>/runs/run-<ts>/` (`pipeline.jsonl` has every stage and exact command) and streamed as `pipeline_start`, `pipeline_stage`, `pipeline_output`:
+
+1. **Preflight** `ants.orchestrator.preflight --muse-code`, plus a scan for another simulator job (two at once give fake depth failures). Failing spends nothing.
+2. **Extraction** `hurobo/scripts/02_extract_demos.py` with the measured 5.75 cm marker, s10e intrinsics and `cuts.json`, into `demo/hurobo/`. Marker setup clips only; hurobo's `usable` verdict decides. A rejected clip stops the run, says why and offers a no-demo run; it never falls back on its own.
+3. **DemoSpec** `tools/hurobo_demospec.py` to `demo/demospec.json`.
+4. **Prompt** saved to `prompt_messages.json` before any spend.
+5. **Synthesizer** `ants.orchestrator.demo_vs_nodemo`, one sample, demo arm (nodemo without a video), T 0.2, 4 repairs, seed 51, stock scene (the same scene the Adversary attacks), in `generation/`. The program is the latest attempt whose `record.json` trace has `task_success`, not the newest file. If none passed the run ends as `no_working_policy` and nothing is attacked.
+6. **Adversary** the live `Loop` in the same run folder with `backend=cap_harness`, mock proposer, eta 0.2, 5 cycles, W = 2.
+
+**Budget.** 300k Muse tokens in total (`--pipeline-token-budget`): generation may spend 150k, rewrites get `300k - generation spent - 50k`. Both budgets are checked before each call, so one call can overshoot; the 50k keeps one observed call (about 46k) of headroom. A single call above 50k could pass the total.
+
+**Stop.** Kills every descendant of the server and keeps doing so until the run ends, so a gate replay cannot start a new rollout. Reported as `user_stop` in the console and in `pipeline.jsonl`; `loop.jsonl` and `summary.json` still hold Loop's own `budget` label, because Loop reads a killed rewrite as a spent budget.
+
+Removed: the question-by-question wizard (`policy_wizard.py`), `/policy-dev setup`, `/cancel`, `/wizard`.
+

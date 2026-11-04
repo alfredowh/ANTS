@@ -247,3 +247,7 @@ body[data-tab="console"] .console-only{display:inline-flex}
 .stop-btn{background:#d9342b;border-color:#d9342b;color:#fff;margin-left:8px}
 .stop-btn:hover{background:#b72a22;border-color:#b72a22}
 .stop-btn[hidden]{display:none}
+.video-chip{display:inline-flex;align-items:center;gap:6px;max-width:320px;border:1px solid var(--accent,#1877F2);border-radius:10px;padding:1px 4px 1px 9px;font-size:13.7px;line-height:1.4;color:var(--fg)}
+.video-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.video-chip button{border:0;background:none;color:var(--muted);cursor:pointer;padding:0 4px;font-size:15px;line-height:1}
+.pipeline-out{white-space:pre-wrap;font-family:var(--mono);font-size:13px;color:var(--dim)}

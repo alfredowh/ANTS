@@ -1,31 +1,12 @@
 {
   "name": "policy-dev",
-  "version": 1,
-  "description": "Guided setup for one policy-development run: task, optional demonstration, Synthesizer only or Synthesizer + Adversary, budgets and retries, Adversary sampling strategy, then an explicit confirmation. Plain data: any agent (Muse Wonder, Muse Code, a person) can read the questions, and the Studio server walks them as a state machine without a model call. Muse tokens cost about $13.5 per million, so nothing launches without an explicit 'yes' at the last step, and 'go with defaults' never skips that step.",
-  "commands": {"start": "/policy-dev", "cancel": "/cancel", "defaults": ["defaults", "go with defaults", "default", "go"]},
-  "limits": {"paid_confirm_above_tokens": 100000, "token_budget_max": 600000, "upload_max_mb": 200, "video_extensions": [".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"]},
-  "steps": [
-    {"id": "task", "type": "text", "default": "put the bowl on the plate", "ask": "What should the robot do? Describe the task in one sentence."},
-    {"id": "demo", "type": "choice", "default": "none", "ask": "Do you have an example demonstration?",
-     "choices": [
-       {"value": "video", "label": "video", "help": "attach a human demo video with the + button"},
-       {"value": "demospec", "label": "demospec", "help": "use a DemoSpec already extracted under data/demospecs/"},
-       {"value": "none", "label": "none", "help": "no demonstration: the generator works from the task text only"}]},
-    {"id": "video", "type": "upload", "when": {"demo": "video"}, "ask": "Attach the video with the + button (mp4, mov, webm, mkv, avi, m4v; up to 200 MB). Say 'skip' to continue without it."},
-    {"id": "demospec", "type": "demospec", "when": {"demo": "demospec"}, "ask": "Which DemoSpec? Give its number or file name."},
-    {"id": "mode", "type": "choice", "default": "synth", "ask": "What should run?",
-     "choices": [
-       {"value": "synth", "label": "synthesizer", "help": "write the first program from the demo and task, then stop"},
-       {"value": "synth_adv", "label": "synthesizer + adversary", "help": "write the program, then run the closed loop: attack, repair, gate"}]},
-    {"id": "synth_budget", "type": "int", "default": 100000, "min": 10000, "max": 600000, "ask": "Synthesizer token budget (hard cap on new Muse tokens)?"},
-    {"id": "synth_retries", "type": "int", "default": 2, "min": 0, "max": 8, "ask": "Synthesizer max retries (repair attempts on a failing program)?"},
-    {"id": "adv_cycles", "type": "int", "when": {"mode": "synth_adv"}, "default": 3, "min": 1, "max": 30, "ask": "Adversary budget: how many attacks (cycles) at most?"},
-    {"id": "adv_stall", "type": "int", "when": {"mode": "synth_adv"}, "default": 2, "min": 1, "max": 6, "ask": "Adversary max retries: how many stalled cycles on one failure before escalating to you?"},
-    {"id": "strategy", "type": "choice", "when": {"mode": "synth_adv"}, "default": "thompson", "ask": "How should the Adversary pick what to attack?",
-     "choices": [
-       {"value": "thompson", "label": "thompson", "help": "adaptive: favour categories most likely to break the policy (eta 0.2)", "eta": 0.2},
-       {"value": "uniform", "label": "random", "help": "uniform sampling over categories (eta 1.0), the baseline", "eta": 1.0}]},
-    {"id": "confirm", "type": "choice", "confirm": true, "default": null, "ask": "Launch this run?",
-     "choices": [{"value": "yes", "label": "yes", "help": "start now"}, {"value": "no", "label": "no", "help": "cancel the wizard"}]}
-  ]
+  "version": 2,
+  "description": "One command runs the whole pipeline: /policy-dev <task> with an optional human demo video. Stages: preflight, video to hurobo demonstration data (markers required), DemoSpec JSON, prompt, Synthesizer (program, develop-and-repair on one acceptance seed), Adversary loop (attack, diagnose, rewrite, gate). Plain data: any agent can read these defaults and limits; the Studio server reads them from this file. Bowl-on-plate only. Muse tokens cost about $13.5 per million.",
+  "command": "/policy-dev <task>",
+  "scene": {"suite": "libero_goal_swap", "task_id": 8, "task_must_mention": ["bowl", "plate"], "debug_seed": 51, "backend": "cap_harness", "scene": "stock"},
+  "video": {"folder": "hurobo/data/raw/e1/clips", "extensions": [".mp4", ".mov", ".webm", ".mkv", ".avi", ".m4v"], "upload_max_mb": 200},
+  "extraction": {"python": "hurobo/.venv/bin/python", "cwd": "hurobo", "setup": "data/raw/setup_01/measurements.yaml", "intrinsics": "data/camera_intrinsics_s10e.npz", "cuts": "data/raw/e1/cuts.json", "marker_size_m": 0.0575, "note": "Only clips of the ArUco/ChArUco marker setup can be extracted. Marker size is the measured 5.75 cm; the stored demospecs used 6.0 cm."},
+  "synthesizer": {"arm_with_video": "demo", "arm_without_video": "nodemo", "temperature": 0.2, "repairs": 4},
+  "adversary": {"model": "mock", "eta": 0.2, "cycles": 5, "stall_window": 2},
+  "budget": {"total_tokens": 300000, "generation_tokens": 150000, "one_call_headroom_tokens": 50000, "usd_per_million_tokens": 13.5, "note": "Budgets are checked before each model call, so one call can overshoot; each stage therefore keeps one call of headroom below the total."}
 }

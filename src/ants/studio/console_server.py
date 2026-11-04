@@ -33,7 +33,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from ants.studio.policy_wizard import WizardManager, launch_generation
+from ants.studio import policy_dev
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PHASES_DOC = REPO_ROOT / "docs" / "orchestrator" / "phases.md"
@@ -643,12 +643,21 @@ class LoopRunConfig:
     stall_window: int = 2  # W: cycles one failure signature may stall before escalation
     nominal_seeds: tuple[int, ...] = (51,)  # acceptance seeds for the nominal cases
     synth_token_budget: int = 200_000
+    video_dir: Path | None = None  # where /policy-dev's file dialog opens (None: the skill file's)
+    pipeline_token_budget: int | None = None  # /policy-dev total Muse cap (None: the skill file's)
     reasoning_effort: str = "high"
     max_model_steps: int = 20
     out_dir: Path = field(default_factory=lambda: REPO_ROOT / "data" / "console_runs")
 
 
-def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
+def run_live_loop(
+    state: RunState,
+    incumbent: Path,
+    cfg: LoopRunConfig,
+    *,
+    run_dir: Path | None = None,
+    task: str = "put the bowl on the plate",
+) -> None:
     """Drive one real `Loop.run()` call, tailing `loop.jsonl` live and broadcasting each row."""
     from ants.adversary import Adversary, AdversaryConfig
     from ants.adversary.perturbations import Bounds
@@ -662,13 +671,11 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
         state.broadcast({"kind": "error", "message": f"MuseOrchestrator unavailable: {exc}"})
         return
 
-    run_dir = cfg.out_dir / time.strftime("run-%Y%m%dT%H%M%S")
+    run_dir = run_dir or cfg.out_dir / time.strftime("run-%Y%m%dT%H%M%S")
     # Tell the UI where this run is being saved before anything runs, so the folder is
     # findable even if the run later crashes.
     state.broadcast({"kind": "run_started", "run_dir": str(run_dir), "backend": cfg.backend})
-    policy = Policy(
-        "bowl_on_plate", 0, "put the bowl on the plate", incumbent.read_text(encoding="utf-8")
-    )
+    policy = Policy("bowl_on_plate", 0, task, incumbent.read_text(encoding="utf-8"))
 
     adv_kwargs: dict = {
         "model": cfg.adversary_model,
@@ -781,6 +788,12 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
                                 pass
                             if detail:
                                 row["rewrite_detail"] = detail
+                        if state.stop_requested.is_set():
+                            # Stop killed the rewrite, which Loop reads as a spent budget.
+                            if row.get("decision") == "budget_stop":
+                                row["decision"] = "user_stop"
+                            if row.get("stopped") == "budget":
+                                row["stopped"] = "user_stop"
                         state.broadcast({"kind": "loop_event", "row": row})
                     pos = f.tell()
             time.sleep(0.3)
@@ -932,22 +945,30 @@ def make_handler(
             state.running = on
             return True
 
-    def _wizard_run_loop(program: Path, answers: dict) -> None:
+    def _pipeline_run_loop(program: Path, task: str, run_dir: Path, budget: int) -> None:
+        adv = policy_dev.load_skill()["adversary"]
         cfg = dataclasses.replace(
             loop_cfg or LoopRunConfig(),
-            cycles=answers.get("adv_cycles", 3),
-            stall_window=answers.get("adv_stall", 2),
-            eta=1.0 if answers.get("strategy") == "uniform" else 0.2,
-            synth_token_budget=answers["synth_budget"],
+            backend="cap_harness",
+            adversary_model=adv["model"],
+            eta=adv["eta"],
+            cycles=adv["cycles"],
+            stall_window=adv["stall_window"],
+            synth_token_budget=budget,
         )
-        run_live_loop(state, program, cfg)
+        run_live_loop(state, program, cfg, run_dir=run_dir, task=task)
 
-    wizard = WizardManager(
+    skill = policy_dev.load_skill()
+    if loop_cfg and loop_cfg.pipeline_token_budget:
+        skill["budget"]["total_tokens"] = loop_cfg.pipeline_token_budget
+    pipeline = policy_dev.Manager(
         state.broadcast,
-        launcher=lambda a, folder, emit: launch_generation(
-            a, folder, emit, run_loop=_wizard_run_loop
-        ),
         set_running=_set_running,
+        run_loop=_pipeline_run_loop,
+        stop_requested=state.stop_requested.is_set,
+        clear_stop=state.stop_requested.clear,
+        runs_dir=lambda: state.session.runs_dir if state.session else LEGACY_RUNS_DIR,
+        skill=skill,
     )
 
     class Handler(BaseHTTPRequestHandler):
@@ -1094,8 +1115,8 @@ def make_handler(
                 self.end_headers()
                 self.wfile.write(body)
                 return
-            if path == "/wizard":
-                self._send_json(wizard.state())
+            if path == "/policy-dev":
+                self._send_json({"running": state.running, "current": pipeline.current})
                 return
             if path == "/events":
                 self.send_response(200)
@@ -1128,8 +1149,14 @@ def make_handler(
             if path == "/session/new":
                 self._handle_new_session()
                 return
-            if path == "/wizard":
-                self._handle_wizard()
+            if path == "/policy-dev":
+                self._handle_policy_dev()
+                return
+            if path == "/pick-video":
+                folder = (loop_cfg.video_dir if loop_cfg else None) or (
+                    REPO_ROOT / skill["video"]["folder"]
+                )
+                self._send_json(policy_dev.pick_video(folder, skill["video"]["extensions"]))
                 return
             if path == "/upload":
                 self._handle_upload()
@@ -1145,6 +1172,17 @@ def make_handler(
                 if waiting is not None:
                     waiting.put("")  # unblock a pending escalation question
                 killed = kill_child_processes()
+
+                def keep_killing() -> None:
+                    # the gate's next replay would otherwise start a new rollout after this kill
+                    for _ in range(300):
+                        with state.lock:
+                            if not state.running:
+                                return
+                        kill_child_processes()
+                        time.sleep(1)
+
+                threading.Thread(target=keep_killing, daemon=True).start()
                 state.broadcast({"kind": "stop_requested", "killed": killed})
                 self._send_json({"ok": True, "killed": killed})
                 return
@@ -1261,34 +1299,28 @@ def make_handler(
             state.broadcast({"kind": "session_reset", "session": state.session.id})
             self._send_json({"ok": True, "session": state.session.id})
 
-        def _handle_wizard(self) -> None:
+        def _handle_policy_dev(self) -> None:
+            if not (self.headers.get("Content-Type") or "").startswith("application/json"):
+                self._send_json({"ok": False, "error": "expected JSON"}, status=415)
+                return
             length = int(self.headers.get("Content-Length", "0"))
             body = json.loads(self.rfile.read(length) or b"{}")
-            action = body.get("action")
-            if action == "start":
-                self._send_json(wizard.start())
-            elif action == "cancel":
-                self._send_json(wizard.cancel())
-            elif action == "message":
-                self._send_json(wizard.message(str(body.get("message") or "")))
-            else:
-                self._send_json({"ok": False, "error": "unknown action"}, status=400)
+            self._send_json(
+                pipeline.start(str(body.get("task") or "").strip(), body.get("video") or None)
+            )
 
         def _handle_upload(self) -> None:
-            limit = wizard.skill["limits"]["upload_max_mb"] * 1024 * 1024
+            limit = skill["video"]["upload_max_mb"] * 1024 * 1024
             length = int(self.headers.get("Content-Length", "0"))
             name = unquote(self.headers.get("X-Filename", ""))
-            target = wizard.upload_target(name)
-            if target is None:
+            safe = policy_dev.safe_upload_name(name, skill["video"]["extensions"])
+            if safe is None or state.session is None:
                 self._send_json(
-                    {
-                        "ok": False,
-                        "error": "no video is being asked for, or the file type is not "
-                        "an allowed video extension",
-                    },
+                    {"ok": False, "error": "that file type is not an allowed video extension"},
                     status=400,
                 )
                 return
+            target = state.session.dir / "uploads" / safe
             if length <= 0 or length > limit:
                 self._send_json(
                     {"ok": False, "error": f"file must be 1 byte to {limit // 1024 // 1024} MB"},
@@ -1308,7 +1340,7 @@ def make_handler(
                 target.unlink(missing_ok=True)
                 self._send_json({"ok": False, "error": "upload was cut short"}, status=400)
                 return
-            self._send_json(wizard.uploaded(target))
+            self._send_json({"ok": True, "path": str(target), "name": target.name})
 
         def _handle_chat(self) -> None:
             length = int(self.headers.get("Content-Length", "0"))

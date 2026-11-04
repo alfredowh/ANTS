@@ -1,16 +1,14 @@
-/* /policy-dev wizard client. The questions live in docs/studio/skills/policy-dev.json and the
-   state machine in policy_wizard.py; this file only renders turns and sends answers. It reuses
-   console.js globals (addTurn, esc, setChatStatus). */
+/* Chat commands: /policy-dev <task> (with an optional demo video) and /deploy. The pipeline itself
+   is in policy_dev.py; this file only starts it and renders its pipeline_* events. It reuses
+   console.js globals (addTurn, esc, setChatStatus, setStatus, setSys, handleError). */
 (function () {
-  let active = false;
-  let seen = 0; // history items already shown
-  let outTurn = null; // the streamed generation-output turn
-  let outLines = [];
-
   const input = document.getElementById("chat-input");
   const attach = document.getElementById("chat-attach");
   const bar = document.getElementById("chatbar");
   if (!input || !bar) return;
+
+  let video = null; // {path, name}
+  let outEl = null, outStage = null, outLines = [];
 
   function post(url, body) {
     return fetch(url, {
@@ -19,127 +17,185 @@
       body: JSON.stringify(body),
     }).then((r) => r.json());
   }
-
   function userBubble(text) {
     addTurn("chat-turn you", `<div class="tk">you</div><div class="main">${esc(text)}</div>`);
   }
-  function agentTurn(text, cls) {
-    addTurn("chat-turn wizard-turn " + (cls || ""), `<div class="tk">${cls === "needs" ? "cannot launch" : "policy-dev"}</div><div class="main">${esc(text)}</div>`);
+  function agentTurn(title, text, cls) {
+    addTurn("chat-turn wizard-turn " + (cls || ""), `<div class="tk">${esc(title)}</div><div class="main">${esc(text)}</div>`);
   }
 
-  function render(state, includeUser) {
-    const hist = state.history || [];
-    for (; seen < hist.length; seen++) {
-      const m = hist[seen];
-      if (m.role === "agent") agentTurn(m.text);
-      else if (includeUser) userBubble(m.text);
-    }
-    active = state.status === "active";
-    chip.textContent = active ? "cancel wizard" : "/policy-dev";
-    chip.title = active ? "Stop the policy-dev wizard" : "Run the policy development loop (type /policy-dev setup for the guided questions)";
-    const askUpload = !!state.awaiting_upload;
-    attach.disabled = !askUpload;
-    attach.classList.toggle("wizard-ask", askUpload);
-    attach.title = askUpload ? "Attach the demo video" : "Attach a video (during /policy-dev)";
-    if (state.status === "confirmed") setChatStatus("Wizard confirmed - launching.", true);
-    else if (!active) setChatStatus("");
-  }
-
-  const chip = document.createElement("button");
-  chip.type = "button";
-  chip.className = "wizard-chip";
-  chip.textContent = "/policy-dev";
-  chip.addEventListener("click", () => {
-    if (active) {
-      post("/wizard", {action: "cancel"}).then((s) => render(s, false));
-      return;
-    }
-    input.value = "/policy-dev";
-    input.focus(); // press Enter to start
-  });
+  /* ---------- chips ---------- */
   const row = document.createElement("div");
   row.className = "chip-row";
-  const dep = document.createElement("button");
-  dep.type = "button";
-  dep.className = "wizard-chip";
-  dep.textContent = "/deploy";
-  dep.title = "Save the latest main program (highest accepted version of this session, else the incumbent) to data/deploy/";
-  dep.addEventListener("click", () => { input.value = "/deploy"; input.focus(); });
-  row.append(chip, dep);
+  function chipButton(label, title, onClick) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "wizard-chip";
+    b.textContent = label;
+    b.title = title;
+    b.addEventListener("click", onClick);
+    row.appendChild(b);
+  }
+  chipButton("/policy-dev", "Run the whole pipeline: attach a demo video with +, type the task, press Enter", () => {
+    input.value = "/policy-dev ";
+    input.focus();
+    syncAttach();
+  });
+  chipButton("/deploy", "Save the latest main program (highest accepted version of this session, else the incumbent) to data/deploy/", () => {
+    input.value = "/deploy";
+    input.focus();
+    syncAttach();
+  });
+  const chosen = document.createElement("span");
+  chosen.className = "video-chip";
+  chosen.style.display = "none";
+  row.appendChild(chosen);
   bar.insertAdjacentElement("afterend", row); // below the chat field
+
+  function renderChosen() {
+    chosen.style.display = video ? "" : "none";
+    chosen.innerHTML = "";
+    if (!video) return;
+    const name = document.createElement("span");
+    name.textContent = video.name;
+    name.title = video.path;
+    const x = document.createElement("button");
+    x.type = "button";
+    x.innerHTML = "&times;";
+    x.title = "Remove this video";
+    x.addEventListener("click", () => { video = null; renderChosen(); });
+    chosen.append(name, x);
+  }
+
+  /* ---------- the + button: native dialog on the server, browser picker as a fallback ---------- */
+  function syncAttach() {
+    const on = input.value.trimStart().toLowerCase().startsWith("/policy-dev");
+    attach.disabled = !on;
+    attach.classList.toggle("wizard-ask", on && !video);
+    attach.title = on ? "Choose the human demo video" : "Click /policy-dev first to attach a demo video";
+  }
+  input.addEventListener("input", syncAttach);
+  syncAttach();
 
   const picker = document.createElement("input");
   picker.type = "file";
   picker.accept = "video/*,.mkv,.avi,.m4v";
   picker.style.display = "none";
   document.body.appendChild(picker);
-  attach.addEventListener("click", () => { if (!attach.disabled) picker.click(); });
   picker.addEventListener("change", () => {
     const f = picker.files[0];
     picker.value = "";
     if (!f) return;
-    userBubble("[attaching " + f.name + "]");
     setChatStatus("Uploading " + f.name + "...", true);
     fetch("/upload", {method: "POST", headers: {"X-Filename": encodeURIComponent(f.name)}, body: f})
       .then((r) => r.json())
       .then((s) => {
-        if (s.ok === false) { agentTurn(s.error, "needs"); setChatStatus(""); return; }
-        render(s, false);
         setChatStatus("");
+        if (!s.ok) { agentTurn("cannot attach", s.error, "needs"); return; }
+        video = {path: s.path, name: s.name};
+        renderChosen();
+        syncAttach();
       })
-      .catch(() => { agentTurn("Upload failed.", "needs"); setChatStatus(""); });
+      .catch(() => { setChatStatus(""); agentTurn("cannot attach", "Upload failed.", "needs"); });
+  });
+  attach.addEventListener("click", () => {
+    if (attach.disabled) return;
+    setChatStatus("Choose the video in the file dialog...", true);
+    post("/pick-video", {}).then((r) => {
+      setChatStatus("");
+      if (r.ok) {
+        video = {path: r.path, name: r.name};
+        renderChosen();
+        syncAttach();
+        input.focus();
+      } else if (r.fallback) {
+        setChatStatus("Native dialog unavailable (" + r.reason + "); the browser picker cannot open at the clips folder.");
+        picker.click();
+      } else if (r.error) {
+        agentTurn("cannot attach", r.error, "needs");
+      }
+    }).catch(() => { setChatStatus(""); picker.click(); });
   });
 
+  /* ---------- commands ---------- */
   window.wizardHandle = function (message) {
     const text = message.trim();
     const low = text.toLowerCase();
+    syncAttachSoon();
     if (low === "/deploy") {
       userBubble(text);
-      post("/deploy", {}).then((r) => agentTurn(r.ok
+      post("/deploy", {}).then((r) => agentTurn("deploy", r.ok
         ? "Deployed v" + r.version + " to " + r.dir + "/" + r.file + " (also latest.py)."
         : "Deploy failed: " + r.error, r.ok ? "" : "needs"))
-        .catch(() => agentTurn("Deploy failed: server unreachable.", "needs"));
+        .catch(() => agentTurn("deploy", "Deploy failed: server unreachable.", "needs"));
       return true;
     }
-    if (low === "/policy-dev" || low === "/policy-dev run") {
-      userBubble(text);
-      if (window.startPolicyLoop) window.startPolicyLoop(); // asks for confirmation, then runs the loop
+    if (low === "/policy-dev" || low.startsWith("/policy-dev ")) {
+      const task = text.slice("/policy-dev".length).trim();
+      userBubble(text + (video ? "\n[video: " + video.name + "]" : ""));
+      post("/policy-dev", {task, video: video ? video.path : null}).then((r) => {
+        if (!r.ok) { agentTurn("cannot start", r.error, "needs"); return; }
+        video = null;
+        renderChosen();
+      }).catch(() => agentTurn("cannot start", "The server did not answer.", "needs"));
       return true;
     }
-    if (low.startsWith("/policy-dev")) { // "/policy-dev setup": the guided questions
-      userBubble(text);
-      seen = 0;
-      post("/wizard", {action: "start"}).then((s) => render(s, false));
-      return true;
-    }
-    if (!active) return false;
-    userBubble(text);
-    post("/wizard", {action: "message", message: text}).then((s) => render(s, false));
-    return true;
+    return false;
   };
+  function syncAttachSoon() { setTimeout(syncAttach, 0); }
 
-  /* generation progress arrives via the console's shared SSE connection (wizard_* kinds only) */
-  window.wizardEvent = (d) => {
-    if (!d.kind || !d.kind.startsWith("wizard_")) return;
-    if (d.kind === "wizard_needs") agentTurn(d.message, "needs");
-    else if (d.kind === "wizard_launch") {
+  /* ---------- pipeline events, via the console's shared SSE connection ---------- */
+  const BADGE = {
+    preflight: ["orch", "preflight"],
+    extraction: ["sys1", "reading the video"],
+    demospec: ["sys1", "building DemoSpec"],
+    prompt: ["sys1", "building the prompt"],
+    generation: ["sys1", "writing the program (Muse)"],
+    nominal: ["sys1", "nominal check"],
+    adversary: ["sys2", "attacking"],
+  };
+  const TITLE = {
+    start: "policy-dev", preflight: "1 preflight", extraction: "2 extraction", demospec: "3 DemoSpec",
+    prompt: "4 prompt", generation: "5 Synthesizer", nominal: "5 nominal check", adversary: "6 Adversary", finished: "finished",
+  };
+  function onStage(d) {
+    const b = BADGE[d.stage];
+    if (b && d.status === "running") {
+      for (const id of ["sys1", "sys2", "orch"]) setSys(id, false, "idle");
+      setSys(b[0], true, b[1]);
+    }
+    if (d.status === "command") return; // the exact command is in pipeline.jsonl
+    if (d.status === "running" && d.stage !== "start") outEl = null;
+    const bad = ["failed", "rejected"].includes(d.status) || (d.stage === "finished" && !["user_stop"].includes(d.status) && d.detail);
+    let text = d.detail || d.status;
+    if (d.path) text += "\n" + d.path;
+    agentTurn(TITLE[d.stage] || d.stage, text, bad ? "needs" : "");
+  }
+  function onOutput(d) {
+    if (!outEl || outStage !== d.stage) {
       outLines = [];
-      agentTurn("Generation started:\n" + d.command.join(" "));
-      addTurn("chat-turn wizard-turn", `<div class="tk">generation output</div><div class="main" id="wizard-out">...</div>`);
-      outTurn = document.getElementById("wizard-out");
-    } else if (d.kind === "wizard_output" && outTurn) {
-      outLines.push(d.line);
-      outTurn.textContent = outLines.slice(-40).join("\n");
-    } else if (d.kind === "wizard_generation_done") {
-      agentTurn("Generation finished (exit " + d.returncode + "). Output: " + d.out, d.returncode ? "needs" : "");
-    } else if (d.kind === "wizard_finished") {
-      setChatStatus("");
-      fetch("/wizard").then((r) => r.json()).then((s) => render(s, false));
+      outStage = d.stage;
+      addTurn("chat-turn wizard-turn", `<div class="tk">${esc(TITLE[d.stage] || d.stage)} output</div><div class="main pipeline-out"></div>`);
+      const all = document.querySelectorAll(".pipeline-out");
+      outEl = all[all.length - 1];
     }
+    outLines.push(d.line);
+    outEl.textContent = outLines.slice(-5).join("\n");
+  }
+  window.wizardEvent = (d) => {
+    if (d.kind === "pipeline_start") {
+      setStatus("running", "running");
+      const rb = document.getElementById("run-btn");
+      if (rb) rb.disabled = true;
+    } else if (d.kind === "pipeline_stage") onStage(d);
+    else if (d.kind === "pipeline_output") onOutput(d);
   };
 
-  /* reload: re-render an unfinished wizard from the server */
-  fetch("/wizard").then((r) => r.json()).then((s) => {
-    if (s.status === "active") render(s, true);
+  /* reload during a run: the server still runs it; say so, and keep Stop reachable */
+  fetch("/policy-dev").then((r) => r.json()).then((s) => {
+    if (s.running && s.current) {
+      setStatus("running", "running");
+      agentTurn("policy-dev", "A run is in progress: " + s.current.task + "\n" + s.current.run_dir);
+    }
   }).catch(() => {});
 })();

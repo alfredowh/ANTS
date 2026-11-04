@@ -602,7 +602,6 @@ function percRolloutEnded() {
 
 switchTab((() => { try { return localStorage.getItem(TAB_KEY) || "console"; } catch (e) { return "console"; } })());
 
-window.startPolicyLoop = () => runBtn.click(); // /policy-dev in the chat does the same as the run button
 function runBtnLabel() {
   document.getElementById("run-btn").textContent =
     DATA.mode === "loop" ? "Run policy development loop" : "Run policy development step";
@@ -747,6 +746,8 @@ function handleLoopEvent(row) {
     if (decision === "no_failure") {
       setSys("sys2", true, "selecting next attack");
       setSys("orch", false, "idle");
+    } else if (decision === "user_stop") {
+      setSys("orch", false, "stopped by you");
     } else if (decision === "budget_stop") {
       setSys("sys2", false, "idle");
       setSys("orch", true, "blocked: budget exhausted");
