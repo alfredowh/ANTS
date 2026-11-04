@@ -20,9 +20,17 @@ RUN_DIR = REPO_ROOT / "data" / "runs" / "mapper_probe"
 
 ARM_FULL_PLY = RUN_DIR / "arm_scan_full" / "reconstructed_scene.ply"
 ORBIT_PLY = RUN_DIR / "reconstructed_scene.ply"
+LOOKAT_PLY = RUN_DIR / "lookat_scan" / "reconstructed_scene.ply"
+FUSED_PLY = RUN_DIR / "fused_combined" / "reconstructed_scene.ply"
+FUSED_HIRES_PLY = RUN_DIR / "fused_hires" / "reconstructed_scene.ply"
+ORBIT_HIRES_PLY = RUN_DIR / "fused_orbit_hires" / "reconstructed_scene.ply"
 MESHES = (
-    ("arm-full", "Arm scan 5-by-3", ARM_FULL_PLY),
+    ("fused-hires", "Fused hi-res: 82 frames incl. arm", FUSED_HIRES_PLY),
+    ("orbit-hires", "Orbit hi-res: 80 frames, robot-free", ORBIT_HIRES_PLY),
+    ("fused", "Fused: 34 frames", FUSED_PLY),
     ("orbit", "Orbit scan 16-frame", ORBIT_PLY),
+    ("arm-full", "Arm scan 5-by-3", ARM_FULL_PLY),
+    ("lookat", "IK look-at scan (3 frames)", LOOKAT_PLY),
 )
 
 THREE_VERSION = "0.160.0"

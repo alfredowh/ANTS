@@ -1247,7 +1247,7 @@ cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/ma
 
 ### `scene_recon.scan_arm`: Real arm-driven scan: sweep the Franka's wrist camera (not a teleport)
 
-Closed-loop drives the Franka's shoulder-pan joint through N waypoints using the exact delta-joint formula LiberoActionCodec.encode uses, then saves robot0_eye_in_hand RGB-D + world-frame camera pose per waypoint -- genuine robot motion, not a camera teleport.
+Closed-loop drives the Franka's shoulder-pan and shoulder-lift joints through a pan x lift waypoint grid using the exact delta-joint formula LiberoActionCodec.encode uses, then saves robot0_eye_in_hand RGB-D + world-frame camera pose per waypoint -- genuine robot motion, not a camera teleport.
 
 ```bash
 LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
@@ -1255,18 +1255,19 @@ LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl
 
 | Flag | Default | On | Meaning |
 |---|---|---|---|
-| `--pan-offsets` | `-0.5 -0.3 -0.1 0.1 0.3 0.5` | no | Radians added to the reset shoulder-pan joint per waypoint. |
-| `--out-dir` | `../data/runs/mapper_probe/frames_arm` | no | Where per-frame .npz files and manifest.txt are written. |
+| `--pan-offsets` | `-0.5 -0.25 0.0 0.25 0.5` | no | Radians added to the reset shoulder-pan joint per waypoint. |
+| `--lift-offsets` | `-0.15 0.0 0.15` | no | Radians added to the reset shoulder-lift joint per waypoint; waypoints are the pan x lift grid. |
+| `--out-dir` | `../data/runs/mapper_probe/frames_arm_full` | no | Where per-frame .npz files and manifest.txt are written. |
 
-Default 6-waypoint pan sweep:
+Default 15-waypoint pan x tilt grid:
 
 ```bash
 cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
 ```
 
-### `scene_recon.fuse`: Fuse orbit-scan frames into a cuRobo Mapper mesh
+### `scene_recon.fuse`: Fuse scan frames into a cuRobo Mapper mesh
 
-Integrates every saved frame into curobo.perception.Mapper (Warp backend), computes the ESDF, extracts a surface mesh, and saves it plus a few shaded renders.
+Integrates every saved frame from one or more scan directories into curobo.perception.Mapper (Warp backend), computes the ESDF, extracts a surface mesh, and saves it plus a few shaded renders. Multiple --frames-dir values fuse all their frames into a single denser mesh.
 
 ```bash
 .venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py
@@ -1274,7 +1275,7 @@ Integrates every saved frame into curobo.perception.Mapper (Warp backend), compu
 
 | Flag | Default | On | Meaning |
 |---|---|---|---|
-| `--frames-dir` | `../data/runs/mapper_probe/frames` | no | Output of scene_recon.scan. |
+| `--frames-dir` | `../data/runs/mapper_probe/frames` | no | One or more frame directories (space-separated), each with its own manifest.txt, fused into one Mapper. Output of scene_recon.scan / .scan_arm / .scan_lookat. |
 | `--voxel-size` | `0.01` | no | TSDF voxel size in meters; smaller is sharper and slower. |
 | `--n-render-views` | `3` | no | How many shaded PNG renders to save from scan camera poses. |
 
@@ -1282,4 +1283,22 @@ Default fuse on the orbit scan above:
 
 ```bash
 cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py
+```
+
+Fuse all three scans (orbit + arm pan-tilt + IK look-at) at a finer voxel size (logged 2026-11-04: 44,180 verts / 82,957 faces, vs 23,441/44,253 for the orbit scan alone):
+
+```bash
+cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py --frames-dir ../data/runs/mapper_probe/frames ../data/runs/mapper_probe/frames_arm_full ../data/runs/mapper_probe/frames_lookat --out-dir ../data/runs/mapper_probe/fused_combined --voxel-size 0.008 --n-render-views 4
+```
+
+Robot-free orbit-only mesh at 5 mm (input of plan_rack and the gate; logged 2026-11-04):
+
+```bash
+cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py --frames-dir ../data/runs/mapper_probe/frames ../data/runs/mapper_probe/frames_orbit_r1 ../data/runs/mapper_probe/frames_orbit_r2 --out-dir ../data/runs/mapper_probe/fused_orbit_hires --voxel-size 0.005
+```
+
+Orbit rings used above:
+
+```bash
+cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py --n-frames 32 --height 0.95 --out-dir ../data/runs/mapper_probe/frames_orbit_r1 && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py --n-frames 32 --height 1.35 --radius 0.5 --out-dir ../data/runs/mapper_probe/frames_orbit_r2
 ```

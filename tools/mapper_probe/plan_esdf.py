@@ -111,9 +111,8 @@ def backproject_frame(frames_dir: Path, name: str) -> np.ndarray:
     valid = (depth >= 0.05) & (depth <= 3.5)
     height, width = depth.shape
     K = d["intrinsics"].astype(np.float64)
-    # Saved pose is cv convention (OpenGL flip applied); undo it for projection.
-    flip = np.diag((1.0, -1.0, -1.0, 1.0))
-    world_from_cam = d["world_from_cam"].astype(np.float64) @ flip
+    # Saved pose is already OpenCV convention, matching the K^-1 rays below.
+    world_from_cam = d["world_from_cam"].astype(np.float64)
     Kinv = np.linalg.inv(K)
     u, v = np.meshgrid(np.arange(width), np.arange(height))
     cam = (Kinv @ np.stack([u[valid], v[valid], np.ones(valid.sum())])) * depth[valid]

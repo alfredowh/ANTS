@@ -22,7 +22,11 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--frames-dir", type=Path, default=REPO_ROOT / "data" / "runs" / "mapper_probe" / "frames"
+        "--frames-dir",
+        type=Path,
+        nargs="+",
+        default=[REPO_ROOT / "data" / "runs" / "mapper_probe" / "frames"],
+        help="One or more frame directories (each with its own manifest.txt) to fuse together.",
     )
     parser.add_argument(
         "--out-dir", type=Path, default=REPO_ROOT / "data" / "runs" / "mapper_probe"
@@ -45,10 +49,14 @@ def main() -> None:
     from curobo.perception import Mapper, MapperCfg
     from curobo.types import CameraObservation, Pose
 
-    manifest = (args.frames_dir / "manifest.txt").read_text(encoding="utf-8").splitlines()
-    print(f"[fuse] {len(manifest)} frames to integrate")
+    manifest: list[Path] = []
+    for frames_dir in args.frames_dir:
+        names = (frames_dir / "manifest.txt").read_text(encoding="utf-8").splitlines()
+        manifest.extend(frames_dir / name for name in names)
+        print(f"[fuse] {len(names)} frames from {frames_dir}")
+    print(f"[fuse] {len(manifest)} frames total to integrate")
 
-    sample = np.load(args.frames_dir / manifest[0])
+    sample = np.load(manifest[0])
     height, width = sample["rgb"].shape[:2]
 
     config = MapperCfg(
@@ -68,8 +76,8 @@ def main() -> None:
     mapper = Mapper(config)
     print(f"[fuse] mapper initialized: {mapper.memory_usage_mb():.1f} MB")
 
-    for name in manifest:
-        d = np.load(args.frames_dir / name)
+    for frame_path in manifest:
+        d = np.load(frame_path)
         rgb = torch.from_numpy(d["rgb"]).to(device=args.device, dtype=torch.uint8).unsqueeze(0)
         depth = (
             torch.from_numpy(d["depth_m"]).to(device=args.device, dtype=torch.float32).unsqueeze(0)
@@ -91,7 +99,7 @@ def main() -> None:
             depth_to_meter=1.0,
         )
         mapper.integrate(camera_observation=obs)
-        print(f"[fuse] integrated {name}")
+        print(f"[fuse] integrated {frame_path}")
 
     print(f"[fuse] post-integration mapper memory: {mapper.memory_usage_mb():.1f} MB")
 
@@ -111,8 +119,8 @@ def main() -> None:
     render_frames = manifest[:: max(1, len(manifest) // max(1, args.n_render_views))][
         : args.n_render_views
     ]
-    for i, name in enumerate(render_frames):
-        d = np.load(args.frames_dir / name)
+    for i, frame_path in enumerate(render_frames):
+        d = np.load(frame_path)
         intrinsics = torch.from_numpy(d["intrinsics"]).to(device=args.device, dtype=torch.float32)
         pose = Pose.from_matrix(
             torch.from_numpy(d["world_from_cam"]).to(device=args.device, dtype=torch.float32)

@@ -297,7 +297,7 @@
       "name": "scene reconstruction probe (cuRobo Mapper)",
       "group": "dev",
       "path": "tools/mapper_probe/",
-      "role": "Orbit-scans a LIBERO scene and fuses the frames into a cuRobo Mapper TSDF/ESDF, extracting a mesh. Offline probe, not wired into synthesizer/ or adversary/ yet.",
+      "role": "Orbit-scans a LIBERO scene and fuses the frames into a cuRobo Mapper TSDF/ESDF, extracting a mesh. Offline probe, not wired into synthesizer/ or adversary/ yet. Also: sim-ready gate (gate_truth, gate_extract, gate_settle) and a wine-rack planning test (plan_rack).",
       "in": [
         "LIBERO scene (suite/task/seed)"
       ],
@@ -3276,14 +3276,16 @@
       "runner": "shell",
       "base": "uv run python tools/mapper_probe/make_viewer.py",
       "args": [],
-      "description": "Embeds the orbit and full arm-scan PLYs as base64 in one portable HTML page (three.js orbit controls, mesh toggle). Open data/runs/mapper_probe/viewer.html straight from disk.",
+      "description": "Embeds the fused-combined, orbit, full arm-scan and IK look-at PLYs as base64 in one portable HTML page (three.js orbit controls, mesh toggle, fused mesh shown by default). Open data/runs/mapper_probe/viewer.html straight from disk.",
       "examples": [],
       "modules": [
         "scene_recon"
       ],
       "in": [
+        "data/runs/mapper_probe/fused_combined/reconstructed_scene.ply",
         "data/runs/mapper_probe/reconstructed_scene.ply",
-        "data/runs/mapper_probe/arm_scan_full/reconstructed_scene.ply"
+        "data/runs/mapper_probe/arm_scan_full/reconstructed_scene.ply",
+        "data/runs/mapper_probe/lookat_scan/reconstructed_scene.ply"
       ],
       "out": [
         "data/runs/mapper_probe/viewer.html"
@@ -3294,7 +3296,7 @@
     },
     {
       "id": "scene_recon.fuse",
-      "title": "Fuse orbit-scan frames into a cuRobo Mapper mesh",
+      "title": "Fuse scan frames into a cuRobo Mapper mesh",
       "group": "scene-recon",
       "runner": "curobo",
       "base": "../tools/mapper_probe/fuse_mapper.py",
@@ -3304,7 +3306,7 @@
           "value": "../data/runs/mapper_probe/frames",
           "kind": "value",
           "on": false,
-          "desc": "Output of scene_recon.scan."
+          "desc": "One or more frame directories (space-separated), each with its own manifest.txt, fused into one Mapper. Output of scene_recon.scan / .scan_arm / .scan_lookat."
         },
         {
           "flag": "--voxel-size",
@@ -3321,11 +3323,23 @@
           "desc": "How many shaded PNG renders to save from scan camera poses."
         }
       ],
-      "description": "Integrates every saved frame into curobo.perception.Mapper (Warp backend), computes the ESDF, extracts a surface mesh, and saves it plus a few shaded renders.",
+      "description": "Integrates every saved frame from one or more scan directories into curobo.perception.Mapper (Warp backend), computes the ESDF, extracts a surface mesh, and saves it plus a few shaded renders. Multiple --frames-dir values fuse all their frames into a single denser mesh.",
       "examples": [
         {
           "title": "Default fuse on the orbit scan above",
           "cmd": "cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py"
+        },
+        {
+          "title": "Fuse all three scans (orbit + arm pan-tilt + IK look-at) at a finer voxel size (logged 2026-11-04: 44,180 verts / 82,957 faces, vs 23,441/44,253 for the orbit scan alone)",
+          "cmd": "cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py --frames-dir ../data/runs/mapper_probe/frames ../data/runs/mapper_probe/frames_arm_full ../data/runs/mapper_probe/frames_lookat --out-dir ../data/runs/mapper_probe/fused_combined --voxel-size 0.008 --n-render-views 4"
+        },
+        {
+          "title": "Robot-free orbit-only mesh at 5 mm (input of plan_rack and the gate; logged 2026-11-04)",
+          "cmd": "cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py --frames-dir ../data/runs/mapper_probe/frames ../data/runs/mapper_probe/frames_orbit_r1 ../data/runs/mapper_probe/frames_orbit_r2 --out-dir ../data/runs/mapper_probe/fused_orbit_hires --voxel-size 0.005"
+        },
+        {
+          "title": "Orbit rings used above",
+          "cmd": "cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py --n-frames 32 --height 0.95 --out-dir ../data/runs/mapper_probe/frames_orbit_r1 && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py --n-frames 32 --height 1.35 --radius 0.5 --out-dir ../data/runs/mapper_probe/frames_orbit_r2"
         }
       ],
       "modules": [
@@ -3337,10 +3351,224 @@
       ],
       "out": [
         "data/runs/mapper_probe/reconstructed_scene.ply",
-        "data/runs/mapper_probe/reconstructed_view_*.png"
+        "data/runs/mapper_probe/reconstructed_view_*.png",
+        "data/runs/mapper_probe/fused_combined/ (combined-fuse example output)"
       ],
       "cost": "free",
       "minutes": 2,
+      "doc": "docs/perception/scene-reconstruction-probe.md"
+    },
+    {
+      "id": "scene_recon.gate_truth",
+      "title": "Sim-ready gate 1: ground truth of one LIBERO object",
+      "group": "scene-recon",
+      "runner": "libero",
+      "base": "../tools/mapper_probe/gate_truth.py",
+      "args": [
+        {
+          "flag": "--body",
+          "value": "akita_black_bowl_1_main",
+          "kind": "value",
+          "on": false,
+          "desc": "MuJoCo body name (e.g. wine_rack_1_main)."
+        },
+        {
+          "flag": "--out-dir",
+          "value": "../data/runs/mapper_probe/gate",
+          "kind": "value",
+          "on": false,
+          "desc": "Where truth.json and truth_vertices.npy go."
+        }
+      ],
+      "description": "Reads true mass, pose, world-frame visual-mesh vertices, robot base pose and reset joints from the simulator; the reference every later gate stage compares against.",
+      "examples": [
+        {
+          "title": "Bowl (default)",
+          "cmd": "cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device .venv-libero/bin/python ../tools/mapper_probe/gate_truth.py"
+        },
+        {
+          "title": "Wine rack, for plan_rack",
+          "cmd": "cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device .venv-libero/bin/python ../tools/mapper_probe/gate_truth.py --body wine_rack_1_main --out-dir ../data/runs/mapper_probe/gate_rack"
+        }
+      ],
+      "modules": [
+        "scene_recon",
+        "aspire"
+      ],
+      "in": [],
+      "out": [
+        "data/runs/mapper_probe/gate/truth.json",
+        "data/runs/mapper_probe/gate/truth_vertices.npy"
+      ],
+      "cost": "free",
+      "minutes": 1,
+      "doc": "docs/perception/scene-reconstruction-probe.md"
+    },
+    {
+      "id": "scene_recon.gate_extract",
+      "title": "Sim-ready gate 2: crop an object from the fused mesh and check geometry",
+      "group": "scene-recon",
+      "runner": "curobo",
+      "base": "../tools/mapper_probe/gate_extract.py",
+      "args": [
+        {
+          "flag": "--mesh",
+          "value": "../data/runs/mapper_probe/fused_hires/reconstructed_scene.ply",
+          "kind": "value",
+          "on": false,
+          "desc": "Fused scene mesh (z-up world frame)."
+        },
+        {
+          "flag": "--tag",
+          "value": "fused_hires",
+          "kind": "value",
+          "on": false,
+          "desc": "Report name suffix."
+        },
+        {
+          "flag": "--scale",
+          "value": "1.0",
+          "kind": "value",
+          "on": false,
+          "desc": "Negative control: scale the crop (1.3 must fail)."
+        },
+        {
+          "flag": "--max-chamfer-mean-mm",
+          "value": "5.0",
+          "kind": "value",
+          "on": false,
+          "desc": "Fixed a priori, not tuned."
+        }
+      ],
+      "description": "Crops the object by its true box, keeps the largest component, and checks chamfer distance, bounding box, convex-hull volume and hull watertightness against ground truth. Writes gate_<tag>_report.json and the collision hull STLs.",
+      "examples": [
+        {
+          "title": "Real run (logged 2026-11-04: geometry pass, chamfer mean 4.5 mm)",
+          "cmd": "cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/gate_extract.py"
+        },
+        {
+          "title": "Negative control (must fail)",
+          "cmd": "cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/gate_extract.py --scale 1.3 --tag neg_scale13"
+        }
+      ],
+      "modules": [
+        "scene_recon",
+        "aspire"
+      ],
+      "in": [
+        "data/runs/mapper_probe/gate/truth.json"
+      ],
+      "out": [
+        "data/runs/mapper_probe/gate/gate_<tag>_report.json",
+        "data/runs/mapper_probe/gate/recon_hull_<tag>.stl"
+      ],
+      "cost": "free",
+      "minutes": 1,
+      "doc": "docs/perception/scene-reconstruction-probe.md"
+    },
+    {
+      "id": "scene_recon.gate_settle",
+      "title": "Sim-ready gate 3: MuJoCo drop and settle test",
+      "group": "scene-recon",
+      "runner": "libero",
+      "base": "../tools/mapper_probe/gate_settle.py",
+      "args": [
+        {
+          "flag": "--tag",
+          "value": "fused_hires",
+          "kind": "value",
+          "on": false,
+          "desc": "Which extract report to complete."
+        },
+        {
+          "flag": "--drop-height-m",
+          "value": "0.03",
+          "kind": "value",
+          "on": false,
+          "desc": "Drop height."
+        },
+        {
+          "flag": "--tilt-deg",
+          "value": "10.0",
+          "kind": "value",
+          "on": false,
+          "desc": "Second run starts tilted by this much."
+        }
+      ],
+      "description": "Drops the reconstructed collision hull and the ground-truth hull (control) in MuJoCo with the true mass, upright and tilted. Passes on rest height, speed, tilt and resting penetration; writes sim_ready into the report.",
+      "examples": [
+        {
+          "title": "After gate_extract",
+          "cmd": "cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device .venv-libero/bin/python ../tools/mapper_probe/gate_settle.py"
+        }
+      ],
+      "modules": [
+        "scene_recon",
+        "aspire"
+      ],
+      "in": [
+        "data/runs/mapper_probe/gate/gate_<tag>_report.json"
+      ],
+      "out": [
+        "data/runs/mapper_probe/gate/gate_<tag>_report.json"
+      ],
+      "cost": "free",
+      "minutes": 1,
+      "doc": "docs/perception/scene-reconstruction-probe.md"
+    },
+    {
+      "id": "scene_recon.plan_rack",
+      "title": "Wine-rack planning: fused mesh vs ASPIRE single-frame carved cloud",
+      "group": "scene-recon",
+      "runner": "curobo",
+      "base": "../tools/mapper_probe/plan_rack.py",
+      "args": [
+        {
+          "flag": "--start",
+          "value": "far_hover",
+          "kind": "value",
+          "on": false,
+          "desc": "far_hover or near_contact (run one start per process; mesh swaps crash CUDA otherwise)."
+        },
+        {
+          "flag": "--near-above-m",
+          "value": "0.03",
+          "kind": "value",
+          "on": false,
+          "desc": "Start height above the logged contact for near_contact."
+        },
+        {
+          "flag": "--mesh",
+          "value": "../data/runs/mapper_probe/fused_orbit_hires/reconstructed_scene.ply",
+          "kind": "value",
+          "on": false,
+          "desc": "Robot-free fused mesh (orbit frames only)."
+        }
+      ],
+      "description": "Same cuRobo planner, same start and goals, four worlds (blind, fused, single-frame carved, single-frame uncarved) around the wine-rack incident of dev/curobo. Planning only, needs CUDA.",
+      "examples": [
+        {
+          "title": "Far start",
+          "cmd": "cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/plan_rack.py --start far_hover"
+        },
+        {
+          "title": "Near start (reproduces the carve bug)",
+          "cmd": "cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/plan_rack.py --start near_contact --near-above-m 0.03"
+        }
+      ],
+      "modules": [
+        "scene_recon",
+        "aspire"
+      ],
+      "in": [
+        "data/runs/mapper_probe/gate_rack/truth.json",
+        "data/runs/mapper_probe/fused_orbit_hires/reconstructed_scene.ply"
+      ],
+      "out": [
+        "data/runs/mapper_probe/plan_rack_<start>_<h>.json"
+      ],
+      "cost": "free",
+      "minutes": 3,
       "doc": "docs/perception/scene-reconstruction-probe.md"
     }
   ]

@@ -111,6 +111,109 @@ either representation, so it shows parity, not superiority. The discriminating q
 filter drops thin obstacles) is the follow-up, and it belongs in System 2's package —
 flag with Daniel before landing it there.
 
+## Fused reconstruction: all scans combined (2026-11-04, `fuse_mapper.py --frames-dir ...`)
+
+`fuse_mapper.py` now accepts multiple `--frames-dir` values and fuses them into one `Mapper`
+instance instead of one scan at a time. Ran it on all 34 frames collected so far (16 orbit +
+15 arm pan-tilt + 3 IK look-at) at a finer `--voxel-size 0.008` (was 0.01): **44,180 vertices,
+82,957 faces** (`data/runs/mapper_probe/fused_combined/`), up from 23,441/44,253 for the orbit
+scan alone. Renders show bowl, bottle, plate and cabinet as distinct, low-noise shapes with a
+sharp table surface — visibly cleaner than any single scan, because the extra wrist-camera
+viewpoints fill in the multi-view constraint that was sparse in the orbit-only mesh and badly
+sparse in the look-at-only mesh. `make_viewer.py` now ships this as the default mesh in
+`viewer.html`, with the three individual scans kept as toggle options for comparison.
+
+## Higher resolution and a robot-free map (2026-11-04)
+
+Two more orbit rings (`scan_orbit.py`, 32 frames each, camera height 0.95 m and 1.35 m) and a finer
+voxel (0.005 m). Frame counts: orbit 16, ring 1 32, ring 2 32, arm grid 15, look-at 3.
+
+| Mesh | Frames | Voxel | Vertices |
+|---|---|---|---|
+| `fused_hires/` | ring 1 + ring 2 + arm grid + look-at = 82 | 0.005 | 122,122 (232,615 faces) |
+| `fused_orbit_hires/` | orbit + ring 1 + ring 2 = 80, robot at home pose only | 0.005 | 124,743 |
+
+`fused_hires` contains ghost copies of the arm and fingers seen by the moving wrist camera, so it
+is not a clean obstacle map. `fused_orbit_hires` is the map used for planning; the home-pose robot
+is carved out of it before use (see the rack test). A persistent map therefore needs the robot
+removed at scan time; this is a requirement, not a detail.
+
+## Sim-ready gate, first version (2026-11-04)
+
+`gate_truth.py` (libero venv), `gate_extract.py` (curobo venv), `gate_settle.py` (libero venv).
+Object: the bowl (`akita_black_bowl_1_main`, 5.6 g), cropped out of `fused_hires` by its true box.
+Thresholds were fixed before the run (chamfer mean 5 mm, p95 10 mm, bbox 10 mm, hull volume 15%).
+
+| Check | Reconstruction | Limit |
+|---|---|---|
+| Chamfer mean / p95 vs true vertices | 4.48 / 9.90 mm | 5 / 10 mm |
+| Bounding-box error | 9.59 mm | 10 mm |
+| Convex-hull volume error | 2.9% | 15% |
+| Raw crop watertight | no (underside never seen); hull is watertight | informational |
+| Settle, upright and 10 deg tilt (3 s) | rest height -0.24 mm, final tilt 0.06 deg, resting penetration 0.24 mm | 2 mm, 5 deg, 2 mm |
+| Same settle on the true hull (control) | -0.19 mm, 0.74 deg, 0.19 mm | |
+
+Result: geometry pass and settle pass, so `sim_ready` is true for this crop, **with thin margins**
+(bbox and p95 are within 0.4 mm and 0.1 mm of the limits at a 5 mm voxel).
+Negative control (crop scaled 1.3): bbox error 25.4 mm, hull volume error 113%, `sim_ready` false.
+Chamfer alone barely separates them (4.5 vs 5.8 mm); bbox and volume do the work.
+
+Limits, stated plainly:
+- The collision body is the convex hull, which discards the bowl's concavity. No convex
+  decomposition (CoACD) is installed; adding it is a new dependency and needs a decision.
+- The settle test is weak on its own: any convex hull settles. The first settle run failed the true
+  hull as well, because MuJoCo re-aligns meshes to their inertia axes (my tilt measure read a
+  principal axis) and because peak penetration (about 6 mm for both hulls) is a drop-impact
+  transient. I fixed the tilt measure and switched to resting penetration after seeing that the
+  control also failed; peak values are kept in the report.
+- One object, one scene, one seed. Mass is read from the simulator, not estimated.
+
+## Wine-rack planning test (2026-11-04, `plan_rack.py`)
+
+Scene `libero_goal_swap` task 8, seed 51; incident from `dev/curobo/README.md`. The logged contact
+point (0.477, -0.175, 0.237) in the robot base frame lies inside the rack's true box. Goal: the
+gripper at that point, pointing down (not the logged orientation). Start: IK pose at a height above
+the contact. Same planner, four worlds. Single-frame baseline: ASPIRE's own sparse-voxel filter,
+robot carve (5 cm) and voxel mesh, on the orbit frame with the most rack points (favours the
+baseline). The fused mesh has the home-pose robot carved out once.
+
+| Start above contact | World | Goal at contact | Free-space goal |
+|---|---|---|---|
+| 0.15 m | blind (no obstacle) | plans, ends inside rack | plans |
+| 0.15 m | fused mesh | blocked | plans |
+| 0.15 m | single frame, carved | blocked | plans |
+| 0.15 m | single frame, uncarved | blocked | plans |
+| 0.03 m | blind | plans, ends inside rack | plans |
+| 0.03 m | fused mesh | blocked | blocked (start rejected) |
+| 0.03 m | **single frame, carved** | **plans, ends inside rack** | plans |
+| 0.03 m | single frame, uncarved | blocked | plans |
+| 0.06 / 0.09 / 0.12 m | fused mesh | blocked | blocked (start rejected) |
+| 0.06 / 0.09 / 0.12 m | single frame, carved or not | blocked | plans |
+
+What this supports:
+- **The carve bug reproduces.** With the start 3 cm from the contact, the carve removes 629 rack
+  points (39,438 to 38,809) and the planner then plans the gripper into the rack. The uncarved
+  cloud and the fused mesh do not.
+- **The fused mesh is not affected by the carve**, by construction (robot removed once at scan time).
+- Beyond 3 cm the carve removes no rack points, so it does not change the result.
+
+What it does not support:
+- The fused mesh is stricter than the single frame: it rejects starts 3 to 12 cm above the contact
+  that the single frame accepts. I did not check in MuJoCo whether those starts truly collide, so I
+  cannot say whether the fused mesh is correct there or over-conservative (5 mm voxels, truncation
+  band, or leftover robot geometry are candidate causes). Until that is checked, "fused plans
+  correctly where the single frame fails" is not shown: at 3 cm the fused world refuses to plan at
+  all.
+- One scene, one seed, hand-picked goal orientation, no execution in simulation.
+
+## Correction to the earlier parity result
+
+`plan_esdf.backproject_frame` applied the OpenGL flip a second time and mis-projected the
+single-frame cloud (0 points on the rack in all 16 frames; the correct projection gives 1,900 to
+17,500). The single-frame baseline in "Planning against the fused mesh" above used that wrong cloud,
+so its 0.55 s versus 2.62 s comparison is not a valid baseline. The function is fixed; that
+comparison has not been re-run.
+
 ## Honest caveats
 
 - The original orbit scan (`scan_orbit.py`, `agentview`) is a **virtual camera teleport**, not
@@ -124,16 +227,16 @@ flag with Daniel before landing it there.
 - No LLM/Muse tokens involved; cost is pure GPU time (untimed so far, order of a minute or two for
   16 frames including first-run Warp kernel compilation).
 
-## Where this goes next (not yet built)
+## Where this goes next
 
-1. **Real arm-driven scan**: replace the virtual orbit with the Franka's `robot0_eye_in_hand`
-   camera, driven through the same waypoints via `move_to_pose` (reuses existing `cap_harness`
-   motion, no new motion code).
-2. **Wire into collision-aware planning**: feed `mapper.compute_esdf()` into cuRobo's
-   `plan_motion`/`ss_cur` path as the obstacle representation, replacing today's single-frame point
-   cloud (see `dev/curobo/` for the known point-cloud-obstacle weak spot, the wine-rack case). This
-   step touches System 2's package (`src/ants/adversary/`, owned by Daniel per `AGENTS.md`) — flag
-   it with him before landing it there; this doc only covers the standalone probe.
+1. Ground-truth the near starts in MuJoCo (do those arm poses touch the rack?) to decide whether the
+   fused mesh is over-conservative; re-run the free-space parity comparison with the fixed baseline.
+2. Online mapping: integrate wrist-camera frames during a rollout and feed the ESDF to the planner
+   each replan, with the robot masked per frame. Not built. Landing it in the rollout or planning
+   path of `src/ants/adversary/` needs Daniel first.
+3. Gate: convex decomposition, more objects, a settle case that can fail, and per-object
+   segmentation of the scene mesh. Real2sim from the hurobo clips is in
+   `docs/perception/real2sim-research.md` (research only, nothing run).
 
 ## Why this isn't `dev/curobo/`
 
