@@ -32,7 +32,29 @@ from urllib.parse import urlparse
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 PHASES_DOC = REPO_ROOT / "docs" / "orchestrator" / "phases.md"
-TEMPLATE = Path(__file__).with_name("console_template.html")
+STUDIO_DIR = Path(__file__).parent
+VIEWS_DIR = STUDIO_DIR / "views"
+STATIC_DIR = STUDIO_DIR / "static"
+# Whitelist: every /static/<name> and /views/<name>_stub route this server will serve.
+STATIC_FILES = {"console.css": STATIC_DIR / "console.css", "console.js": STATIC_DIR / "console.js"}
+STUB_FILES = {
+    "synthesizer_stub": VIEWS_DIR / "synthesizer_stub.html",
+    "adversary_stub": VIEWS_DIR / "adversary_stub.html",
+}
+
+
+def _assemble_shell() -> str:
+    """Build the one served page from views/shell.html + its view fragments."""
+    shell = (VIEWS_DIR / "shell.html").read_text(encoding="utf-8")
+    fragments = {
+        "<!--__AGENT_CONSOLE__-->": (VIEWS_DIR / "agent_console.html").read_text(encoding="utf-8"),
+        "<!--__PERCEPTION__-->": (VIEWS_DIR / "perception.html").read_text(encoding="utf-8"),
+        "<!--__SYNTHESIZER__-->": (VIEWS_DIR / "synthesizer.html").read_text(encoding="utf-8"),
+        "<!--__ADVERSARY__-->": (VIEWS_DIR / "adversary.html").read_text(encoding="utf-8"),
+    }
+    for marker, content in fragments.items():
+        shell = shell.replace(marker, content)
+    return shell
 
 # Archived example only: a real simulator rollout's agentview keyframes (exp04_scene, E3 evidence
 # arm, sample0). This console's own loop runs System 2 on the mock backend, which has no simulator
@@ -251,6 +273,13 @@ class RunState:
     running: bool = False
     events: queue.Queue[dict] = field(default_factory=queue.Queue)
     subscribers: list[queue.Queue[dict]] = field(default_factory=list)
+    # Chat: at most one of these is meaningful at a time.
+    # - awaiting_answer: set while Loop's ask_human callback is blocked waiting for a chat reply
+    #   (Case 1 -- the escalation this run stalled on).
+    # - queued_chat: a message that arrived while a run was active, to auto-fire as a one-shot
+    #   the moment the run goes idle (Case 3, queue-and-auto-fire).
+    awaiting_answer: queue.Queue[str] | None = None
+    queued_chat: str | None = None
 
     def broadcast(self, event: dict) -> None:
         with self.lock:
@@ -268,6 +297,45 @@ class RunState:
         with self.lock:
             if q in self.subscribers:
                 self.subscribers.remove(q)
+
+
+def chat_prompt(incumbent: Path, message: str) -> str:
+    """A free-form chat message, with the current incumbent program as context (not its full repair
+    history/constraints -- those live inside one Loop run, not the console's standalone chat path).
+    """
+    return (
+        "You are being asked a question about the robot program below, outside of any repair "
+        "cycle -- this is not a request to rewrite it unless the question asks for a change.\n\n"
+        "## Current incumbent program\n```python\n"
+        + incumbent.read_text(encoding="utf-8")
+        + "```\n\n## Question\n"
+        + message
+        + "\n"
+    )
+
+
+def run_chat_oneshot(
+    state: RunState,
+    incumbent: Path,
+    message: str,
+    *,
+    reasoning_effort: str,
+    max_model_steps: int,
+) -> None:
+    """Case 2/3 of the chat flow: a one-shot muse exec call, streamed as "chat_*" SSE events."""
+    src = stream_muse_exec(
+        chat_prompt(incumbent, message),
+        reasoning_effort=reasoning_effort,
+        max_model_steps=max_model_steps,
+    )
+    while True:
+        item = src.get()
+        kind = {"muse_event": "chat_muse_event", "done": "chat_done", "error": "chat_error"}.get(
+            item.get("kind"), item.get("kind")
+        )
+        state.broadcast({**item, "kind": kind})
+        if item.get("kind") in ("done", "error"):
+            break
 
 
 def build_prompt(incumbent: Path) -> str:
@@ -466,7 +534,19 @@ def run_live_loop(state: RunState, incumbent: Path, cfg: LoopRunConfig) -> None:
             }
         )
 
-    loop = Loop(adv, synth, loop_cfg, on_attack=on_attack)
+    def ask_human(escalation):
+        from ants.orchestrator.human_gate import GateAnswer
+
+        answer_q: queue.Queue[str] = queue.Queue()
+        with state.lock:
+            state.awaiting_answer = answer_q
+        state.broadcast({"kind": "awaiting_answer", "escalation": dict(escalation)})
+        text = answer_q.get()  # blocks the loop thread until /chat delivers a reply
+        with state.lock:
+            state.awaiting_answer = None
+        return GateAnswer(channel="text", text=text)
+
+    loop = Loop(adv, synth, loop_cfg, on_attack=on_attack, ask_human=ask_human)
 
     log_path = run_dir / "loop.jsonl"
     stop_tail = threading.Event()
@@ -633,7 +713,7 @@ def make_handler(
             for arm in ("E1", "E2", "E3")
         },
     }
-    page = TEMPLATE.read_text(encoding="utf-8").replace("/*__DATA__*/null", json.dumps(data))
+    page = _assemble_shell().replace("/*__DATA__*/null", json.dumps(data))
 
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, format: str, *args) -> None:  # noqa: A002 -- stdlib signature
@@ -649,6 +729,35 @@ def make_handler(
 
         def do_GET(self) -> None:  # noqa: N802 -- stdlib handler name
             path = urlparse(self.path).path
+            if path.startswith("/static/"):
+                name = path[len("/static/") :]
+                file_path = STATIC_FILES.get(name)  # whitelist, no arbitrary filesystem access
+                if file_path is None or not file_path.exists():
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                content_type = "text/css" if name.endswith(".css") else "application/javascript"
+                body = file_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", f"{content_type}; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
+            if path.startswith("/views/"):
+                name = path[len("/views/") :]
+                file_path = STUB_FILES.get(name)  # whitelist
+                if file_path is None or not file_path.exists():
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                body = file_path.read_bytes()
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+                return
             if path == "/perception/planviewer":
                 if PLAN_VIEWER_PATH is None or not PLAN_VIEWER_PATH.exists():
                     self.send_response(404)
@@ -711,14 +820,16 @@ def make_handler(
                 self.send_header("Content-Type", "text/event-stream")
                 self.send_header("Cache-Control", "no-cache")
                 self.end_headers()
+                # One persistent connection for the whole page session, not one per run: a loop
+                # run's "done" used to close this stream, which would silently drop a Case-3
+                # queued chat's events (broadcast with zero subscribers, since the per-run
+                # connection had already closed before the auto-fired chat even started).
                 sub = state.subscribe()
                 try:
                     while True:
                         event = sub.get()
                         self.wfile.write(f"data: {json.dumps(event)}\n\n".encode())
                         self.wfile.flush()
-                        if event.get("kind") in ("done", "error"):
-                            break
                 except (BrokenPipeError, ConnectionResetError):
                     pass
                 finally:
@@ -729,6 +840,9 @@ def make_handler(
 
         def do_POST(self) -> None:  # noqa: N802 -- stdlib handler name
             path = urlparse(self.path).path
+            if path == "/chat":
+                self._handle_chat()
+                return
             if path != "/run":
                 self.send_response(404)
                 self.end_headers()
@@ -752,6 +866,18 @@ def make_handler(
                     return
                 state.running = True
 
+            def fire_queued_chat() -> None:
+                with state.lock:
+                    msg, state.queued_chat = state.queued_chat, None
+                if msg:
+                    run_chat_oneshot(
+                        state,
+                        incumbent,
+                        msg,
+                        reasoning_effort=reasoning_effort,
+                        max_model_steps=max_model_steps,
+                    )
+
             def drive_single() -> None:
                 prompt = build_prompt(incumbent)
                 src = stream_muse_exec(
@@ -764,6 +890,7 @@ def make_handler(
                         break
                 with state.lock:
                     state.running = False
+                fire_queued_chat()
 
             def drive_loop() -> None:
                 try:
@@ -771,10 +898,48 @@ def make_handler(
                 finally:
                     with state.lock:
                         state.running = False
+                    fire_queued_chat()
 
             target = drive_loop if (mode == "loop" and loop_cfg is not None) else drive_single
             threading.Thread(target=target, daemon=True).start()
             self._send_json({"ok": True})
+
+        def _handle_chat(self) -> None:
+            length = int(self.headers.get("Content-Length", "0"))
+            body = json.loads(self.rfile.read(length) or b"{}")
+            message = (body.get("message") or "").strip()
+            if not message:
+                self._send_json({"ok": False, "error": "empty message"}, status=400)
+                return
+            with state.lock:
+                # Case 1: a run is escalated and waiting on exactly this -- answer it.
+                if state.awaiting_answer is not None:
+                    answer_q = state.awaiting_answer
+                    answer_q.put(message)
+                    self._send_json({"ok": True, "case": "answer"})
+                    return
+                # Case 3: a run is active but not escalated -- queue, auto-fire once idle.
+                if state.running:
+                    state.queued_chat = message
+                    self._send_json({"ok": True, "case": "queued"})
+                    return
+                state.running = True
+            # Case 2: idle -- a one-shot Muse call, streamed as chat_* SSE events.
+            def drive_chat() -> None:
+                try:
+                    run_chat_oneshot(
+                        state,
+                        incumbent,
+                        message,
+                        reasoning_effort=reasoning_effort,
+                        max_model_steps=max_model_steps,
+                    )
+                finally:
+                    with state.lock:
+                        state.running = False
+
+            threading.Thread(target=drive_chat, daemon=True).start()
+            self._send_json({"ok": True, "case": "oneshot"})
 
     return Handler
 

@@ -126,8 +126,15 @@ def test_http_live_route_serves_frame_and_page_loads(tmp_path, monkeypatch):
 
 
 def test_template_has_live_replay_toggle_and_run_folder():
-    """Contract for the Perception source toggle, collapsible logs, scene graph, run folder."""
-    html = console_server.TEMPLATE.read_text(encoding="utf-8")
+    """Contract for the Perception source toggle, collapsible logs, scene graph, run folder.
+
+    HTML markup lives in the assembled shell (views/*.html); behaviour lives in the shared
+    static/console.js the shell loads via <script src> -- check both, since this is a contract on
+    what the served page as a whole provides, not on which file it happens to live in.
+    """
+    html = console_server._assemble_shell() + console_server.STATIC_FILES["console.js"].read_text(
+        encoding="utf-8"
+    )
     for needle in (
         'id="perc-mode-auto"',
         'id="perc-mode-live"',
