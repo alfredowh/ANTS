@@ -1034,7 +1034,7 @@
           "desc": "Default of the dialog's Muse token cap for /policy-dev."
         }
       ],
-      "description": "Start the server, click the /policy-dev chip, choose a marker clip with +, type the task, press Enter; a settings dialog opens; Run starts it. Stages: preflight, hurobo extraction (5.75 cm marker; 7 of 26 clips pass, listed in docs/studio/live-console-handoff.md), DemoSpec, prompt, one Muse generation on seed 51 in the stock scene, then the Adversary loop on real cap_harness rollouts with the mock proposer. Dialog defaults (docs/studio/skills/policy-dev.json): Synthesizer on, 5 retries, Adversary on, Thompson, 2 attacks, 1 seed, 300000 token cap. Synthesizer off attacks a given .py and reports, with no tokens. Adversary off saves the program to data/deploy/. Bowl-on-plate only. Spends Muse tokens up to the cap (about $4 at 300000). Stops and spends nothing if preflight fails or another simulator is running.",
+      "description": "Start the server, click the /policy-dev chip, choose a marker clip with +, type the task, press Enter; a settings dialog opens; Run starts it. Stages: preflight, hurobo extraction (5.75 cm marker; 7 of 26 clips pass, listed in docs/studio/live-console-handoff.md), DemoSpec, prompt, one Muse generation on seed 51 in the stock scene (prompt includes the measured stock scene, S4 format, and repairs add e3 contact evidence), then the Adversary loop on real cap_harness rollouts with the mock proposer. Dialog defaults (docs/studio/skills/policy-dev.json): Synthesizer on, 5 retries, Adversary on, Thompson, 2 attacks, 1 seed, 300000 token cap. Synthesizer off attacks a given .py and reports, with no tokens. Adversary off saves the program to data/deploy/. Bowl-on-plate only. Spends Muse tokens up to the cap (about $4 at 300000). Stops and spends nothing if preflight fails or another simulator is running.",
       "examples": [
         {
           "title": "Start the server, then use the chip",
@@ -1049,6 +1049,30 @@
       "paid": true,
       "cost": "about $4 at most (300k tokens)",
       "minutes": 40
+    },
+    {
+      "id": "studio.stock-scene",
+      "title": "Studio: measure the stock scene /policy-dev sends",
+      "group": "viewer",
+      "runner": "ants",
+      "where": "ANTS repo root",
+      "base": "-m ants.studio.stock_scene",
+      "args": [],
+      "description": "One no-op rollout in the stock scene on seed 51 (no model, no tokens) through the launcher, then writes data/scenes/stock/contacts_scene.json and data/scene_text/stock_seed51_S4.txt. /policy-dev runs this itself if the text is missing. The S4_L* files describe the scaled scene and must not be sent to a stock run. Needs the simulator to be free.",
+      "examples": [
+        {
+          "title": "Measure once",
+          "cmd": "uv run python -m ants.studio.stock_scene"
+        }
+      ],
+      "modules": [],
+      "in": [],
+      "out": [
+        "data/scene_text/stock_seed51_S4.txt",
+        "data/scenes/stock/contacts_scene.json"
+      ],
+      "paid": false,
+      "minutes": 1
     },
     {
       "id": "setup.sync",

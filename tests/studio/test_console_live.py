@@ -259,9 +259,11 @@ def test_snapshot_and_flow_state_are_tied_to_the_session():
 
 def test_scene_panel_is_labelled_with_its_real_source(tmp_path):
     js = console_server.STATIC_FILES["console.js"].read_text(encoding="utf-8")
-    assert "has no scene text" in js and "Scene given to Synthesizer" not in js
+    assert "as sent to the Synthesizer" in js and "shown for reference" in js
     from ants.studio import policy_dev
 
     skill = policy_dev.load_skill()
     cmd = policy_dev.generation_command("t", Path("d.json"), Path("o"), 1, 1, True, skill)
-    assert "--scene-text-file" not in cmd and cmd[cmd.index("--scenes") + 1] == "stock"
+    assert cmd[cmd.index("--scenes") + 1] == "stock"
+    text = cmd[cmd.index("--scene-text-file") + 1]  # the stock text, never the scaled S4_L* files
+    assert Path(text).name == "stock_seed51_S4.txt"

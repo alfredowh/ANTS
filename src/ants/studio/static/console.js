@@ -129,14 +129,16 @@ function renderScene2D(kind) {
   if (!scene) {
     svg.innerHTML = "";
     asofEl.textContent = "";
-    noteEl.textContent = "This run's prompt has no scene text. /policy-dev debugs in the stock scene (libero_goal_swap task 8) and the program finds objects at run time.";
+    noteEl.textContent = "Not measured yet. The first /policy-dev run measures the stock scene (libero_goal_swap task 8, seed 51) with one no-op rollout and sends that description to the Synthesizer; reload to see it.";
     noteEl.title = "Start the server with --scene <contacts_scene.json> to show a scene file here.";
     document.querySelector(".scene2d").classList.add("no-scene");
     return;
   }
   asofEl.textContent = "as of " + scene.as_of;
-  noteEl.textContent = "Scene file: " + (s2d.source || "unknown") + " (shown for reference; /policy-dev does not send it to the Synthesizer)";
-  noteEl.title = "From --scene: oracle geometry, no robot trajectory.";
+  noteEl.textContent = s2d.sent
+    ? "Stock scene, seed 51, as sent to the Synthesizer: " + s2d.source
+    : "Scene file: " + (s2d.source || "unknown") + " (shown for reference; /policy-dev sends the stock scene instead)";
+  noteEl.title = "Simulator truth (oracle geometry) before the arm moves, no robot trajectory.";
 
   const pad = 14;
   let xs = [], ys = [];

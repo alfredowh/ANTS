@@ -342,6 +342,8 @@ def generation_command(
         "--debug-seed", str(scene["debug_seed"]), "--eval-seeds", "",
         "--scenes", scene["scene"], "--debug-scene", scene["scene"],
         "--repairs", str(repairs), "--token-budget", str(budget),
+        "--scene-text-file", str(root / skill["scene_context"]["text"]),
+        "--evidence", skill["scene_context"]["evidence"],
     ]  # fmt: skip
 
 
@@ -384,7 +386,11 @@ def loop_budget(total: int, generation_spent: int, headroom: int) -> int:
 
 
 def build_prompt_preview(
-    task: str, demo_summary: dict | None, out: Path, root: Path = REPO_ROOT
+    task: str,
+    demo_summary: dict | None,
+    out: Path,
+    root: Path = REPO_ROOT,
+    scene_text: str | None = None,
 ) -> dict:
     """The exact first prompt, saved before any spend (same function and inputs as generation)."""
     from ants.orchestrator.demo_vs_nodemo import EXAMPLE, EXAMPLE_TASK
@@ -393,13 +399,16 @@ def build_prompt_preview(
     aspire = Path(os.environ.get("ANTS_ASPIRE_ROOT", root / "ASPIRE"))
     api_ref = (aspire / "docs" / "api-reference.md").read_text(encoding="utf-8")
     example = (aspire / EXAMPLE).read_text(encoding="utf-8")
-    messages = build_messages(api_ref, example, EXAMPLE_TASK, task, demo_summary)
+    messages = build_messages(
+        api_ref, example, EXAMPLE_TASK, task, demo_summary, scene_context=scene_text
+    )
     path = out / "prompt_messages.json"
     path.write_text(json.dumps(messages, indent=1), encoding="utf-8")
     return {
         "path": str(path),
         "chars": sum(len(str(m.get("content", ""))) for m in messages),
         "has_demo": demo_summary is not None,
+        "has_scene": scene_text is not None,
     }
 
 
@@ -656,6 +665,23 @@ class Pipeline:
         self.stage("demospec", "done", json.dumps(summary, indent=1), path=str(spec))
         return spec, summary
 
+    def scene_text(self) -> str | None:
+        """The stock-scene text for the prompt, measured once if missing; None if that failed."""
+        context = self.skill["scene_context"]
+        path = self.root / context["text"]
+        if not path.is_file():
+            self.stage(
+                "prompt", "started", "Measuring the stock scene (one no-op rollout, no tokens)"
+            )
+            cmd = [sys.executable, "-m", "ants.studio.stock_scene"]
+            self.run_cmd("prompt", cmd, self.root, self.req.run_dir / "scene_prep.log")
+            if not path.is_file():
+                return None
+        self._log(
+            {"kind": "scene_context", "scene_text": str(path), "evidence": context["evidence"]}
+        )
+        return path.read_text(encoding="utf-8").strip()
+
     def synthesize(self) -> tuple[Path, int] | None:
         """Video to a program that passed its nominal seed, or None after finishing the run."""
         req = self.req
@@ -663,12 +689,23 @@ class Pipeline:
         if prepared is None:
             return None
         spec, summary = prepared
+        scene_text = self.scene_text()
+        self.check_stop()
+        if scene_text is None:
+            self.stage("prompt", "failed", "The stock scene could not be measured")
+            self.finish(
+                "no_working_policy", "draft",
+                f"The stock scene could not be measured, so no tokens were spent. See "
+                f"{req.run_dir / 'scene_prep.log'}.",
+            )  # fmt: skip
+            return None
         self.stage("prompt", "started", "Building the prompt")
-        preview = self.prompt_preview(req.task, summary, req.run_dir, self.root)
+        preview = self.prompt_preview(req.task, summary, req.run_dir, self.root, scene_text)
         self.stage(
             "prompt", "done",
             f"{preview['chars']:,} characters, "
-            f"{'with' if preview['has_demo'] else 'without'} the demonstration",
+            f"{'with' if preview['has_demo'] else 'without'} the demonstration, "
+            f"{'with' if preview.get('has_scene') else 'without'} the stock scene",
             path=preview["path"],
         )  # fmt: skip
         out = req.run_dir / "generation"
@@ -705,7 +742,16 @@ class Pipeline:
         req, cfg, skill = self.req, self.req.settings, self.skill
         req.run_dir.mkdir(parents=True, exist_ok=True)
         (req.run_dir / "settings.json").write_text(
-            json.dumps({"task": req.task, "video": str(req.video or ""), **cfg}, indent=2),
+            json.dumps(
+                {
+                    "task": req.task,
+                    "video": str(req.video or ""),
+                    "scene_text": str(self.root / skill["scene_context"]["text"]),
+                    "evidence": skill["scene_context"]["evidence"],
+                    **cfg,
+                },
+                indent=2,
+            ),
             encoding="utf-8",
         )
         self.note(

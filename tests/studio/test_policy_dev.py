@@ -48,6 +48,8 @@ class FakeWorld:
                 json.dumps({"summary": {"grasp": 1}}), encoding="utf-8"
             )
             return FakeProc([], 0)
+        if "ants.studio.stock_scene" in text:
+            return FakeProc([], 1)  # writes nothing
         return self._generate(cmd)
 
     def _generate(self, cmd):
@@ -71,8 +73,13 @@ class FakeWorld:
         return FakeProc(lines, 0)
 
 
-def _preview(task, summary, out, root):
-    return {"path": str(out / "prompt_messages.json"), "chars": 10, "has_demo": summary is not None}
+def _preview(task, summary, out, root, scene_text=None):
+    SCENES.append(scene_text)
+    return {"path": str(out / "prompt_messages.json"), "chars": 10, "has_demo": summary is not None,
+            "has_scene": scene_text is not None}  # fmt: skip
+
+
+SCENES: list = []
 
 
 def _settings(**over):
@@ -81,8 +88,12 @@ def _settings(**over):
     return settings
 
 
-def _run(tmp_path, world, video=True, stop=lambda: False, jobs=(), **over):
+def _run(tmp_path, world, video=True, stop=lambda: False, jobs=(), scene=True, **over):
     events, loops, attacks = [], [], []
+    if scene:
+        text = tmp_path / SKILL["scene_context"]["text"]
+        text.parent.mkdir(parents=True, exist_ok=True)
+        text.write_text("Scene, measured\n", encoding="utf-8")
     clip = tmp_path / "clip.mp4"
     clip.write_bytes(b"v")
     (tmp_path / "run").mkdir(exist_ok=True)
@@ -154,6 +165,52 @@ def test_generation_command_is_demo_arm_stock_scene_acceptance_seed(tmp_path):
     assert get("--eval-seeds") == ""
     assert (get("--suite"), get("--task-id")) == ("libero_goal_swap", "8")
     assert (get("--scenes"), get("--debug-scene")) == ("stock", "stock")
+
+
+def test_generation_sends_the_stock_scene_text_and_e3_evidence(tmp_path):
+    world = FakeWorld()
+    SCENES.clear()
+    _, _, req, _ = _run(tmp_path, world)
+    cmd = next(c for c in world.calls if "ants.orchestrator.demo_vs_nodemo" in c)
+    text = tmp_path / SKILL["scene_context"]["text"]
+    assert cmd[cmd.index("--scene-text-file") + 1] == str(text)
+    assert cmd[cmd.index("--evidence") + 1] == "e3"
+    assert (cmd[cmd.index("--scenes") + 1], cmd[cmd.index("--debug-scene") + 1]) == (
+        "stock",
+        "stock",
+    )
+    assert "S4_L" not in str(text)  # those describe the scaled scene
+    assert SCENES == ["Scene, measured"]  # the preview gets what generation reads (stripped)
+    assert json.loads((req.run_dir / "settings.json").read_text("utf-8"))["scene_text"] == str(text)
+    rows = (req.run_dir / "pipeline.jsonl").read_text("utf-8")
+    assert '"kind": "scene_context"' in rows and str(text) in rows
+
+
+def test_scene_that_cannot_be_measured_spends_nothing(tmp_path):
+    world = FakeWorld()
+    events, loops, _, _ = _run(tmp_path, world, scene=False)
+    assert any("ants.studio.stock_scene" in c for c in world.calls)
+    assert not any("ants.orchestrator.demo_vs_nodemo" in c for c in world.calls)
+    assert ("prompt", "failed") in _stages(events) and not loops
+    assert _done(events)[0]["stopped"] == "no_working_policy"
+
+
+def test_preview_puts_the_scene_in_the_prompt(tmp_path):
+    aspire = tmp_path / "ASPIRE"
+    (aspire / "docs").mkdir(parents=True)
+    (aspire / "docs" / "api-reference.md").write_text("API", encoding="utf-8")
+    from ants.orchestrator.demo_vs_nodemo import EXAMPLE
+
+    (aspire / EXAMPLE).parent.mkdir(parents=True, exist_ok=True)
+    (aspire / EXAMPLE).write_text("EX", encoding="utf-8")
+    info = pd.build_prompt_preview("t", None, tmp_path, tmp_path, "SCENE-MARKER")
+    assert info["has_scene"]
+    assert "SCENE-MARKER" in (tmp_path / "prompt_messages.json").read_text("utf-8")
+
+
+def test_stock_command_with_contacts_uses_the_launcher_only_then():
+    src = (pd.REPO_ROOT / "src/ants/orchestrator/demo_vs_nodemo.py").read_text("utf-8")
+    assert "launcher=launcher if args.contacts else None" in src
 
 
 def test_extraction_uses_the_measured_marker_and_the_logged_setup(tmp_path):
