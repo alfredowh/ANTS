@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from ants.studio import adversary_view, live_view, policy_dev
+from ants.studio import adversary_view, attempts_view, live_view, policy_dev
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 STUDIO_DIR = Path(__file__).parent
@@ -36,6 +36,8 @@ STATIC_FILES = {
     "console.css": STATIC_DIR / "console.css",
     "console.js": STATIC_DIR / "console.js",
     "wizard.js": STATIC_DIR / "wizard.js",
+    "demo_media.js": STATIC_DIR / "demo_media.js",
+    "attempts.js": STATIC_DIR / "attempts.js",
     "studio_switch.js": STATIC_DIR / "studio_switch.js",
     "flow.js": STATIC_DIR / "flow.js",
     "live.js": STATIC_DIR / "live.js",
@@ -170,6 +172,57 @@ def deploy_latest(session_dir: Path | None, incumbent: Path, deploy_dir: Path) -
     return policy_dev.save_deployed(src, version, deploy_dir)
 
 
+def session_tokens(session_dir: Path | None, usd_per_mtok: float = 13.5) -> dict:
+    """New model tokens this session spent, from its own run and event logs, never from the shared
+    ledger, which other sessions and experiments also write. A call counts when it has finished."""
+    generation = rewrites = chat = spark = 0
+    if session_dir is not None:
+        for log in session_dir.glob("runs/run-*/generation/events.jsonl"):
+            for row in _jsonl(log):
+                if row.get("kind") == "program" and str(row.get("from_cache")).lower() != "true":
+                    generation += int(row.get("tokens") or 0)
+        for run in session_dir.glob("runs/run-*"):
+            spent = [_json_or_none(u) or {} for u in run.glob("muse/cycle*/usage.json")]
+            rewrites += max((int(u.get("spent_total") or 0) for u in spent), default=0)
+            spark += int((_json_or_none(run / "spark_usage.json") or {}).get("spent") or 0)
+        for row in _jsonl(session_dir / "events.jsonl"):
+            if row.get("kind") == "chat_done":
+                usage = row.get("usage") or {}
+                chat += int(usage.get("input_tokens") or 0) + int(usage.get("output_tokens") or 0)
+    total = generation + rewrites + chat + spark
+    return {
+        "total": total,
+        "usd": round(total * usd_per_mtok / 1e6, 2),
+        "generation": generation,
+        "rewrites": rewrites,
+        "chat": chat,
+        "spark": spark,
+    }
+
+
+def _jsonl(path: Path) -> list[dict]:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    rows = []
+    for line in lines:
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        if isinstance(row, dict):
+            rows.append(row)
+    return rows
+
+
+def _json_or_none(path: Path) -> dict | None:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
 class Session:
     """One server/browser session = one folder holding everything relevant to it.
 
@@ -295,6 +348,7 @@ class RunState:
     awaiting_answer: queue.Queue[str] | None = None
     queued_chat: str | None = None
     session: Session | None = None
+    picked_video: Path | None = None  # chosen in the file dialog, shown before a run starts
     live: live_view.LiveView | None = None  # the rollout-in-progress panel (live_view.py)
 
     def broadcast(self, event: dict) -> None:
@@ -467,11 +521,19 @@ class LoopRunConfig:
     stall_window: int = 2  # W: cycles one failure signature may stall before escalation
     nominal_seeds: tuple[int, ...] = (51,)  # acceptance seeds for the nominal cases
     synth_token_budget: int = 200_000
+    spark_token_budget: int | None = None  # None keeps the adapter's default
     video_dir: Path | None = None  # where /policy-dev's file dialog opens (None: the skill file's)
     pipeline_token_budget: int | None = None  # /policy-dev total Muse cap (None: the skill file's)
     reasoning_effort: str = "high"
     max_model_steps: int = 20
     out_dir: Path = field(default_factory=lambda: REPO_ROOT / "data" / "console_runs")
+
+
+def _record_spark(adv, run_dir: Path) -> None:
+    """The Adversary model's new tokens for this run, for the session's token count."""
+    spent = getattr(getattr(adv, "model", None), "run_spent", 0)
+    if spent:
+        (run_dir / "spark_usage.json").write_text(json.dumps({"spent": spent}), encoding="utf-8")
 
 
 def _adversary_from(cfg: LoopRunConfig, run_dir: Path):
@@ -491,6 +553,8 @@ def _adversary_from(cfg: LoopRunConfig, run_dir: Path):
         "tau": cfg.tau,
         "history_path": run_dir / "history.jsonl",
     }
+    if cfg.spark_token_budget is not None:
+        kwargs["token_budget"] = cfg.spark_token_budget
     if cfg.categories:
         kwargs["categories"] = cfg.categories
     if (
@@ -518,6 +582,7 @@ def run_attacks_only(state: RunState, program: Path, cfg: LoopRunConfig, run_dir
             break
         report = adv.attack(policy)
         append_row(run_dir / "attacks.jsonl", attack_row(adv, report, policy))
+        _record_spark(raw_adv, run_dir)
         failures += report.failure is not None
         state.broadcast(
             {
@@ -613,6 +678,7 @@ def run_live_loop(
             from ants.studio.run import append_row, attack_row
 
             append_row(run_dir / "attacks.jsonl", attack_row(adv, report, attacked_policy))
+            _record_spark(adv, run_dir)
         except Exception as exc:  # noqa: BLE001 -- logging must never break the loop
             state.broadcast({"kind": "error", "message": f"attacks.jsonl logging failed: {exc}"})
 
@@ -823,7 +889,10 @@ def make_handler(
         return dataclasses.replace(
             loop_cfg or LoopRunConfig(),
             backend="cap_harness",
-            adversary_model=skill["loop"]["proposer_model"],
+            adversary_model="muse-spark"
+            if settings.get("spark")
+            else skill["loop"]["proposer_model"],
+            spark_token_budget=settings.get("spark_token_cap") if settings.get("spark") else None,
             eta=settings["eta"],
             cycles=settings["attacks"],
             stall_window=skill["loop"]["stall_window"],
@@ -928,6 +997,44 @@ def make_handler(
                 self.wfile.write(body or b"")
                 return
             # ---- end live simulator panel ----
+            # ---- human demo video and generation attempts of the current run ----
+            current_run = Path(pipeline.current["run_dir"]) if pipeline.current else None
+            if path == "/session/tokens":
+                self._send_json(session_tokens(state.session.dir if state.session else None))
+                return
+            if path == "/demo-video/status":
+                overlay = current_run / "demo" / "overlay.mp4" if current_run else None
+                self._send_json(
+                    {
+                        "raw": self._demo_raw() is not None,
+                        "overlay": bool(overlay and overlay.is_file()),
+                    }
+                )
+                return
+            if path in ("/demo-video/raw", "/demo-video/overlay"):
+                file = (
+                    self._demo_raw()
+                    if path.endswith("raw")
+                    else (current_run / "demo" / "overlay.mp4" if current_run else None)
+                )
+                if file is None or not file.is_file():
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                self._send_ranged(file, "video/mp4")
+                return
+            if path == "/attempts":
+                self._send_json({"attempts": attempts_view.attempts(current_run)})
+                return
+            if path.startswith("/attempts/media/"):
+                rel = unquote(path[len("/attempts/media/") :])
+                image = attempts_view.media_path(current_run, rel)
+                if image is None:
+                    self.send_response(404)
+                    self.end_headers()
+                    return
+                self._send_ranged(image, attempts_view.MEDIA[image.suffix.lower()])
+                return
             if path == "/session":
                 self._send_json(
                     {
@@ -954,6 +1061,11 @@ def make_handler(
                         "current": pipeline.current,
                         "settings": skill["settings"],
                         "budget": skill["budget"],
+                        "proposer_model": (
+                            "muse-spark"
+                            if (pipeline.current or {}).get("settings", {}).get("spark")
+                            else skill["loop"]["proposer_model"]
+                        ),
                     }
                 )
                 return
@@ -995,7 +1107,10 @@ def make_handler(
                 folder = (loop_cfg.video_dir if loop_cfg else None) or (
                     REPO_ROOT / skill["video"]["folder"]
                 )
-                self._send_json(policy_dev.pick_file(folder, skill["video"]["extensions"]))
+                picked = policy_dev.pick_file(folder, skill["video"]["extensions"])
+                if picked.get("ok"):
+                    state.picked_video = Path(picked["path"])
+                self._send_json(picked)
                 return
             if path == "/pick-script":
                 self._send_json(
@@ -1069,6 +1184,41 @@ def make_handler(
             self.end_headers()
 
         # ---- Adversary view ----
+        def _demo_raw(self) -> Path | None:
+            if pipeline.current and pipeline.current.get("video"):
+                return Path(pipeline.current["video"])
+            return state.picked_video
+
+        def _send_ranged(self, file: Path, content_type: str) -> None:
+            size = file.stat().st_size
+            start, end = adversary_view.byte_range(self.headers.get("Range"), size)
+            if start is None:
+                self.send_response(416)
+                self.send_header("Content-Range", f"bytes */{size}")
+                self.end_headers()
+                return
+            partial = self.headers.get("Range") is not None
+            self.send_response(206 if partial else 200)
+            self.send_header("Content-Type", content_type)
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Length", str(end - start + 1))
+            self.send_header("Cache-Control", "no-store")
+            if partial:
+                self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
+            self.end_headers()
+            try:
+                with file.open("rb") as fh:
+                    fh.seek(start)
+                    left = end - start + 1
+                    while left > 0:
+                        chunk = fh.read(min(1 << 20, left))
+                        if not chunk:
+                            break
+                        self.wfile.write(chunk)
+                        left -= len(chunk)
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
         def _serve_adversary(self, rest: str) -> None:
             run_dir = adversary_view.latest_run(runs_dir()) or adversary_run
             if not rest:
@@ -1132,6 +1282,8 @@ def make_handler(
                     )
                     return
                 state.queued_chat = None
+                state.picked_video = None
+                pipeline.current = None
                 start_session(state, sessions_dir, loop_cfg, session_meta())
             state.broadcast({"kind": "session_reset", "session": state.session.id})
             self._send_json({"ok": True, "session": state.session.id})

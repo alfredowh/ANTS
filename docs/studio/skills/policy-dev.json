@@ -1,6 +1,6 @@
 {
   "name": "policy-dev",
-  "version": 4,
+  "version": 5,
   "description": "/policy-dev: attach a human video, type the task, send; a settings dialog opens; Run starts the pipeline. Stages: video, extract (hurobo, markers required), demospec, prompt, generate, nominal, attack, diagnose, rewrite, gate, deploy. Plain data: any agent can read these defaults and limits; the Studio server and dialog read them from this file. Bowl-on-plate only. Muse tokens cost about $13.5 per million.",
   "command": "/policy-dev <task>",
   "scene": {
@@ -121,6 +121,20 @@
       "max": 15,
       "label": "Acceptance seeds",
       "help": "Seeds 51 upward."
+    },
+    "spark": {
+      "type": "bool",
+      "default": false,
+      "label": "Muse Spark (Adversary)",
+      "help": "On: Muse Spark proposes attacks, diagnoses failures and explains them; adds cost. Off: uniform proposals and rule diagnosis, free."
+    },
+    "spark_token_cap": {
+      "type": "int",
+      "default": 100000,
+      "min": 10000,
+      "max": 1000000,
+      "label": "Muse Spark token cap",
+      "help": "Separate from the Synthesizer cap. When it is spent, the Adversary falls back to the free behaviour."
     },
     "token_cap": {
       "type": "int",

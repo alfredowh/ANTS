@@ -282,12 +282,18 @@ const NAV_KEY = "ants-studio-nav", PANELS_KEY = "ants-studio-panels";
   const labels = { left: "context panel (primitives, scene prompt)", right: "run details (usage, reply, settings)" };
   let panels = { left: false, right: false };
   try { panels = Object.assign(panels, JSON.parse(localStorage.getItem(PANELS_KEY) || "{}")); } catch (e) {}
+  const forced = new Set(); // reasons the right column is open for now (live view, human demo)
+  window.studioForceRight = (reason, on) => {
+    if (on) forced.add(reason); else forced.delete(reason);
+    applyPanels();
+  };
   function applyPanels() {
     for (const side of ["left", "right"]) {
-      main.classList.toggle("show-" + side, !!panels[side]);
-      btns[side].classList.toggle("on", !!panels[side]);
-      btns[side].title = (panels[side] ? "Hide " : "Show ") + labels[side];
-      btns[side].innerHTML = (side === "left") === !!panels[side] ? "&#9666;" : "&#9656;";
+      const open = !!panels[side] || (side === "right" && forced.size > 0);
+      main.classList.toggle("show-" + side, open);
+      btns[side].classList.toggle("on", open);
+      btns[side].title = (open ? "Hide " : "Show ") + labels[side];
+      btns[side].innerHTML = (side === "left") === open ? "&#9666;" : "&#9656;";
     }
     try { localStorage.setItem(PANELS_KEY, JSON.stringify(panels)); } catch (e) {}
   }
@@ -306,6 +312,17 @@ function refreshRunList() {
   }).catch(() => { document.getElementById("navruns").innerHTML = `<div class="navnote">runs unavailable</div>`; });
 }
 refreshRunList();
+
+/* ---------- tokens this session has spent, from its own logs; a call counts once it has finished ---------- */
+function refreshTokens() {
+  fetch("/session/tokens").then((r) => r.json()).then((t) => {
+    const el = document.getElementById("token-pill");
+    el.textContent = `${t.total.toLocaleString()} tokens · $${t.usd.toFixed(2)}`;
+    el.title = `This session, new tokens at the observed $13.5 per million:\ngeneration ${t.generation.toLocaleString()}\nrewrites ${t.rewrites.toLocaleString()}\nMuse Spark ${t.spark.toLocaleString()}\nchat ${t.chat.toLocaleString()}\nUpdates when a model call finishes; Muse Spark after each attack.`;
+  }).catch(() => {});
+}
+refreshTokens();
+setInterval(refreshTokens, 2000);
 
 /* ---------- session: one folder per session on the server (chat, events, runs); "New session" resets ---------- */
 let currentSessionId = null;
@@ -667,6 +684,8 @@ function openStream() {
     const data = JSON.parse(ev.data);
     if (window.studioEvent) window.studioEvent(data); // Adversary view refresh
     if (window.flowEvent) window.flowEvent(data); // live process-flow panel
+    if (window.demoEvent) window.demoEvent(data);
+    if (window.attemptsEvent) window.attemptsEvent(data);
     if (window.wizardEvent) window.wizardEvent(data); // one shared connection (browsers allow only ~6 per site)
     if (data.kind === "loop_event") handleLoopEvent(data.row);
     else if (data.kind === "attack_event") handleAttackEvent(data);

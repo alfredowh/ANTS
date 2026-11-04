@@ -1022,6 +1022,33 @@
       "minutes": 1
     },
     {
+      "id": "studio.hurobo-overlay",
+      "title": "Studio: render a demo over its clip",
+      "group": "viewer",
+      "runner": "hurobo",
+      "where": "hurobo folder",
+      "base": ".venv/bin/python ../tools/hurobo_overlay.py <demo.npz> --video <clip.mp4> --setup data/raw/setup_01/measurements.yaml --intrinsics data/camera_intrinsics_s10e.npz --marker-size-m 0.0575 --out <overlay.mp4>",
+      "args": [],
+      "description": "Draws hurobo's overlay (hand skeleton, marker detections, TCP trajectory, object centres, gripper gauge) on the clip at recorded speed. /policy-dev runs this on its own after extraction and transcodes the result to H.264 for the browser. No model, no tokens, no GPU; about 75 s for a 20 s clip (measured once).",
+      "examples": [
+        {
+          "title": "Render one demo",
+          "cmd": ".venv/bin/python ../tools/hurobo_overlay.py ../data/hurobo_e1/demos_marker_0.06/20261016_233859.npz --video data/raw/e1/clips/20261016_233859.mp4 --setup data/raw/setup_01/measurements.yaml --intrinsics data/camera_intrinsics_s10e.npz --marker-size-m 0.0575 --out /tmp/overlay.mp4",
+          "note": ""
+        }
+      ],
+      "modules": [],
+      "in": [
+        "hurobo demo .npz",
+        "source clip"
+      ],
+      "out": [
+        "overlay .mp4"
+      ],
+      "paid": false,
+      "minutes": 2
+    },
+    {
       "id": "setup.sync",
       "title": "Install / sync the ANTS env",
       "group": "setup",

@@ -43,14 +43,14 @@ body.nav-hidden .nav{display:none}
 main{display:flex;background:var(--bg);height:100%}
 .col{background:var(--bg);overflow-y:auto;padding:16px}
 #col-left{flex:none;width:var(--lw,280px);border-right:1px solid var(--line)}
-#col-right{flex:none;width:var(--rw,300px);border-left:1px solid var(--line)}
+#col-right{flex:none;width:var(--rw,360px);border-left:1px solid var(--line)}
 #col-center{flex:1;min-width:0}
 #handle-left,#handle-right{display:none}
 #col-left,#col-right{width:11px;padding:0;overflow:hidden;background:var(--raise)}
 #col-left>*,#col-right>*{visibility:hidden}
 main.show-left #handle-left,main.show-right #handle-right{display:block}
 main.show-left #col-left{width:var(--lw,280px);padding:16px;overflow-y:auto;background:var(--bg)}
-main.show-right #col-right{width:var(--rw,300px);padding:16px;overflow-y:auto;background:var(--bg)}
+main.show-right #col-right{width:var(--rw,360px);padding:16px;overflow-y:auto;background:var(--bg)}
 main.show-left #col-left>*,main.show-right #col-right>*{visibility:visible}
 .icon-btn{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border:1px solid transparent;border-radius:8px;background:none;color:var(--muted);cursor:pointer;padding:0}
 .icon-btn:hover{color:var(--fg);background:var(--raise)}
@@ -242,3 +242,4 @@ body[data-view="adversary"] #adversary-view{display:block}
 .set-actions{margin-top:10px;text-align:right}
 .scene2d.no-scene .scene2d-head,.scene2d.no-scene .scene2d-layers,.scene2d.no-scene .scene2d-canvas{display:none}
 .scene2d.no-scene .scene2d-note{font-size:13.7px;cursor:default;margin-top:0}
+.token-pill{font-family:var(--mono);font-size:13px;color:var(--muted);border:1px solid var(--line);padding:3px 8px;margin-left:8px;white-space:nowrap}

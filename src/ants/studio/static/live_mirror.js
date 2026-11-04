@@ -3,8 +3,8 @@
    simulator, not a reconstruction. three.js loads on first use; polling only. */
 (function () {
   const POLL_MS = 125, PREF = "ants-studio-mirror";
-  let enabled = true;
-  try { enabled = localStorage.getItem(PREF) !== "0"; } catch (e) {}
+  let enabled = false; // off by default: the column is for the two cameras
+  try { enabled = localStorage.getItem(PREF) === "1"; } catch (e) {}
   let loaded = null, three = null, scene, camera, renderer, controls, contacts;
   let modelId = null, objects = [], busy = false, status = {active: false}, shown = false, dirty = false, cam0 = null;
   const layers = {robot: [], scene: []};
@@ -29,7 +29,7 @@
   toggle.type = "button";
   toggle.textContent = "3D";
   toggle.title = "Show or hide the Live mirror";
-  head.insertBefore(toggle, document.getElementById("live-close"));
+  head.appendChild(toggle);
   const note = document.getElementById("mirror-note");
 
   function loadScript(src) {

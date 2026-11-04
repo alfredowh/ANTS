@@ -147,6 +147,10 @@ def worst_case_note(settings: dict, skill: dict) -> str:
     )
     if need > cap - b["one_call_headroom_tokens"]:
         note += " That can pass the cap; the run then ends as a budget stop."
+    if settings.get("spark") and settings["adversary"]:
+        spark = settings["spark_token_cap"]
+        spark_usd = spark / 1e6 * b["usd_per_million_tokens"]
+        note += f" Muse Spark adds up to {spark:,} tokens, about ${spark_usd:.2f}."
     return note
 
 
@@ -344,6 +348,7 @@ def generation_command(
         "--repairs", str(repairs), "--token-budget", str(budget),
         "--scene-text-file", str(root / skill["scene_context"]["text"]),
         "--evidence", skill["scene_context"]["evidence"],
+        "--explain",  # the model states why it changed the code; shown on each attempt
     ]  # fmt: skip
 
 
@@ -432,6 +437,78 @@ def other_simulator_jobs(proc: Path = Path("/proc"), own: int | None = None) -> 
         if any(m in cmd for m in SIMULATOR_MARKERS):
             found.append(f"pid {entry.name}: {cmd.replace(chr(0), ' ').strip()[:160]}")
     return found
+
+
+def observed_planner(generation: Path) -> dict | None:
+    """What the planner really was, from a logged motion plan of this run; None if none yet."""
+    for path in sorted(generation.glob("**/trace/calls/*plan-motion/output.json")):
+        try:
+            out = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        diag = out.get("diagnostics") or {}
+        traj = out.get("trajectory") or {}
+        return {
+            "ik_solver": diag.get("ik_solver"),
+            "trajectory_planner": diag.get("trajectory_planner"),
+            "collision_aware": traj.get("collision_aware"),
+            "curobo_used": "curobo" in f"{diag.get('ik_solver')} {diag.get('trajectory_planner')}",
+            "source": str(path),
+        }
+    return None
+
+
+def _commit(folder: Path) -> str | None:
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(folder), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=10,
+        )  # fmt: skip
+        return out.stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def execution_record(req: Request, skill: dict, root: Path = REPO_ROOT) -> dict:
+    """Everything this run executes with, as it will be used. Written to `execution.json`."""
+    cfg, scene, context = req.settings, skill["scene"], skill["scene_context"]
+    gen = skill["generation"]
+    return {
+        "task": req.task,
+        "video": str(req.video or ""),
+        "code": {"ants": _commit(root), "aspire": _commit(root / "ASPIRE")},
+        "extraction": skill["extraction"],
+        "scene": {**scene, "scene_text": context["text"], "scene_level": context["level"]},
+        "synthesizer": {
+            "enabled": cfg["synthesizer"],
+            "model": "muse-wonder-1.0",
+            "temperature": gen["temperature"],
+            "max_retries": cfg["max_retries"],
+            "evidence": context["evidence"],
+            "contacts": context["evidence"] != "none",
+            "explain": True,
+            "token_cap": cfg["token_cap"],
+        },
+        "planner": {
+            "setting": "default",
+            "curobo_requested": False,
+            "observed": None,
+            "note": "Observed values are read from the run's first logged motion plan.",
+        },
+        "adversary": {
+            "enabled": cfg["adversary"],
+            "backend": scene["backend"],
+            "proposer_model": "muse-spark-1.3"
+            if cfg.get("spark")
+            else skill["loop"]["proposer_model"],
+            "spark_token_cap": cfg.get("spark_token_cap") if cfg.get("spark") else 0,
+            "strategy": cfg["strategy"],
+            "eta": cfg["eta"],
+            "attacks": cfg["attacks"],
+            "seeds": cfg["seeds"],
+            "stall_window": skill["loop"]["stall_window"],
+        },
+    }
 
 
 class Stopped(Exception):
@@ -575,6 +652,7 @@ class Pipeline:
             )  # fmt: skip
             return None
         self.stage("extract", "done", "All quality gates passed", demo=str(c["npz"]))
+        self.start_overlay(c["npz"])
         self.stage("demospec", "started", "Building the DemoSpec")
         code = self.run_cmd("demospec", c["demospec"], self.root, log)
         spec = c["demospec_json"]
@@ -583,6 +661,43 @@ class Pipeline:
             self.finish("demospec_failed", "demospec", "Could not build the DemoSpec.")
             return None
         return spec
+
+    def start_overlay(self, npz: Path) -> None:
+        """Render the demo over its clip in the background; a failure never stops the pipeline."""
+        threading.Thread(target=self._render_overlay, args=(npz,), daemon=True).start()
+
+    def _render_overlay(self, npz: Path) -> None:
+        e = self.skill["extraction"]
+        out = self.req.run_dir / "demo"
+        raw, final = out / "overlay_raw.mp4", out / "overlay.mp4"
+        log = out / "overlay.log"
+        draw = [
+            str(self.root / e["python"]), str(self.root / "tools" / "hurobo_overlay.py"), str(npz),
+            "--video", str(self.req.video), "--setup", e["setup"], "--intrinsics", e["intrinsics"],
+            "--marker-size-m", str(e["marker_size_m"]), "--out", str(raw),
+        ]  # fmt: skip
+        encode = [
+            "ffmpeg", "-y", "-v", "error", "-i", str(raw), "-c:v", "libx264",
+            "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-preset", "veryfast", str(final),
+        ]  # fmt: skip
+        self._emit({"kind": "pipeline_demo_video", "state": "rendering"})
+        try:
+            with log.open("a", encoding="utf-8") as fh:
+                for cmd, cwd in ((draw, self.root / e["cwd"]), (encode, self.root)):
+                    self._log({"kind": "command", "stage": "overlay", "cmd": cmd, "cwd": str(cwd)})
+                    subprocess.run(cmd, cwd=str(cwd), stdout=fh, stderr=fh, check=True)
+            raw.unlink(missing_ok=True)
+            self._emit({"kind": "pipeline_demo_video", "state": "overlay"})
+        except (OSError, subprocess.SubprocessError) as err:
+            self._log({"kind": "overlay_failed", "error": str(err)})
+            self._emit({"kind": "pipeline_demo_video", "state": "failed", "detail": f"see {log}"})
+
+    def write_execution(self, observed: dict | None = None) -> None:
+        path = self.req.run_dir / "execution.json"
+        record = execution_record(self.req, self.skill, self.root)
+        record["planner"]["observed"] = observed
+        path.write_text(json.dumps(record, indent=2), encoding="utf-8")
+        self._log({"kind": "execution", **record})
 
     def _report_generation(self, out: Path, seen: list[int]) -> None:
         """Turn new rows of the generator's event log into stages: `program` means a call ended and
@@ -641,6 +756,16 @@ class Pipeline:
         g = self.skill["generation"]
         arm = g["arm_with_video"] if has_demo else g["arm_without_video"]
         program, record = passing_program(out, arm)
+        observed = observed_planner(out)
+        self.write_execution(observed)
+        if observed:
+            self.note(
+                "execution", "ok",
+                f"Planner used: IK {observed['ik_solver']}, trajectory "
+                f"{observed['trajectory_planner']}, collision aware: "
+                f"{observed['collision_aware']}, cuRobo: {observed['curobo_used']}. "
+                f"All settings: {self.req.run_dir / 'execution.json'}",
+            )  # fmt: skip
         sent = out / arm / "sample0" / "messages_attempt0.json"
         saved = self.req.run_dir / "prompt_messages.json"
         if sent.is_file() and saved.is_file():
@@ -758,6 +883,7 @@ class Pipeline:
             ),
             encoding="utf-8",
         )
+        self.write_execution()
         self.note(
             "start", "running",
             f"Task: {req.task}\nVideo: {req.video or 'none'}\n"
