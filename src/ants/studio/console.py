@@ -94,6 +94,12 @@ def main() -> None:
         help="separate scene to show under the 'repair' toggle; defaults to --scene (same data, "
         "E3-style evidence over it is not wired into this console yet)",
     )
+    parser.add_argument(
+        "--session",
+        default=None,
+        help="resume an existing session folder data/console_sessions/<id> (default: start a new "
+        "one). A session stores session.json, chat.jsonl, events.jsonl and runs/run-<ts>/.",
+    )
     args = parser.parse_args()
 
     loop_cfg = LoopRunConfig(
@@ -123,6 +129,7 @@ def main() -> None:
         loop_cfg=loop_cfg,
         scene_generation_path=args.scene,
         scene_repair_path=args.scene_repair,
+        session_id=args.session,
     )
 
 

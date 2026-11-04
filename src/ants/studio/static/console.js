@@ -313,6 +313,52 @@ function refreshRunList() {
 }
 refreshRunList();
 
+/* ---------- session: one folder per session on the server (chat, events, runs); "New session" resets ---------- */
+function refreshSession() {
+  fetch("/session").then((r) => r.json()).then((d) => {
+    const el = document.getElementById("session-id");
+    el.textContent = d.id || "no session";
+    if (d.dir) el.title = "Stored in " + d.dir + "/ (session.json, chat.jsonl, events.jsonl, runs/)";
+  }).catch(() => {});
+}
+refreshSession();
+// Clears the conversation view and the saved snapshot; theme, column and panel prefs stay.
+function resetSessionUi() {
+  try { localStorage.removeItem(UI_STATE_KEY); } catch (e) {}
+  document.getElementById("restored-note")?.remove();
+  turnsEl.innerHTML = "";
+  turnCount = 0;
+  rewriteTokenTotal = 0;
+  cycleDetails = [];
+  currentRunName = null;
+  chatMode = "idle";
+  chatBuffer = "";
+  chatTurnEl = null;
+  document.getElementById("chat-input").placeholder = "Message the agent...";
+  setChatStatus("");
+  hideBanner();
+  setSys("sys1", false, "idle"); setSys("sys2", false, "idle"); setSys("orch", false, "idle"); setSys("escalate", false, "none");
+  setStatus("idle", "idle");
+  document.getElementById("run-folder").textContent = "";
+  document.getElementById("usage-tiles").innerHTML = "";
+  document.getElementById("reply-box").textContent = "(waiting)";
+  runBtn.disabled = false;
+  renderSynthPanel();
+  renderAdvPanel();
+  updateCenterLayout();
+  refreshRunList();
+  refreshSession();
+}
+document.getElementById("new-session").addEventListener("click", () => {
+  const msg = document.getElementById("session-msg");
+  msg.textContent = "";
+  fetch("/session/new", { method: "POST" }).then((r) => r.json().then((d) => ({ ok: r.ok, d }))).then(({ ok, d }) => {
+    if (!ok || !d.ok) { msg.textContent = d.error || "could not start a new session"; return; }
+    // the session_reset SSE event clears the page too (other open tabs); this covers a missed event
+    resetSessionUi();
+  }).catch(() => { msg.textContent = "server unreachable"; });
+});
+
 /* ---------- source badge: LIVE (green, pulsing) or ARCHIVED (muted) or MISSING ---------- */
 function renderSrcBadge(elId, live, available, archivedLabel) {
   const el = document.getElementById(elId);
@@ -841,6 +887,7 @@ function openStream() {
     else if (data.kind === "perception_run") percGoLive(data.run_id);
     else if (data.kind === "perception_keyframe") percPushKeyframe(data);
     else if (data.kind === "perception_sam3") percPushSam3(data);
+    else if (data.kind === "session_reset") { resetSessionUi(); return; }
     else if (data.kind === "done") handleDone(data);
     else if (data.kind === "error") handleError(data);
     else if (data.kind === "awaiting_answer") handleAwaitingAnswer(data);

@@ -25,7 +25,7 @@ import subprocess
 import tempfile
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
@@ -299,6 +299,84 @@ TOOLS_RIGHT = [
 ]
 
 
+SESSIONS_DIR = REPO_ROOT / "data" / "console_sessions"
+LEGACY_RUNS_DIR = REPO_ROOT / "data" / "console_runs"
+
+
+class Session:
+    """One server/browser session = one folder holding everything relevant to it.
+
+    data/console_sessions/<id>/ with session.json (id, started, cli config, incumbent), chat.jsonl
+    (every chat message: role, case, ts), events.jsonl (every SSE event) and runs/run-<ts>/
+    (the per-run folders the loop writes). Nothing secret is stored: the config is the CLI flags.
+    """
+
+    def __init__(self, base: Path, session_id: str | None = None, meta: dict | None = None) -> None:
+        if session_id is None:
+            session_id = time.strftime("sess-%Y%m%d-%H%M%S")
+            n = 1
+            while (base / session_id).exists():  # two resets within one second
+                n += 1
+                session_id = time.strftime("sess-%Y%m%d-%H%M%S") + f"-{n}"
+        self.id = session_id
+        self.dir = base / session_id
+        self.runs_dir = self.dir / "runs"
+        self.runs_dir.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.Lock()
+        self._assistant_buf = ""
+        info_path = self.dir / "session.json"
+        if info_path.is_file():
+            self.info = json.loads(info_path.read_text(encoding="utf-8"))
+            self.info.setdefault("resumed", []).append(time.strftime("%Y-%m-%dT%H:%M:%S"))
+        else:
+            self.info = {
+                "id": self.id,
+                "started": time.strftime("%Y-%m-%dT%H:%M:%S"),
+                **(meta or {}),
+            }
+        info_path.write_text(json.dumps(self.info, indent=2, default=str), encoding="utf-8")
+
+    def _append(self, name: str, row: dict) -> None:
+        with self._lock, (self.dir / name).open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(row, default=str) + "\n")
+
+    def log_event(self, event: dict) -> None:
+        ts = time.strftime("%Y-%m-%dT%H:%M:%S")
+        self._append("events.jsonl", {"ts": ts, **event})
+        # the agent's streamed chat reply becomes one chat.jsonl row when it finishes
+        kind = event.get("kind")
+        if kind == "chat_muse_event":
+            ev = event.get("event") or {}
+            if ev.get("payload_type") == "run.output.delta":
+                self._assistant_buf += (ev.get("payload") or {}).get("text", "")
+        elif kind in ("chat_done", "chat_error"):
+            text, self._assistant_buf = self._assistant_buf, ""
+            if kind == "chat_error":
+                text = text or str(event.get("message", ""))
+            self.log_chat("assistant", text, "error" if kind == "chat_error" else "oneshot")
+
+    def log_chat(self, role: str, text: str, case: str) -> None:
+        self._append(
+            "chat.jsonl",
+            {"ts": time.strftime("%Y-%m-%dT%H:%M:%S"), "role": role, "case": case, "text": text},
+        )
+
+
+def start_session(
+    state: RunState,
+    base: Path,
+    loop_cfg: LoopRunConfig | None,
+    meta: dict,
+    session_id: str | None = None,
+) -> Session:
+    """Create (or resume) a session folder and point the loop's run output into it."""
+    session = Session(base, session_id, meta)
+    state.session = session
+    if loop_cfg is not None:
+        loop_cfg.out_dir = session.runs_dir
+    return session
+
+
 @dataclass
 class RunState:
     lock: threading.Lock = field(default_factory=threading.Lock)
@@ -312,8 +390,11 @@ class RunState:
     #   the moment the run goes idle (Case 3, queue-and-auto-fire).
     awaiting_answer: queue.Queue[str] | None = None
     queued_chat: str | None = None
+    session: Session | None = None
 
     def broadcast(self, event: dict) -> None:
+        if self.session is not None:
+            self.session.log_event(event)
         with self.lock:
             subs = list(self.subscribers)
         for sub in subs:
@@ -673,7 +754,26 @@ def make_handler(
     loop_cfg: LoopRunConfig | None = None,
     scene_generation_path: Path | None = None,
     scene_repair_path: Path | None = None,
+    sessions_dir: Path | None = None,
+    session_id: str | None = None,
 ):
+    def session_meta() -> dict:
+        return {
+            "mode": mode,
+            "incumbent": str(incumbent),
+            "config": asdict(loop_cfg) if loop_cfg else None,
+            "reasoning_effort": reasoning_effort,
+            "max_model_steps": max_model_steps,
+        }
+
+    if sessions_dir is not None and state.session is None:
+        start_session(state, sessions_dir, loop_cfg, session_meta(), session_id)
+
+    def runs_dir() -> Path | None:
+        if state.session is not None:
+            return state.session.runs_dir
+        return loop_cfg.out_dir if loop_cfg else None
+
     tools_right = (
         TOOLS_RIGHT if mode == "loop" else [t for t in TOOLS_RIGHT if t["role"] != "Adversary"]
     )
@@ -810,11 +910,37 @@ def make_handler(
                 self.wfile.write(body)
                 return
             if path == "/runs":
-                self._send_json({"runs": _list_runs(loop_cfg.out_dir) if loop_cfg else []})
+                cur = runs_dir()
+                runs = _list_runs(cur) if cur else []
+                legacy = [
+                    {**r, "legacy": True}
+                    for r in (_list_runs(LEGACY_RUNS_DIR) if cur != LEGACY_RUNS_DIR else [])
+                ]
+                self._send_json(
+                    {
+                        "runs": runs,
+                        "legacy_runs": legacy,
+                        "session": state.session.id if state.session else None,
+                    }
+                )
+                return
+            if path == "/session":
+                self._send_json(
+                    {
+                        "id": state.session.id if state.session else None,
+                        "dir": str(state.session.dir.relative_to(REPO_ROOT))
+                        if state.session and state.session.dir.is_relative_to(REPO_ROOT)
+                        else None,
+                        "running": state.running,
+                    }
+                )
                 return
             if path.startswith("/attacks/"):
                 run_name = path[len("/attacks/") :]
-                attacks_path = _attacks_jsonl_path(loop_cfg.out_dir, run_name) if loop_cfg else None
+                cur = runs_dir()
+                attacks_path = _attacks_jsonl_path(cur, run_name) if cur else None
+                if attacks_path is None:  # older runs from before sessions existed (read-only)
+                    attacks_path = _attacks_jsonl_path(LEGACY_RUNS_DIR, run_name)
                 if attacks_path is None:
                     self.send_response(404)
                     self.end_headers()
@@ -883,6 +1009,9 @@ def make_handler(
             if path == "/chat":
                 self._handle_chat()
                 return
+            if path == "/session/new":
+                self._handle_new_session()
+                return
             if path != "/run":
                 self.send_response(404)
                 self.end_headers()
@@ -944,6 +1073,26 @@ def make_handler(
             threading.Thread(target=target, daemon=True).start()
             self._send_json({"ok": True})
 
+        def _handle_new_session(self) -> None:
+            if sessions_dir is None:
+                self._send_json({"ok": False, "error": "sessions are not enabled"}, status=400)
+                return
+            with state.lock:
+                if state.running or state.awaiting_answer is not None:
+                    self._send_json(
+                        {
+                            "ok": False,
+                            "error": "a run or chat reply is in progress; wait for it to finish "
+                            "before starting a new session",
+                        },
+                        status=409,
+                    )
+                    return
+                state.queued_chat = None
+                start_session(state, sessions_dir, loop_cfg, session_meta())
+            state.broadcast({"kind": "session_reset", "session": state.session.id})
+            self._send_json({"ok": True, "session": state.session.id})
+
         def _handle_chat(self) -> None:
             length = int(self.headers.get("Content-Length", "0"))
             body = json.loads(self.rfile.read(length) or b"{}")
@@ -952,18 +1101,25 @@ def make_handler(
                 self._send_json({"ok": False, "error": "empty message"}, status=400)
                 return
             with state.lock:
+                session = state.session
                 # Case 1: a run is escalated and waiting on exactly this -- answer it.
                 if state.awaiting_answer is not None:
                     answer_q = state.awaiting_answer
                     answer_q.put(message)
+                    if session:
+                        session.log_chat("user", message, "answer")
                     self._send_json({"ok": True, "case": "answer"})
                     return
                 # Case 3: a run is active but not escalated -- queue, auto-fire once idle.
                 if state.running:
                     state.queued_chat = message
+                    if session:
+                        session.log_chat("user", message, "queued")
                     self._send_json({"ok": True, "case": "queued"})
                     return
                 state.running = True
+                if session:
+                    session.log_chat("user", message, "oneshot")
 
             # Case 2: idle -- a one-shot Muse call, streamed as chat_* SSE events.
             def drive_chat() -> None:
@@ -1000,8 +1156,12 @@ def serve(
     / "L1"
     / "contacts_scene.json",
     scene_repair_path: Path | None = None,
+    session_id: str | None = None,
+    sessions_dir: Path | None = SESSIONS_DIR,
 ) -> None:
     state = RunState()
+    if session_id and sessions_dir and not (sessions_dir / session_id).is_dir():
+        raise SystemExit(f"no such session: {sessions_dir / session_id}")
     handler = make_handler(
         state,
         incumbent,
@@ -1011,9 +1171,13 @@ def serve(
         loop_cfg=loop_cfg if mode == "loop" else None,
         scene_generation_path=scene_generation_path,
         scene_repair_path=scene_repair_path,
+        sessions_dir=sessions_dir,
+        session_id=session_id,
     )
     httpd = ThreadingHTTPServer((host, port), handler)
     print(f"ANTS live console ({mode}): http://{host}:{port}  (incumbent: {incumbent})")
+    if state.session:
+        print(f"session: {state.session.dir}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

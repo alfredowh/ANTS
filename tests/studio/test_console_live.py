@@ -37,9 +37,7 @@ def test_watcher_broadcasts_keyframes_and_overlays_progressively(tmp_path, monke
     state = console_server.RunState()
     q = state.subscribe()
     stop = threading.Event()
-    t = threading.Thread(
-        target=console_server.watch_aspire_live, args=(state, stop), daemon=True
-    )
+    t = threading.Thread(target=console_server.watch_aspire_live, args=(state, stop), daemon=True)
     t.start()
     try:
         run = tmp_path / "20260101_000000_0000_s1_test"
@@ -77,9 +75,7 @@ def test_watcher_ignores_runs_finished_before_it_started(tmp_path, monkeypatch):
     state = console_server.RunState()
     q = state.subscribe()
     stop = threading.Event()
-    t = threading.Thread(
-        target=console_server.watch_aspire_live, args=(state, stop), daemon=True
-    )
+    t = threading.Thread(target=console_server.watch_aspire_live, args=(state, stop), daemon=True)
     t.start()
     try:
         with pytest.raises(queue.Empty):
@@ -168,3 +164,118 @@ def test_live_asset_path_refuses_escape(tmp_path, monkeypatch):
     monkeypatch.setattr(console_server, "ASPIRE_LIVE_ROOT", tmp_path)
     assert console_server._live_asset_path("..", "etc/passwd", overlay=False) is None
     assert console_server._live_asset_path("nope", "000001-x", overlay=False) is None
+
+
+def _serve(tmp_path, state=None):
+    from http.server import ThreadingHTTPServer
+
+    incumbent = tmp_path / "policy.py"
+    incumbent.write_text("# incumbent\n", encoding="utf-8")
+    state = state or console_server.RunState()
+    cfg = console_server.LoopRunConfig()
+    handler = console_server.make_handler(
+        state,
+        incumbent,
+        loop_cfg=cfg,
+        scene_generation_path=None,
+        sessions_dir=tmp_path / "sessions",
+    )
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), handler)
+    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    return httpd, state, cfg, f"http://127.0.0.1:{httpd.server_address[1]}"
+
+
+def _post(url: str, body: dict | None = None):
+    import json
+    import urllib.error
+    import urllib.request
+
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(body or {}).encode("utf-8"),
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=5) as r:
+            return r.status, json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        return e.code, json.loads(e.read())
+
+
+def test_session_folder_logs_events_and_points_runs_into_it(tmp_path):
+    import json
+
+    httpd, state, cfg, _ = _serve(tmp_path)
+    try:
+        s = state.session
+        assert s.dir.parent == tmp_path / "sessions" and s.id.startswith("sess-")
+        assert cfg.out_dir == s.runs_dir and s.runs_dir.is_dir()
+        info = json.loads((s.dir / "session.json").read_text(encoding="utf-8"))
+        assert info["id"] == s.id and info["config"]["cycles"] == cfg.cycles
+        state.broadcast({"kind": "loop_event", "row": {"event": "x"}})
+        state.broadcast(
+            {
+                "kind": "chat_muse_event",
+                "event": {"payload_type": "run.output.delta", "payload": {"text": "hi"}},
+            }
+        )
+        state.broadcast({"kind": "chat_done"})
+        events = [
+            json.loads(x) for x in (s.dir / "events.jsonl").read_text(encoding="utf-8").splitlines()
+        ]
+        assert [e["kind"] for e in events] == ["loop_event", "chat_muse_event", "chat_done"]
+        chat = [
+            json.loads(x) for x in (s.dir / "chat.jsonl").read_text(encoding="utf-8").splitlines()
+        ]
+        assert chat[-1]["role"] == "assistant" and chat[-1]["text"] == "hi"
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_chat_message_is_logged_with_its_case(tmp_path):
+    import json
+
+    state = console_server.RunState()
+    state.running = True  # a run is active -> the message is queued, no model call
+    httpd, state, _, base = _serve(tmp_path, state)
+    try:
+        status, body = _post(base + "/chat", {"message": "hello"})
+        assert status == 200 and body["case"] == "queued"
+        row = json.loads(
+            (state.session.dir / "chat.jsonl").read_text(encoding="utf-8").splitlines()[0]
+        )
+        assert (row["role"], row["case"], row["text"]) == ("user", "queued", "hello")
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_new_session_refused_while_running_then_creates_fresh_folder(tmp_path):
+    httpd, state, cfg, base = _serve(tmp_path)
+    try:
+        old = state.session
+        state.running = True
+        status, body = _post(base + "/session/new")
+        assert status == 409 and not body["ok"] and "in progress" in body["error"]
+        assert state.session is old
+        state.running = False
+        state.queued_chat = "stale"
+        status, body = _post(base + "/session/new")
+        assert status == 200 and body["session"] != old.id
+        assert state.session.id == body["session"] and state.queued_chat is None
+        assert cfg.out_dir == state.session.runs_dir and old.dir.is_dir()
+        kinds = (state.session.dir / "events.jsonl").read_text(encoding="utf-8")
+        assert "session_reset" in kinds
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+
+
+def test_session_resume_keeps_folder(tmp_path):
+    first = console_server.Session(tmp_path, meta={"mode": "loop"})
+    first.log_chat("user", "a", "oneshot")
+    again = console_server.Session(tmp_path, first.id)
+    assert again.dir == first.dir and again.info["started"] == first.info["started"]
+    assert again.info["resumed"]
