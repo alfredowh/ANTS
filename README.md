@@ -2,7 +2,7 @@
 
 # ANTS: Agentic Task Synthesis
 
-**Show a robot a task once. An adversary breaks it in simulation. Every failure becomes a readable fix, kept only if no case seen so far got worse.** No model weights are trained.
+**Show a robot a task once. An adversary breaks it in simulation. Every failure becomes a readable fix, kept only if nominal acceptance cases and discovered failures do not regress.** No model weights are trained.
 
 Our entry for the [Meta Global AI Developer Hackathon 2026](https://dev.meta.ai/events/global-hackathon).
 
@@ -12,15 +12,15 @@ Robots learn one task at a time from lots of data, and nobody can say when they 
 
 ## Solution
 
-![ANTS: the Synthesizer writes a program from one human demo, the Adversary attacks it in simulation, and a regression gate keeps only rewrites that do no worse](docs/images/architecture.svg)
+[![ANTS architecture: synthesis, adversarial simulation, code-enforced regression checks and separate held-out reporting; dashed extensions are planned](docs/images/architecture-proposal.svg)](docs/architecture.md)
 
-*Solid boxes are built and running. Dashed boxes are future work.*
+*Solid: implemented. Dashed: planned. Cache symbols mark API reply caches; Meta symbols mark Meta models. [Module interfaces and deployment concept](docs/architecture.md#module-interfaces).*
 
 | Part | What it does |
 |---|---|
 | **Synthesizer** (System 1) | Tracks one demonstration video, summarises it relative to object size, and has Muse Wonder write the robot program (v0), checked in simulation |
 | **Adversary** (System 2) | Picks the weakest category (Thompson sampling), four Muse Spark agents propose attacks on the program's assumptions, severity is capped in code, LIBERO runs it, and the failure is diagnosed into a rule |
-| **Gate** (orchestrator) | Replays every case seen so far; a rewrite is accepted only if it is no worse on all of them and better on one |
+| **Gate** (orchestrator) | Replays nominal acceptance cases and discovered failures; a rewrite is accepted only if it is no worse on all of them and better on one |
 | **ANTS Studio** | One window to watch it: the Synthesizer chat and live cameras, and the Adversary's attacks, replays and versions |
 
 ## Show once: from one human video to the robot

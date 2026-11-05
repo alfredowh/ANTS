@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="920" viewBox="0 0 1400 920" role="img" aria-labelledby="title description">
+  <title id="title">ANTS deployment and recovery concept, not implemented</title>
+  <desc id="description">Future concept only. A real robot runs the selected main policy or a behavior tree with recovery and fallback skills. A failure produces observations for human review. Approved development work asks System 1 to reproduce the scenario in simulation, validate reproduction, and synthesize an updated main policy, a recovery skill or policy, or a new behavior tree. Optional System 2 adversarial testing uses new constraints within approved bounds. Replay and regression checks plus human release review precede deployment. Real-world scenario reproduction, behavior-tree synthesis, recovery and automatic deployment integration are not implemented; existing development modules are reused conceptually.</desc>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1L9 5L1 9Z" fill="#526272"/></marker></defs>
+  <style>
+    text{font-family:Helvetica,Arial,sans-serif;letter-spacing:0;fill:#162b3b}
+    .heading{font-size:25px;font-weight:700}.title{font-size:21px;font-weight:700}.body{font-size:17px;fill:#455b6d}.small{font-size:15px;fill:#455b6d}
+    .label{font-size:15px;fill:#455b6d;paint-order:stroke;stroke:#fff;stroke-width:6px;stroke-linejoin:round}
+    .edge{fill:none;stroke:#526272;stroke-width:1.8;stroke-dasharray:6 5;marker-end:url(#arrow)}
+    .box{fill:#fff;stroke:#8495a4;stroke-width:1.5;stroke-dasharray:6 5}.synth{fill:#edf5ff;stroke:#387bc1;stroke-width:1.5;stroke-dasharray:6 5}.adv{fill:#fff5e8;stroke:#b97a28;stroke-width:1.5;stroke-dasharray:6 5}.gate{fill:#edf8f1;stroke:#39835c;stroke-width:1.5;stroke-dasharray:6 5}
+  </style>
+  <rect width="1400" height="920" fill="#fff"/>
+  <text x="38" y="42" class="heading">Deployment &amp; recovery</text>
+  <text x="1358" y="41" text-anchor="end" class="body">CONCEPT ONLY · Not an implemented runtime</text>
+
+  <rect x="22" y="73" width="1356" height="230" rx="8" fill="#f8fafc" stroke="#a8b7c3" stroke-dasharray="6 5"/>
+  <text x="42" y="108" class="title">Robot execution · Future fast loop</text>
+  <rect x="42" y="147" width="240" height="111" rx="6" class="box"/>
+  <text x="162" y="182" text-anchor="middle" class="title">Real perception</text><text x="162" y="213" text-anchor="middle" class="small">Observations of the scene</text>
+  <rect x="372" y="147" width="370" height="111" rx="6" class="box"/>
+  <text x="557" y="182" text-anchor="middle" class="title">Main policy / behavior tree</text><text x="557" y="213" text-anchor="middle" class="small">May include recovery &amp; fallback skills</text><text x="557" y="239" text-anchor="middle" class="small">Simulator state is not a runtime input</text>
+  <rect x="832" y="147" width="240" height="111" rx="6" class="box"/>
+  <text x="952" y="182" text-anchor="middle" class="title">Robot execution</text><text x="952" y="213" text-anchor="middle" class="small">Observe outcome</text>
+  <rect x="1162" y="147" width="196" height="111" rx="6" class="box"/>
+  <text x="1260" y="182" text-anchor="middle" class="title">Failure evidence</text><text x="1260" y="213" text-anchor="middle" class="small">Logs · Scene · Task</text>
+  <path d="M282 202H372M742 202H832M1072 202H1162" class="edge"/>
+  <text x="1117" y="190" text-anchor="middle" class="label">on failure</text>
+
+  <rect x="22" y="354" width="1356" height="460" rx="8" fill="#fff" stroke="#a8b7c3" stroke-dasharray="6 5"/>
+  <text x="42" y="389" class="title">Return to policy development · Future integration with existing modules</text>
+  <rect x="1108" y="433" width="250" height="105" rx="6" fill="#fbeef5" stroke="#bd7d9d" stroke-dasharray="6 5"/>
+  <text x="1233" y="467" text-anchor="middle" class="title">Human review</text><text x="1233" y="495" text-anchor="middle" class="small">Approve reopening development</text><text x="1233" y="520" text-anchor="middle" class="small">Choose scope and constraints</text>
+  <path d="M1260 258V433" class="edge"/>
+  <text x="1246" y="331" text-anchor="end" class="label">proposed failure case</text>
+
+  <rect x="680" y="433" width="330" height="105" rx="6" class="synth"/>
+  <text x="845" y="467" text-anchor="middle" class="title">Reproduce in simulation</text><text x="845" y="495" text-anchor="middle" class="small">System 1 + simulation substrate</text><text x="845" y="520" text-anchor="middle" class="small">Verify the failure is reproduced</text>
+  <path d="M1108 485H1010" class="edge"/>
+  <text x="1059" y="473" text-anchor="middle" class="label">evidence</text>
+
+  <rect x="42" y="433" width="530" height="105" rx="6" class="synth"/>
+  <text x="307" y="467" text-anchor="middle" class="title">Synthesize a candidate</text><text x="307" y="495" text-anchor="middle" class="small">Updated main policy · Recovery skill / policy</text><text x="307" y="520" text-anchor="middle" class="small">Or a new behavior tree</text>
+  <path d="M680 485H572" class="edge"/>
+  <text x="626" y="473" text-anchor="middle" class="label">scenario</text>
+
+  <rect x="680" y="632" width="330" height="105" rx="6" class="adv"/>
+  <text x="845" y="666" text-anchor="middle" class="title">Optional adversarial hardening</text><text x="845" y="694" text-anchor="middle" class="small">System 2 tests new constraints</text><text x="845" y="719" text-anchor="middle" class="small">Within approved bounds and budget</text>
+  <path d="M572 518H626V684H680" class="edge"/>
+  <text x="638" y="590" class="label">optional tests</text>
+
+  <rect x="42" y="632" width="530" height="105" rx="6" class="gate"/>
+  <text x="307" y="666" text-anchor="middle" class="title">Replay &amp; regression checks</text><text x="307" y="694" text-anchor="middle" class="small">Old acceptance cases + reproduced failure + new tests</text><text x="307" y="719" text-anchor="middle" class="small">Retain current release if validation fails</text>
+  <path d="M307 538V632M680 684H572" class="edge"/>
+  <text x="319" y="591" class="label">direct validation</text>
+
+  <rect x="1108" y="632" width="250" height="105" rx="6" fill="#fbeef5" stroke="#bd7d9d" stroke-dasharray="6 5"/>
+  <text x="1233" y="666" text-anchor="middle" class="title">Release review</text><text x="1233" y="694" text-anchor="middle" class="small">Human-approved policy / tree</text><text x="1233" y="719" text-anchor="middle" class="small">Controlled robot validation</text>
+  <path d="M307 737V782H1233V737" class="edge"/>
+  <text x="770" y="775" text-anchor="middle" class="label">validated candidate + evidence</text>
+  <path d="M1233 737V840H1390V122H557V147" class="edge"/>
+  <text x="1030" y="860" text-anchor="middle" class="label">approved release → replace robot policy / tree</text>
+  <text x="38" y="900" class="small">Dashed = conceptual workflow. Reproduction fidelity, behavior-tree interfaces and release criteria remain design decisions.</text>
+</svg>

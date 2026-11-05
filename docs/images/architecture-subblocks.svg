@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1000" viewBox="0 0 1400 1000" role="img" aria-labelledby="title description">
+  <title id="title">ANTS development modules and interfaces</title>
+  <desc id="description">Three detailed views of the implemented development architecture. System 1 extracts marker demonstrations, builds context and generates candidates. System 2 selects bounded tests, runs the incumbent in simulation and diagnoses task failures; all outcomes update history. The code-controlled orchestrator replays candidates on nominal acceptance cases and discovered failures, then adopts or rejects them. Held-out reporting is separate and never feeds synthesis. Input assumptions and module destinations are labeled.</desc>
+  <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1L9 5L1 9Z" fill="#526272"/></marker></defs>
+  <style>
+    text{font-family:Helvetica,Arial,sans-serif;letter-spacing:0;fill:#162b3b}
+    .heading{font-size:25px;font-weight:700}.title{font-size:21px;font-weight:700}.node{font-size:18px;font-weight:700}.body{font-size:17px;fill:#455b6d}.small{font-size:15px;fill:#455b6d}
+    .edge{fill:none;stroke:#526272;stroke-width:1.8;marker-end:url(#arrow)}
+    .box{fill:#fff;stroke:#8495a4;stroke-width:1.5}.synth{fill:#edf5ff;stroke:#387bc1;stroke-width:1.5}.adv{fill:#fff5e8;stroke:#b97a28;stroke-width:1.5}.gate{fill:#edf8f1;stroke:#39835c;stroke-width:1.5}
+  </style>
+  <rect width="1400" height="1000" fill="#fff"/>
+  <text x="38" y="42" class="heading">Development modules</text>
+  <text x="38" y="70" class="body">Interfaces and assumptions behind the high-level architecture</text>
+
+  <rect x="22" y="98" width="1356" height="232" rx="8" fill="#f7faff" stroke="#b4cee8"/>
+  <text x="42" y="131" class="title">System 1 · Synthesizer</text>
+  <text x="1358" y="130" text-anchor="end" class="small">Assumption: calibrated marker demo; bowl-on-plate scene</text>
+  <rect x="42" y="168" width="210" height="85" rx="6" class="box"/>
+  <text x="147" y="201" text-anchor="middle" class="node">Demo / task</text><text x="147" y="228" text-anchor="middle" class="small">From human / Studio</text>
+  <rect x="310" y="168" width="210" height="85" rx="6" class="synth"/>
+  <text x="415" y="201" text-anchor="middle" class="node">Extract &amp; abstract</text><text x="415" y="228" text-anchor="middle" class="small">hurobo → DemoSpec</text>
+  <rect x="578" y="168" width="210" height="85" rx="6" class="synth"/>
+  <text x="683" y="201" text-anchor="middle" class="node">Build context</text><text x="683" y="228" text-anchor="middle" class="small">Task · API · Scene · Rules</text>
+  <rect x="846" y="168" width="210" height="85" rx="6" class="synth"/>
+  <text x="951" y="201" text-anchor="middle" class="node">Generate / repair</text><text x="951" y="228" text-anchor="middle" class="small">Muse Wonder</text>
+  <rect x="1114" y="168" width="244" height="85" rx="6" class="box"/>
+  <text x="1236" y="201" text-anchor="middle" class="node">Program / candidate</text><text x="1236" y="228" text-anchor="middle" class="small">To orchestrator → simulation</text>
+  <path d="M252 211H310M520 211H578M788 211H846M1056 211H1114" class="edge"/>
+  <path d="M683 296V253" class="edge"/>
+  <text x="42" y="302" class="small">Repairs bypass extraction.</text>
+  <text x="705" y="301" class="small">From orchestrator: incumbent + failure feedback + accumulated constraints</text>
+
+  <rect x="22" y="364" width="1356" height="255" rx="8" fill="#fffbf5" stroke="#e1c49b"/>
+  <text x="42" y="398" class="title">System 2 · Adversary</text>
+  <text x="1358" y="397" text-anchor="end" class="small">Assumption: runnable incumbent; configured severity bounds and test budget</text>
+  <rect x="42" y="438" width="180" height="92" rx="6" class="box"/>
+  <text x="132" y="471" text-anchor="middle" class="node">Incumbent + history</text><text x="132" y="499" text-anchor="middle" class="small">From orchestrator / log</text>
+  <rect x="268" y="438" width="180" height="92" rx="6" class="adv"/>
+  <text x="358" y="471" text-anchor="middle" class="node">Select category</text><text x="358" y="499" text-anchor="middle" class="small">Thompson / baseline</text>
+  <rect x="494" y="438" width="180" height="92" rx="6" class="adv"/>
+  <text x="584" y="471" text-anchor="middle" class="node">Propose &amp; clamp</text><text x="584" y="499" text-anchor="middle" class="small">Spark / sampler</text>
+  <rect x="720" y="438" width="180" height="92" rx="6" class="box"/>
+  <text x="810" y="471" text-anchor="middle" class="node">Simulate</text><text x="810" y="499" text-anchor="middle" class="small">ASPIRE / LIBERO</text>
+  <rect x="946" y="438" width="180" height="92" rx="6" class="adv"/>
+  <text x="1036" y="471" text-anchor="middle" class="node">Diagnose failure</text><text x="1036" y="499" text-anchor="middle" class="small">Spark + rule fallback</text>
+  <rect x="1172" y="438" width="186" height="92" rx="6" class="box"/>
+  <text x="1265" y="471" text-anchor="middle" class="node">Attack report</text><text x="1265" y="499" text-anchor="middle" class="small">To orchestrator</text>
+  <path d="M222 484H268M448 484H494M674 484H720M900 484H946M1126 484H1172" class="edge"/>
+  <text x="923" y="426" text-anchor="middle" class="small">failure only</text>
+  <path d="M810 530V559H132V530" class="edge"/>
+  <text x="472" y="585" text-anchor="middle" class="small">Every outcome updates history; passing and error outcomes bypass diagnosis.</text>
+  <text x="1358" y="603" text-anchor="end" class="small">Explanation → Studio (read-only)</text>
+
+  <rect x="22" y="653" width="1356" height="300" rx="8" fill="#f5faf7" stroke="#a8ccb9"/>
+  <text x="42" y="687" class="title">Orchestrator · Replay, compare, adopt</text>
+  <text x="1358" y="686" text-anchor="end" class="small">Assumption: seeded replay; only acceptance cases enter repair context</text>
+  <rect x="42" y="729" width="210" height="89" rx="6" class="box"/>
+  <text x="147" y="763" text-anchor="middle" class="node">Candidate + cases</text><text x="147" y="791" text-anchor="middle" class="small">From System 1 + case store</text>
+  <rect x="310" y="729" width="210" height="89" rx="6" class="gate"/>
+  <text x="415" y="763" text-anchor="middle" class="node">Replay candidate</text><text x="415" y="791" text-anchor="middle" class="small">Via simulation backend</text>
+  <rect x="578" y="729" width="210" height="89" rx="6" class="gate"/>
+  <text x="683" y="763" text-anchor="middle" class="node">Compare outcomes</text><text x="683" y="791" text-anchor="middle" class="small">No worse; improve one</text>
+  <rect x="846" y="729" width="210" height="89" rx="6" class="gate"/>
+  <text x="951" y="763" text-anchor="middle" class="node">Adopt / retain</text><text x="951" y="791" text-anchor="middle" class="small">Versioned current best</text>
+  <rect x="1114" y="729" width="244" height="89" rx="6" class="box"/>
+  <text x="1236" y="763" text-anchor="middle" class="node">Continue / stop</text><text x="1236" y="791" text-anchor="middle" class="small">To System 2 / saved artifact</text>
+  <path d="M252 774H310M520 774H578M788 774H846M1056 774H1114" class="edge"/>
+  <path d="M683 880V818" class="edge"/>
+  <text x="42" y="855" class="small">Cases: nominal acceptance set + discovered task failures.</text>
+  <text x="705" y="885" class="small">Incumbent outcomes reused from earlier seeded runs</text>
+  <text x="42" y="929" class="small">Held-out evaluation: separate cases and backend → metrics / report only. Never → System 1 or gate tuning.</text>
+  <text x="1358" y="984" text-anchor="end" class="small">Module interfaces, not an event-timing diagram · Frozen models</text>
+</svg>
