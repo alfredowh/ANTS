@@ -1,6 +1,6 @@
 """Live orchestrator console: a stdlib HTTP server around the Phase A closed loop.
 
-Static viewers in this repo (`dashboard.py`, `ants.studio.run`) all read a saved JSONL trace after
+Static viewers in this repo (`ants.studio.run`) all read a saved JSONL trace after
 a run finished. This module is the live counterpart: `/policy-dev` in the chat starts the pipeline
 (`policy_dev.py`), and its stages, attacks, rewrites and gate verdicts stream into the browser as
 they happen. It only consumes `orchestrator`'s and `adversary`'s public APIs (`Loop`, `LoopConfig`,
