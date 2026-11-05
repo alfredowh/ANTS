@@ -78,7 +78,7 @@ New work this session, on top of everything below (which is still accurate as of
 | LIBERO human demos → DemoSpec (run with ASPIRE's Python) | `tools/libero_demospec.py` |
 | Perturbation launcher (no ASPIRE edits) | `tools/aspire_launch.py` |
 | Local data (git-ignored) | `data/`: `hurobo_e1/` extractions, `demospecs/`, `libero_demos/book_under_shelf_demo.hdf5` (596 MB, 50 demos), `runs/`, `llm_cache/`, `llm_ledger.jsonl`, `viz/` |
-| ASPIRE local changes | `ASPIRE/configs/profiles/a5500.json` and an `sm_86` entry in `configs/dependency-lock.json` |
+| ASPIRE A5500 hardware setup | Preserved in [the ANTS-owned patch](patches/aspire-a5500.patch), with base commit and apply/check commands; no fork needed. Excludes experimental cuRobo changes and generated reports. |
 
 ## 4. How to run what exists
 
