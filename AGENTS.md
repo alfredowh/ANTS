@@ -62,7 +62,7 @@ Learn a robot skill from one demonstration with a frozen generative model, then 
 ## Environment
 
 - Python is managed exclusively with [uv](https://docs.astral.sh/uv/). Do not use `pip`, `venv`, `poetry` or `conda`.
-- Setup (identical on Windows, Ubuntu, macOS): `uv sync`
+- Setup (identical on Ubuntu and macOS): `uv sync`
 - Run anything inside the env with `uv run ...` (never activate the venv manually, never hardcode `.venv/bin` or `.venv\Scripts`).
 - Python version is pinned in `.python-version`; uv installs it automatically.
 
