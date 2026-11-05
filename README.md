@@ -25,9 +25,9 @@ Robots learn one task at a time from lots of data, and nobody can say when they 
 
 ## Show once: from one human video to the robot
 
-| One human demonstration (phone, 15 s) | The program Muse Wonder wrote from it (v0, LIBERO-Pro) |
+| One human demonstration, with what extraction read (clip `233859`) | The program Muse Wonder wrote from it (v0, LIBERO-Pro) |
 |---|---|
-| ![a person puts a bowl on a plate](docs/images/demo_human.gif) | ![the Franka arm puts the bowl on the plate in simulation](docs/images/demo_robot.gif) |
+| ![a person puts a bowl on a plate, with the hand skeleton, marker detections, hand path and gripper opening drawn over the video](docs/images/demo_overlay.gif) | ![the Franka arm puts the bowl on the plate in simulation](docs/images/demo_robot.gif) |
 
 - **Tracking:** markers on the bowl, the plate and a ChArUco board give the hand and object paths in metres.
 - **Summary (DemoSpec):** grasp the rim, approach from above, carry height, release over the plate, all as fractions of the object sizes, so they carry over to the simulated objects.
@@ -110,7 +110,9 @@ A test-and-repair layer for robot skills: from one demonstration, an integrator 
 
 Requires [uv](https://docs.astral.sh/uv/getting-started/installation/). Everything runs through `uv run`.
 
-**1. Offline, no GPU or key** (a toy world that exercises the whole loop):
+### Try it offline
+
+No GPU or key: a toy world exercises the whole loop.
 
 ```bash
 uv sync
@@ -118,7 +120,9 @@ uv run python -m ants.orchestrator.run --cycles 30 --out data/runs/mock_loop   #
 uv run python -m ants.studio.console --adversary-run data/runs/mock_loop      # open http://localhost:8765
 ```
 
-**2. On a GPU** (Ubuntu 22.04, CUDA 12.8; we used one RTX 5090). You need approved access to [`facebook/sam3`](https://huggingface.co/facebook/sam3) and a Meta API key.
+### Setup for real runs
+
+Ubuntu 22.04, CUDA 12.8; we used one RTX 5090. You need approved access to [`facebook/sam3`](https://huggingface.co/facebook/sam3) and a Meta API key.
 
 ```bash
 git submodule update --init ASPIRE && uv sync                                   # code and the ANTS env
@@ -130,15 +134,41 @@ export HF_TOKEN=hf_...; echo 'META_API_KEY=...' > .env                          
 uv run python -m ants.orchestrator.preflight --aspire $PWD/ASPIRE --muse-spark --smoke   # must print READY
 ```
 
-**3. Run the attacks** (pass the ASPIRE path as an absolute path; one simulator job at a time):
+Run one simulator job at a time, and pass the ASPIRE path as an absolute path. A rollout takes about 13 s on the 5090. Muse models spend tokens at about $13.5 per million, so every command below sets a budget.
+
+### Start manually
+
+**Synthesizer: one demonstration to a program.** `examples/bowl_on_plate/demospec.json` is a ready DemoSpec from our recording.
+
+```bash
+uv run python -m ants.studio.stock_scene     # measure the scene once (no model, no tokens)
+
+uv run python -m ants.orchestrator.demo_vs_nodemo --aspire $PWD/ASPIRE \
+  --demospec examples/bowl_on_plate/demospec.json --out data/runs/synth \
+  --arms demo --temperatures 0.2 --scenes stock --debug-scene stock --eval-seeds "" \
+  --repairs 5 --explain --token-budget 250000 \
+  --scene-text-file data/scene_text/stock_seed51_S4.txt --evidence e3
+```
+
+| Argument | Default | Meaning |
+|---|---|---|
+| `--arms` | `nodemo,demo` | `demo` uses the DemoSpec; `nodemo` uses the task text only |
+| `--temperatures` | `0.2,0.7,0.5,1.0` | one program per temperature |
+| `--repairs` | `4` | retries on the debug seed |
+| `--token-budget` | `600000` | hard cap on new tokens |
+| `--task` | `put the bowl on the plate` | with `--suite libero_goal_swap --task-id 8` |
+
+The program that passed is the attempt with `task_success: true` in `data/runs/synth/demo/sample0/record.json`.
+
+**Adversary: attack a program.** `--policy` defaults to our example v0.
 
 ```bash
 A="--backend cap_harness --aspire $PWD/ASPIRE"
 
-# Muse Spark attacks on v0, no rewrites: why each attack, the replay, the diagnosis
+# attacks only, no rewrites: why each attack, the replay, the diagnosis
 uv run python -m ants.studio.run --attacks 8 $A --model muse-spark --token-budget 300000 --out data/runs/attacks
 
-# the closed loop: attack, diagnose, rewrite, gate; then 50 held-out cases
+# closed loop: attack, diagnose, rewrite, gate; then 50 held-out cases
 uv run python -m ants.orchestrator.run $A --model muse-spark --synthesizer muse-api \
   --synth-token-budget 400000 --categories size --cycles 10 --eval-held-out 50 --out data/runs/loop
 
@@ -146,11 +176,39 @@ uv run python -m ants.orchestrator.run $A --model muse-spark --synthesizer muse-
 uv run python -m ants.adversary.experiments.adaptive_vs_uniform $A --attacks 40 --seeds 0 1 2 3 4 --out data/runs/h1a
 ```
 
-**4. Watch a run:** `uv run python -m ants.studio.console --adversary-run data/runs/loop`. Replay plays each attack's video next to the nominal run, and the call timeline is the scrubber.
+To attack your own program, add `--policy data/runs/synth/demo/sample0/program_attempt<N>.py`. Use `--model mock` for free rule-based attacks and diagnosis. A Muse Spark attack takes 1 to 2 minutes for its four agents.
 
-Rollouts take about 13 s each on the 5090; a Muse Spark attack takes 1–2 min for its four agents. The README images come from these runs: `tools/make_readme_media.py`.
+**Watch a finished run:** `uv run python -m ants.studio.console --adversary-run data/runs/loop`. The README images come from these runs: `tools/make_readme_media.py`.
 
-**5. From your own video, in ANTS Studio:** start the console as in step 4, click `/policy-dev`, click `+` and pick a clip, type the task, press Enter, then choose the settings. The run goes through extraction, DemoSpec, Muse Wonder and a nominal check, then holds for you with the rollout looping before the Adversary starts. Clips need the marker setup; `20261016_233859` is known to pass. This path plans with PyRoki and interpolation, without cuRobo, and writes every setting to `execution.json`.
+### Start with the UI
+
+After the setup above, ANTS Studio runs the same pipeline from one window. To use your own video, also run `git submodule update --init hurobo && (cd hurobo && uv sync)`. Rewrites use the `muse` CLI, so install it too.
+
+```bash
+uv run python -m ants.studio.console     # open http://localhost:8765 (--port to change, --video-dir for your clips)
+```
+
+1. **Pick a video (optional).** Click `/policy-dev`, then `+`. Videos need the marker setup: ArUco markers on the bowl, plate and table in view. With no video, the Synthesizer works from the task text alone.
+2. **Type the task** after `/policy-dev`, for example `put the bowl on the plate`, and press Enter.
+3. **Choose the settings and click Run:**
+
+   | Setting | Default | What you can do |
+   |---|---|---|
+   | Synthesizer | on | off: give your own script to attack |
+   | Max retries | 5 | |
+   | Adversary | on | off: save the program to `data/deploy/` and stop |
+   | Stop after candidate v0 | on | off: go straight to the attacks |
+   | Selector | Thompson | or random |
+   | Attacks, seeds | 2, 1 | |
+   | Muse Spark | off | on: real proposals, diagnosis and explanations, with its own token cap |
+   | Token cap | 300,000 | checked before each model call, with worst-case cost shown |
+
+4. **Watch it run.** The chat shows each stage and a card per attempt: why it changed, the program diff, the feedback and a looping rollout. The right column shows your video with the tracking overlay, then the live cameras during rollouts. The process flow lights up each step, and tokens spent are next to the status.
+5. **Decide at the human check.** When v0 passes, the run waits with its rollout looping. Nothing is spent. Click **Continue to the Adversary** or type `/continue`.
+6. **Inspect the attacks.** Use the **Adversary | Synthesizer** switch at the top. Adversary shows Harden, Replay with video, and Versions with diffs and gate verdicts.
+7. **Step in at any time.** **Stop** ends the whole run. If the loop stalls, it asks you, and your answer becomes a rule it must keep. `/deploy` saves the latest program to `data/deploy/`. **New session** starts clean.
+
+Every run is saved in `data/console_sessions/`, with all its settings in `execution.json`.
 
 ## Docs
 
