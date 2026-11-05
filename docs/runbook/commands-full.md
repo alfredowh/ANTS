@@ -10,7 +10,7 @@ Interactive version: `docs/runbook.html`. Essential commands only: [experiment-c
 
 *reference.* Is the environment ready to run anything?
 
-- Docs: `docs/synthesizer/smoke-2026-10-31.md`
+- Docs: `docs/results.md`
 - Inputs: uv; ASPIRE with venvs; GPU; META_API_KEY in .env
 - Outputs: services up on 8114/8116 (+8118); tests green
 - Result so far: ASPIRE example passes in 36 s on the RTX A5500 laptop (smoke §1).
@@ -102,7 +102,7 @@ nvidia-smi --query-gpu=memory.used,memory.total --format=csv && (ss -ltnp 2>/dev
 
 *reference.* Turn a human demo into the object-relative summary the generator reads.
 
-- Docs: `docs/synthesizer/experiment-01-demo-vs-nodemo.md` · run dir: `data/demospecs/`
+- Docs: `docs/results.md` · run dir: `data/demospecs/`
 - Inputs: hurobo clips + setup yaml, or LIBERO demo hdf5
 - Outputs: data/demospecs/*.json
 - Result so far: 4 of 26 hurobo clips usable at 6.0 cm marker (smoke §3); the measured marker is 5.75 cm, so re-extract with --marker-size-m 0.0575.
@@ -187,7 +187,7 @@ cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 
 
 *done.* Arms differ only in the demo section. Does the demo arm write a working program?
 
-- Docs: `docs/synthesizer/experiment-01-demo-vs-nodemo.md` · run dir: `data/runs/demo_vs_nodemo_01`
+- Docs: `docs/results.md` · run dir: `data/runs/demo_vs_nodemo_01`
 - Inputs: data/demospecs/hurobo_233832.json; services up; Muse tokens
 - Outputs: data/runs/demo_vs_nodemo_01/ (programs, diffs, feedback, record.json, summary.md); report.html
 - Cost: 284,304 tokens in the original run (cap 600k)
@@ -365,7 +365,7 @@ Camera + lighting (spec):
 
 *done.* Same arms, but programs are debugged and repaired in the real-size scene (bowl x1.227, plate x1.855).
 
-- Docs: `docs/synthesizer/experiment-02-scaled-scene.md` · run dir: `data/runs/exp02_scaled`
+- Docs: `docs/results.md` · run dir: `data/runs/exp02_scaled`
 - Inputs: data/demospecs/hurobo_233832.json
 - Outputs: data/runs/exp02_scaled/
 - Cost: 866,299 tokens (about $11.7), first pass 600k then resumed with 320k
@@ -449,7 +449,7 @@ uv run python -m ants.evalkit.report data/runs/exp02_scaled --serve --open
 
 *done (no write-up).* With a WHY: rationale in each repair, how do the 3 good hurobo clips fare? Clip 233859 attempt 2 stalls on the wine rack and motivates exp04 and dev/curobo.
 
-- Docs: `docs/synthesizer/proposal-collision-context.md` · run dir: `data/runs/exp03_explain/clip_<id>`
+- Docs: `docs/results.md` · run dir: `data/runs/exp03_explain/clip_<id>`
 - Inputs: data/demospecs/hurobo_233832|233859|234314.json
 - Outputs: data/runs/exp03_explain/clip_*/
 - Result so far: Config only (see run dirs and data/exp03.log); no results doc yet. Reconstructed command, taken from config.json.
@@ -509,7 +509,7 @@ uv run python -m ants.evalkit.report data/runs/exp02_scaled --serve --open
 
 *done (see experiment-04-scene-context.md).* G: which scene section (S0-S4, SP placebo) in the first prompt helps, in levels L1-L3. E: which contact evidence (E0-E3, EP placebo) helps one repair.
 
-- Docs: `docs/synthesizer/experiment-04-scene-context.md` · run dir: `data/runs/exp04_scene`
+- Docs: `docs/results.md` · run dir: `data/runs/exp04_scene`
 - Inputs: data/demospecs/hurobo_233859.json; data/scenes/levels.json; exp03 program_attempt2.py (for E)
 - Outputs: data/runs/exp04_scene/{G,E}-<variant>/; contacts.jsonl; overlay.json; scenes/
 - Cost: default cap 900,000 new tokens
@@ -626,7 +626,7 @@ uv run python -m ants.evalkit.report data/runs/exp02_scaled --serve --open
 
 *done.* Does a working program survive hand-picked perturbations? (friction x0.4, bowl shift, actuation noise + latency)
 
-- Docs: `docs/synthesizer/experiment-01-demo-vs-nodemo.md` · run dir: `data/runs/perturb_preview/`
+- Docs: `docs/results.md` · run dir: `data/runs/perturb_preview/`
 - Inputs: a program.py; perturbation.json
 - Outputs: run dir under --output-root
 - Result so far: Winning exp01 program: 3/3 survived.
@@ -744,45 +744,6 @@ Spec:
 {"scale": {"bodies": {"akita_black_bowl_1_main": 1.227, "plate_1_main": 1.855}}, "contacts": {"path": "../data/evidence/run/contacts.jsonl"}}
 ```
 
-## System 2 v0: harden with the never-regress gate
-
-*built, no live run.* Does the adversary + diagnoser + gate loop improve a working program without regressions?
-
-- Docs: `src/ants/orchestrator/system2.py` · run dir: `data/runs/system2_mock_synthetic`
-- Inputs: incumbent program; HardenConfig
-- Outputs: system2.jsonl; Human gate request/answer JSON
-- Result so far: Only a synthetic mock world so far (clearly marked); harden() has no CLI. A live run needs a thin driver script (not written).
-
-### `system2.mock`: Write a synthetic System 2 run (no sim, no model)
-
-Fake world: program v0 breaks on size and physics, v1 fixes size but breaks pose (the gate must reject it), v2 fixes both. Clearly marked synthetic in config.json. Use it to try the System 2 tab; it is not a result.
-
-```bash
-uv run python tools/system2_mock.py data/runs/system2_mock_synthetic
-```
-
-Then view:
-
-```bash
-uv run python -m ants.evalkit.report data/runs --open
-```
-
-### `report.all`: View all runs (incl. synthetic System 2 mock)
-
-Opens the run selector.
-
-```bash
-uv run python -m ants.evalkit.report data/runs --open
-```
-
-### `test.system2`: Tests for the System 2 loop, gate, planner
-
-harden() has no CLI; its behaviour is exercised here with fake run_case and generate callables.
-
-```bash
-uv run pytest tests/orchestrator tests/adversary -q
-```
-
 ## dev/curobo: why does the planner go through the rack?
 
 *done (dev notes).* Tune cuRobo's robot carve, add a robot mask, validate no forbidden collisions.
@@ -873,97 +834,11 @@ ontop_test.py has no CLI of its own; set ANTS_ONTOP_TEST in curobo.contact.
 echo 'run curobo.contact with ANTS_ONTOP_TEST=out.json (ontop_test.py is called by contact_launch.py)'
 ```
 
-## Research radar maintenance
-
-*tooling.* Keep the Robot Research Radar artifact in sync.
-
-- Docs: `.claude/skills/robot-research-radar/SKILL.md`
-- Inputs: JSON sources
-- Outputs: documents for the artifact db
-- Result so far: Usually driven by the robot-research-radar skill, not by hand.
-
-### `radar.build`: Radar: merge JSON sources into documents
-
-Merges research-radar JSON sources into documents for the artifact db. Normally driven by the robot-research-radar skill.
-
-```bash
-uv run python .claude/skills/robot-research-radar/scripts/radar.py build \
-    --in scratch/orgs.json scratch/works.json \
-    --out scratch/radar_docs.json
-```
-
-| Flag | Default | On | Meaning |
-|---|---|---|---|
-| `--in` | `scratch/orgs.json scratch/works.json` | yes | One or more JSON sources to merge. |
-| `--out` | `scratch/radar_docs.json` | yes | Documents for the radar artifact database. |
-
-### `radar.pending`: Radar: dump works still pending
-
-Lists queued/draft works so the skill can verify them from Claude Code.
-
-```bash
-uv run python .claude/skills/robot-research-radar/scripts/radar.py pending \
-    --dump scratch/pending.json
-```
-
-| Flag | Default | On | Meaning |
-|---|---|---|---|
-| `--dump` | `scratch/pending.json` | yes | Where to write the pending works. |
-
-### `radar.metrics`: Radar: citations and GitHub stars
-
-Semantic Scholar unauthenticated; the old gh lacks auth token.
-
-```bash
-uv run python .claude/skills/robot-research-radar/scripts/metrics.py \
-    --arxiv 2609.30249
-```
-
-| Flag | Default | On | Meaning |
-|---|---|---|---|
-| `--arxiv` | `2609.30249` | yes | arXiv ids (batch endpoint; single lookups get rate-limited). |
-| `--github` | `owner/repo` | no | GitHub repos (stars via gh api graphql). |
-| `--title` | `TITLE` | no | Titles. |
-| `--file` | `works.json` | no | Batch file. |
-
-## Agent skills (slash commands)
-
-*reference.* Prompts that write into the ANTS To-do artifact.
-
-- Docs: `docs/runbook/agent-access.md`
-- Inputs: free text
-- Outputs: artifact db documents
-- Result so far: Claude Code slash commands. Another agent can follow the SKILL.md files as plain instructions.
-
-### `skill.idea`: /idea-judge <idea>
-
-Reviews a raw idea with Judge A (supportive) and Judge B (strict) and writes it to the Ideas tab of the ANTS To-do artifact. Instructions: .claude/skills/idea-judge/SKILL.md.
-
-```bash
-/idea-judge  # then your raw idea text
-```
-
-### `skill.storyline`: /storyline-judge <storyline>
-
-Reviews a hackathon storyline against the current code and runs. Writes to the Storyline tab. Instructions: .claude/skills/storyline-judge/SKILL.md.
-
-```bash
-/storyline-judge  # then the storyline text or a storyline_id
-```
-
-### `skill.radar`: /robot-research-radar (refresh, extend, sync)
-
-Maintains the Robot Research Radar artifact. Instructions: .claude/skills/robot-research-radar/SKILL.md.
-
-```bash
-/robot-research-radar  # refresh | extend | sync | re-rank
-```
-
 ## Exp 05: perceived scene vs oracle
 
 *done (see experiment-05-perceived-scene.md).* Can SAM 3 and depth build the exp04 collision world and S4 text without simulator state, and what is missing?
 
-- Docs: `docs/synthesizer/experiment-05-perceived-scene.md` · run dir: `data/runs/exp05_perceived_scene`
+- Docs: `docs/results.md` · run dir: `data/runs/exp05_perceived_scene`
 - Inputs: data/scenes/L1/contacts_scene.json; data/scenes/perception_probe2.py; data/scenes/perception_probe3.py
 - Outputs: perception_start.json; perception_arm.json; analysis.json; s4_perceived.txt; s4_oracle.txt; report.html
 - Cost: free (no model call)
@@ -1032,7 +907,7 @@ uv run python -m ants.evalkit.perceived_report --out data/runs/exp05_perceived_s
 
 *done (see experiment-06-08-curobo.md).* With cuRobo planning on the depth cloud (SAM 3 robot mask), does a scene description in the first prompt and contact evidence in repairs help, and how much does perception cost against a digital twin?
 
-- Docs: `docs/synthesizer/experiment-06-08-curobo.md` · run dir: `data/runs/curobo/<exp>/<arm>`
+- Docs: `docs/results.md` · run dir: `data/runs/curobo/<exp>/<arm>`
 - Inputs: data/demospecs/hurobo_233859.json; data/demospecs/hurobo_233832.json; data/runs/exp05_perceived_scene/s4_perceived.txt
 - Outputs: data/runs/curobo/
 - Result so far: 9 runs: solved 1 of 3 (06), 2 of 3 (07), 2 of 3 (08); no blocking contact in any rollout. See the doc.
@@ -1105,7 +980,7 @@ uv run python -m ants.evalkit.report data/runs/exp02_scaled --serve --open
 
 *code ready, not run.* Do the cuRobo refusals disappear when the held bowl is an attached object of the known size instead of an obstacle in the cloud, and does that change the solved count?
 
-- Docs: `docs/synthesizer/experiment-09-11-curobo-attach.md` · run dir: `data/runs/curobo/<exp>/<arm>`
+- Docs: `docs/results.md` · run dir: `data/runs/curobo/<exp>/<arm>`
 - Inputs: data/demospecs/hurobo_233859.json; data/demospecs/hurobo_233832.json; data/runs/exp05_perceived_scene/s4_perceived.txt; data/scenes/L1/contacts_scene.json
 - Outputs: data/runs/curobo/exp09|exp10|exp11/
 - Result so far: Not run yet.
@@ -1257,96 +1132,6 @@ Attach against sparse:
 uv run python dev/curobo/goal_confusion.py data/runs/curobo/replay_seeds/attach data/runs/curobo/replay_seeds/sparse
 ```
 
-## Scene reconstruction probe: cuRobo Mapper TSDF/ESDF on the LIBERO scene
-
-*probe working, logged once.* Can ANTS fuse a multi-view camera scan of the LIBERO scene into a persistent 3D reconstruction (cuRobo's Mapper: TSDF to ESDF to mesh), as a step toward a policy planning against a reconstructed scene instead of a single-frame point cloud?
-
-- Docs: `docs/perception/scene-reconstruction-probe.md` · run dir: `data/runs/mapper_probe`
-- Inputs: LIBERO scene: libero_goal_swap task 8 seed 51
-- Outputs: data/runs/mapper_probe/frames/*.npz; data/runs/mapper_probe/reconstructed_scene.ply; data/runs/mapper_probe/reconstructed_view_*.png
-- Result so far: Logged run, 2026-11-03: 16 orbit frames fused into a mesh (23,441 vertices, 44,253 faces); rendered views match the real scene layout. Virtual orbiting camera, not yet the real arm; not wired into any owned package. See the doc for caveats and next steps.
-
-### `scene_recon.scan`: Orbit-scan a LIBERO scene (RGB-D + camera pose per frame)
-
-Teleports a LIBERO camera through N orbit waypoints around the scene and saves RGB-D + world-frame camera pose per frame, in the same convention cap_harness's LiberoAdapter uses for its own camera reads.
-
-```bash
-LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py
-```
-
-| Flag | Default | On | Meaning |
-|---|---|---|---|
-| `--suite` | `libero_goal_swap` | no | LIBERO suite name. |
-| `--task-id` | `8` | no | Task index within the suite (8 = put-the-bowl-on-the-plate). |
-| `--seed` | `51` | no | LIBERO seed (acceptance seeds 51-65; never a held-out seed 1-50 for anything other than reporting). |
-| `--n-frames` | `16` | no | Number of orbit waypoints. |
-| `--camera` | `robot0_eye_in_hand` | no | Default is the fixed 'agentview' camera (teleported each frame). 'robot0_eye_in_hand' needs real arm motion first -- it is parented to the moving gripper, not world, so teleporting it directly is not yet implemented. |
-| `--out-dir` | `../data/runs/mapper_probe/frames` | no | Where per-frame .npz files and manifest.txt are written. |
-
-Default bowl-on-plate orbit scan (what produced the 2026-11-03 result):
-
-```bash
-cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py
-```
-
-### `scene_recon.scan_arm`: Real arm-driven scan: sweep the Franka's wrist camera (not a teleport)
-
-Closed-loop drives the Franka's shoulder-pan and shoulder-lift joints through a pan x lift waypoint grid using the exact delta-joint formula LiberoActionCodec.encode uses, then saves robot0_eye_in_hand RGB-D + world-frame camera pose per waypoint -- genuine robot motion, not a camera teleport.
-
-```bash
-LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
-```
-
-| Flag | Default | On | Meaning |
-|---|---|---|---|
-| `--pan-offsets` | `-0.5 -0.25 0.0 0.25 0.5` | no | Radians added to the reset shoulder-pan joint per waypoint. |
-| `--lift-offsets` | `-0.15 0.0 0.15` | no | Radians added to the reset shoulder-lift joint per waypoint; waypoints are the pan x lift grid. |
-| `--out-dir` | `../data/runs/mapper_probe/frames_arm_full` | no | Where per-frame .npz files and manifest.txt are written. |
-
-Default 15-waypoint pan x tilt grid:
-
-```bash
-cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
-```
-
-### `scene_recon.fuse`: Fuse scan frames into a cuRobo Mapper mesh
-
-Integrates every saved frame from one or more scan directories into curobo.perception.Mapper (Warp backend), computes the ESDF, extracts a surface mesh, and saves it plus a few shaded renders. Multiple --frames-dir values fuse all their frames into a single denser mesh.
-
-```bash
-.venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py
-```
-
-| Flag | Default | On | Meaning |
-|---|---|---|---|
-| `--frames-dir` | `../data/runs/mapper_probe/frames` | no | One or more frame directories (space-separated), each with its own manifest.txt, fused into one Mapper. Output of scene_recon.scan / .scan_arm / .scan_lookat. |
-| `--voxel-size` | `0.01` | no | TSDF voxel size in meters; smaller is sharper and slower. |
-| `--n-render-views` | `3` | no | How many shaded PNG renders to save from scan camera poses. |
-
-Default fuse on the orbit scan above:
-
-```bash
-cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py
-```
-
-Fuse all three scans (orbit + arm pan-tilt + IK look-at) at a finer voxel size (logged 2026-11-04: 44,180 verts / 82,957 faces, vs 23,441/44,253 for the orbit scan alone):
-
-```bash
-cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py --frames-dir ../data/runs/mapper_probe/frames ../data/runs/mapper_probe/frames_arm_full ../data/runs/mapper_probe/frames_lookat --out-dir ../data/runs/mapper_probe/fused_combined --voxel-size 0.008 --n-render-views 4
-```
-
-Robot-free orbit-only mesh at 5 mm (input of plan_rack and the gate; logged 2026-11-04):
-
-```bash
-cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py --frames-dir ../data/runs/mapper_probe/frames ../data/runs/mapper_probe/frames_orbit_r1 ../data/runs/mapper_probe/frames_orbit_r2 --out-dir ../data/runs/mapper_probe/fused_orbit_hires --voxel-size 0.005
-```
-
-Orbit rings used above:
-
-```bash
-cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py --n-frames 32 --height 0.95 --out-dir ../data/runs/mapper_probe/frames_orbit_r1 && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py --n-frames 32 --height 1.35 --radius 0.5 --out-dir ../data/runs/mapper_probe/frames_orbit_r2
-```
-
 ## Demo vs no demo on cuRobo (simulator robot mask, attached bowl)
 
 *final (submission experiment, tag submission-experiment).* With cuRobo planning and the held bowl attached, does one human demonstration (plus S4 scene text and E3 repair evidence) beat task text only?
@@ -1354,7 +1139,7 @@ cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/ma
 - Docs: `docs/synthesizer/show-once-vs-task-only/demo_vs_no_demo_analysis.ipynb` · run dir: `data/runs/demo_e3_s4_sim | data/runs/nodemo_task_only_sim`
 - Inputs: data/demospecs/hurobo_233859.json; data/scene_text/S4_L1.txt
 - Outputs: data/runs/demo_e3_s4_sim/; data/runs/nodemo_task_only_sim/
-- Result so far: Held-out seeds 1 to 5, two samples (T 0.2, 0.7) per arm. Demo: debug seed solved in 2 and 2 attempts; scaled 5/5 and 2/5, stock 4/5 and 3/5. No-demo: solved in 5 (no) and 3 attempts; scaled 4/5 and 4/5, stock 0/5 and 0/5. The arms also differ in scene text and evidence. Source: events.jsonl of each run. Ran before the attach frame fix: spheres 9.65 cm too high, see docs/synthesizer/handoff-curobo-debug.md.
+- Result so far: Held-out seeds 1 to 5, two samples (T 0.2, 0.7) per arm. Demo: debug seed solved in 2 and 2 attempts; scaled 5/5 and 2/5, stock 4/5 and 3/5. No-demo: solved in 5 (no) and 3 attempts; scaled 4/5 and 4/5, stock 0/5 and 0/5. The arms also differ in scene text and evidence. Source: events.jsonl of each run. Ran before the attach frame fix: spheres 9.65 cm too high.
 
 ### `exp12.demo`: Demo vs no demo, demo arm: demo + S4 + E3 on cuRobo (paid)
 
@@ -1477,4 +1262,219 @@ Exp 02 over http:
 
 ```bash
 uv run python -m ants.evalkit.report data/runs/exp02_scaled --serve --open
+```
+
+## System 2 v0: harden with the never-regress gate
+
+*built, no live run.* Does the adversary + diagnoser + gate loop improve a working program without regressions?
+
+- Docs: `src/ants/orchestrator/system2.py` · run dir: `data/runs/system2_mock_synthetic`
+- Inputs: incumbent program; HardenConfig
+- Outputs: system2.jsonl; Human gate request/answer JSON
+- Result so far: Only a synthetic mock world so far (clearly marked); harden() has no CLI. A live run needs a thin driver script (not written).
+
+### `system2.mock`: Write a synthetic System 2 run (no sim, no model)
+
+Fake world: program v0 breaks on size and physics, v1 fixes size but breaks pose (the gate must reject it), v2 fixes both. Clearly marked synthetic in config.json. Use it to try the System 2 tab; it is not a result.
+
+```bash
+uv run python tools/system2_mock.py data/runs/system2_mock_synthetic
+```
+
+Then view:
+
+```bash
+uv run python -m ants.evalkit.report data/runs --open
+```
+
+### `report.all`: View all runs (incl. synthetic System 2 mock)
+
+Opens the run selector.
+
+```bash
+uv run python -m ants.evalkit.report data/runs --open
+```
+
+### `test.system2`: Tests for the System 2 loop, gate, planner
+
+harden() has no CLI; its behaviour is exercised here with fake run_case and generate callables.
+
+```bash
+uv run pytest tests/orchestrator tests/adversary -q
+```
+
+## Research radar maintenance
+
+*tooling.* Keep the Robot Research Radar artifact in sync.
+
+- Docs: `.claude/skills/robot-research-radar/SKILL.md`
+- Inputs: JSON sources
+- Outputs: documents for the artifact db
+- Result so far: Usually driven by the robot-research-radar skill, not by hand.
+
+### `radar.build`: Radar: merge JSON sources into documents
+
+Merges research-radar JSON sources into documents for the artifact db. Normally driven by the robot-research-radar skill.
+
+```bash
+uv run python .claude/skills/robot-research-radar/scripts/radar.py build \
+    --in scratch/orgs.json scratch/works.json \
+    --out scratch/radar_docs.json
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `--in` | `scratch/orgs.json scratch/works.json` | yes | One or more JSON sources to merge. |
+| `--out` | `scratch/radar_docs.json` | yes | Documents for the radar artifact database. |
+
+### `radar.pending`: Radar: dump works still pending
+
+Lists queued/draft works so the skill can verify them from Claude Code.
+
+```bash
+uv run python .claude/skills/robot-research-radar/scripts/radar.py pending \
+    --dump scratch/pending.json
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `--dump` | `scratch/pending.json` | yes | Where to write the pending works. |
+
+### `radar.metrics`: Radar: citations and GitHub stars
+
+Semantic Scholar unauthenticated; the old gh lacks auth token.
+
+```bash
+uv run python .claude/skills/robot-research-radar/scripts/metrics.py \
+    --arxiv 2609.30249
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `--arxiv` | `2609.30249` | yes | arXiv ids (batch endpoint; single lookups get rate-limited). |
+| `--github` | `owner/repo` | no | GitHub repos (stars via gh api graphql). |
+| `--title` | `TITLE` | no | Titles. |
+| `--file` | `works.json` | no | Batch file. |
+
+## Agent skills (slash commands)
+
+*reference.* Prompts that write into the ANTS To-do artifact.
+
+- Docs: `docs/runbook/agent-access.md`
+- Inputs: free text
+- Outputs: artifact db documents
+- Result so far: Claude Code slash commands. Another agent can follow the SKILL.md files as plain instructions.
+
+### `skill.idea`: /idea-judge <idea>
+
+Reviews a raw idea with Judge A (supportive) and Judge B (strict) and writes it to the Ideas tab of the ANTS To-do artifact. Instructions: .claude/skills/idea-judge/SKILL.md.
+
+```bash
+/idea-judge  # then your raw idea text
+```
+
+### `skill.storyline`: /storyline-judge <storyline>
+
+Reviews a hackathon storyline against the current code and runs. Writes to the Storyline tab. Instructions: .claude/skills/storyline-judge/SKILL.md.
+
+```bash
+/storyline-judge  # then the storyline text or a storyline_id
+```
+
+### `skill.radar`: /robot-research-radar (refresh, extend, sync)
+
+Maintains the Robot Research Radar artifact. Instructions: .claude/skills/robot-research-radar/SKILL.md.
+
+```bash
+/robot-research-radar  # refresh | extend | sync | re-rank
+```
+
+## Scene reconstruction probe: cuRobo Mapper TSDF/ESDF on the LIBERO scene
+
+*probe working, logged once.* Can ANTS fuse a multi-view camera scan of the LIBERO scene into a persistent 3D reconstruction (cuRobo's Mapper: TSDF to ESDF to mesh), as a step toward a policy planning against a reconstructed scene instead of a single-frame point cloud?
+
+- Docs: `docs/perception/scene-reconstruction-probe.md` · run dir: `data/runs/mapper_probe`
+- Inputs: LIBERO scene: libero_goal_swap task 8 seed 51
+- Outputs: data/runs/mapper_probe/frames/*.npz; data/runs/mapper_probe/reconstructed_scene.ply; data/runs/mapper_probe/reconstructed_view_*.png
+- Result so far: Logged run, 2026-11-03: 16 orbit frames fused into a mesh (23,441 vertices, 44,253 faces); rendered views match the real scene layout. Virtual orbiting camera, not yet the real arm; not wired into any owned package. See the doc for caveats and next steps.
+
+### `scene_recon.scan`: Orbit-scan a LIBERO scene (RGB-D + camera pose per frame)
+
+Teleports a LIBERO camera through N orbit waypoints around the scene and saves RGB-D + world-frame camera pose per frame, in the same convention cap_harness's LiberoAdapter uses for its own camera reads.
+
+```bash
+LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `--suite` | `libero_goal_swap` | no | LIBERO suite name. |
+| `--task-id` | `8` | no | Task index within the suite (8 = put-the-bowl-on-the-plate). |
+| `--seed` | `51` | no | LIBERO seed (acceptance seeds 51-65; never a held-out seed 1-50 for anything other than reporting). |
+| `--n-frames` | `16` | no | Number of orbit waypoints. |
+| `--camera` | `robot0_eye_in_hand` | no | Default is the fixed 'agentview' camera (teleported each frame). 'robot0_eye_in_hand' needs real arm motion first -- it is parented to the moving gripper, not world, so teleporting it directly is not yet implemented. |
+| `--out-dir` | `../data/runs/mapper_probe/frames` | no | Where per-frame .npz files and manifest.txt are written. |
+
+Default bowl-on-plate orbit scan (what produced the 2026-11-03 result):
+
+```bash
+cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py
+```
+
+### `scene_recon.scan_arm`: Real arm-driven scan: sweep the Franka's wrist camera (not a teleport)
+
+Closed-loop drives the Franka's shoulder-pan and shoulder-lift joints through a pan x lift waypoint grid using the exact delta-joint formula LiberoActionCodec.encode uses, then saves robot0_eye_in_hand RGB-D + world-frame camera pose per waypoint -- genuine robot motion, not a camera teleport.
+
+```bash
+LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `--pan-offsets` | `-0.5 -0.25 0.0 0.25 0.5` | no | Radians added to the reset shoulder-pan joint per waypoint. |
+| `--lift-offsets` | `-0.15 0.0 0.15` | no | Radians added to the reset shoulder-lift joint per waypoint; waypoints are the pan x lift grid. |
+| `--out-dir` | `../data/runs/mapper_probe/frames_arm_full` | no | Where per-frame .npz files and manifest.txt are written. |
+
+Default 15-waypoint pan x tilt grid:
+
+```bash
+cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
+```
+
+### `scene_recon.fuse`: Fuse scan frames into a cuRobo Mapper mesh
+
+Integrates every saved frame from one or more scan directories into curobo.perception.Mapper (Warp backend), computes the ESDF, extracts a surface mesh, and saves it plus a few shaded renders. Multiple --frames-dir values fuse all their frames into a single denser mesh.
+
+```bash
+.venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `--frames-dir` | `../data/runs/mapper_probe/frames` | no | One or more frame directories (space-separated), each with its own manifest.txt, fused into one Mapper. Output of scene_recon.scan / .scan_arm / .scan_lookat. |
+| `--voxel-size` | `0.01` | no | TSDF voxel size in meters; smaller is sharper and slower. |
+| `--n-render-views` | `3` | no | How many shaded PNG renders to save from scan camera poses. |
+
+Default fuse on the orbit scan above:
+
+```bash
+cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py
+```
+
+Fuse all three scans (orbit + arm pan-tilt + IK look-at) at a finer voxel size (logged 2026-11-04: 44,180 verts / 82,957 faces, vs 23,441/44,253 for the orbit scan alone):
+
+```bash
+cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py --frames-dir ../data/runs/mapper_probe/frames ../data/runs/mapper_probe/frames_arm_full ../data/runs/mapper_probe/frames_lookat --out-dir ../data/runs/mapper_probe/fused_combined --voxel-size 0.008 --n-render-views 4
+```
+
+Robot-free orbit-only mesh at 5 mm (input of plan_rack and the gate; logged 2026-11-04):
+
+```bash
+cd ASPIRE && .venv-curobo/bin/python ../tools/mapper_probe/fuse_mapper.py --frames-dir ../data/runs/mapper_probe/frames ../data/runs/mapper_probe/frames_orbit_r1 ../data/runs/mapper_probe/frames_orbit_r2 --out-dir ../data/runs/mapper_probe/fused_orbit_hires --voxel-size 0.005
+```
+
+Orbit rings used above:
+
+```bash
+cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py --n-frames 32 --height 0.95 --out-dir ../data/runs/mapper_probe/frames_orbit_r1 && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py --n-frames 32 --height 1.35 --radius 0.5 --out-dir ../data/runs/mapper_probe/frames_orbit_r2
 ```

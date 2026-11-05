@@ -109,6 +109,7 @@
       if (r.ok) {
         video = {path: r.path, name: r.name};
         renderChosen();
+        window.dispatchEvent(new CustomEvent("demo-video-picked"));
         syncAttach();
         input.focus();
       } else if (r.fallback) {
@@ -125,6 +126,11 @@
     const text = message.trim();
     const low = text.toLowerCase();
     syncAttachSoon();
+    if (low === "/continue") {
+      userBubble(text);
+      resumeRun();
+      return true;
+    }
     if (low === "/deploy") {
       userBubble(text);
       post("/deploy", {}).then((r) => agentTurn("deploy", r.ok
@@ -175,7 +181,8 @@
         document.getElementById("row-main_script").style.display = synth ? "none" : "";
         document.getElementById("row-max_retries").style.display = synth ? "" : "none";
         document.getElementById("row-token_cap").style.display = synth ? "" : "none";
-        for (const k of ["strategy", "attacks", "seeds"]) document.getElementById("row-" + k).style.display = adv ? "" : "none";
+        for (const k of ["pause_after_v0", "strategy", "attacks", "seeds", "spark"]) document.getElementById("row-" + k).style.display = adv ? "" : "none";
+        document.getElementById("row-spark_token_cap").style.display = adv && el("spark").checked ? "" : "none";
         const cap = +el("token_cap").value || 0;
         const usd = (cap / 1e6 * budget.usd_per_million_tokens).toFixed(2);
         const calls = (+el("max_retries").value || 0) + 1 + (adv ? (+el("attacks").value || 0) : 0);
@@ -233,6 +240,24 @@
     if (d.path) text += "\n" + d.path;
     agentTurn(d.stage + " " + d.status, text, d.status === "failed" ? "needs" : "");
   }
+  /* the hold after candidate v0: the run continues only from here or from /continue */
+  function showReview(program) {
+    if (document.getElementById("review-continue")) return;
+    addTurn("chat-turn wizard-turn", `<div class="tk">your call</div><div class="main">Candidate v0 is ready${program ? " (" + esc(program) + ")" : ""}. It passed its nominal seed; its rollout is playing on the right. Nothing is being spent while this waits.<div class="review-actions"><button class="btn sm" id="review-continue" type="button">Continue to the Adversary</button></div></div>`);
+    setStatus("running", "waiting for you");
+    document.getElementById("review-continue").addEventListener("click", resumeRun);
+  }
+  function resumeRun() {
+    const b = document.getElementById("review-continue");
+    if (b) { b.disabled = true; b.textContent = "Continuing..."; }
+    post("/policy-dev/continue", {}).then((r) => {
+      if (!r.ok && b) { b.textContent = r.error; return; }
+      if (b) b.textContent = "Continued";
+      setStatus("running", "running");
+    });
+  }
+  fetch("/policy-dev").then((r) => r.json()).then((i) => { if (i.waiting) showReview(); }).catch(() => {});
+
   function onNote(d) {
     if (d.status === "ok" && d.note === "preflight") return;
     const bad = d.note === "finished" && d.status !== "user_stop" && d.status !== "deployed";
@@ -265,6 +290,8 @@
       runTokenCap = (d.settings && d.settings.synthesizer && d.settings.token_cap) || null;
       hideBanner();
       document.getElementById("incumbent-name").textContent = "task: " + d.task;
+    } else if (d.kind === "pipeline_wait") {
+      showReview(d.program);
     } else if (d.kind === "pipeline_stage") onStage(d);
     else if (d.kind === "pipeline_note") onNote(d);
     else if (d.kind === "pipeline_output") onOutput(d);

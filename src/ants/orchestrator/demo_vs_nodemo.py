@@ -1,7 +1,7 @@
 """Experiment: does one demonstration help the generator write a working program?
 
 Arms differ only in the demonstration section of the prompt (Q1 in
-docs/synthesizer/discussion.md). Per arm and sample: write a program, run it on a debug seed,
+the project discussion). Per arm and sample: write a program, run it on a debug seed,
 repair it from text feedback up to N times, then evaluate the final program unchanged on the
 acceptance seeds (no model calls at evaluation time).
 
@@ -355,7 +355,8 @@ def main(argv: list[str] | None = None) -> int:
     harnesses = {}
     for scene in args.scenes.split(","):
         if scene == "stock":
-            harnesses[scene] = CapHarness(args.aspire)
+            # contacts go through the launcher; a stock debug run with evidence needs it too
+            harnesses[scene] = CapHarness(args.aspire, launcher=launcher if args.contacts else None)
         elif scene == "scaled":
             harnesses[scene] = CapHarness(
                 args.aspire,

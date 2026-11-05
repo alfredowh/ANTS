@@ -34,7 +34,7 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[3]
 SKILL_PATH = REPO_ROOT / "docs" / "studio" / "skills" / "policy-dev.json"
 STAGES = (
-    "video", "extract", "demospec", "prompt", "generate", "nominal",
+    "video", "extract", "demospec", "prompt", "generate", "nominal", "review",
     "attack", "diagnose", "rewrite", "gate", "deploy",
 )  # fmt: skip
 SIMULATOR_MARKERS = ("aspire_launch.py", "cap-harness\0run", "cap_harness.cli\0run")
@@ -147,6 +147,10 @@ def worst_case_note(settings: dict, skill: dict) -> str:
     )
     if need > cap - b["one_call_headroom_tokens"]:
         note += " That can pass the cap; the run then ends as a budget stop."
+    if settings.get("spark") and settings["adversary"]:
+        spark = settings["spark_token_cap"]
+        spark_usd = spark / 1e6 * b["usd_per_million_tokens"]
+        note += f" Muse Spark adds up to {spark:,} tokens, about ${spark_usd:.2f}."
     return note
 
 
@@ -342,7 +346,19 @@ def generation_command(
         "--debug-seed", str(scene["debug_seed"]), "--eval-seeds", "",
         "--scenes", scene["scene"], "--debug-scene", scene["scene"],
         "--repairs", str(repairs), "--token-budget", str(budget),
+        "--scene-text-file", str(root / skill["scene_context"]["text"]),
+        "--evidence", skill["scene_context"]["evidence"],
+        "--explain",  # the model states why it changed the code; shown on each attempt
     ]  # fmt: skip
+
+
+def candidate_video(program: Path) -> Path | None:
+    """The agentview recording of the nominal rollout of `program_attempt<K>.py`."""
+    attempt = program.stem.removeprefix("program_attempt")
+    found = sorted(
+        (program.parent / f"debug_attempt{attempt}").glob("**/media/videos/agentview.mp4")
+    )
+    return found[-1] if found else None
 
 
 def passing_program(out: Path, arm: str) -> tuple[Path | None, dict]:
@@ -384,7 +400,11 @@ def loop_budget(total: int, generation_spent: int, headroom: int) -> int:
 
 
 def build_prompt_preview(
-    task: str, demo_summary: dict | None, out: Path, root: Path = REPO_ROOT
+    task: str,
+    demo_summary: dict | None,
+    out: Path,
+    root: Path = REPO_ROOT,
+    scene_text: str | None = None,
 ) -> dict:
     """The exact first prompt, saved before any spend (same function and inputs as generation)."""
     from ants.orchestrator.demo_vs_nodemo import EXAMPLE, EXAMPLE_TASK
@@ -393,13 +413,16 @@ def build_prompt_preview(
     aspire = Path(os.environ.get("ANTS_ASPIRE_ROOT", root / "ASPIRE"))
     api_ref = (aspire / "docs" / "api-reference.md").read_text(encoding="utf-8")
     example = (aspire / EXAMPLE).read_text(encoding="utf-8")
-    messages = build_messages(api_ref, example, EXAMPLE_TASK, task, demo_summary)
+    messages = build_messages(
+        api_ref, example, EXAMPLE_TASK, task, demo_summary, scene_context=scene_text
+    )
     path = out / "prompt_messages.json"
     path.write_text(json.dumps(messages, indent=1), encoding="utf-8")
     return {
         "path": str(path),
         "chars": sum(len(str(m.get("content", ""))) for m in messages),
         "has_demo": demo_summary is not None,
+        "has_scene": scene_text is not None,
     }
 
 
@@ -416,9 +439,85 @@ def other_simulator_jobs(proc: Path = Path("/proc"), own: int | None = None) -> 
             cmd = (entry / "cmdline").read_bytes().decode("utf-8", "replace")
         except OSError:
             continue
+        # A shell or a search whose command text merely mentions a marker is not a simulator; a real
+        # job always has its own python process under the shell.
+        if Path(cmd.split("\0", 1)[0]).name in ("sh", "bash", "dash", "zsh", "grep", "pgrep"):
+            continue
         if any(m in cmd for m in SIMULATOR_MARKERS):
             found.append(f"pid {entry.name}: {cmd.replace(chr(0), ' ').strip()[:160]}")
     return found
+
+
+def observed_planner(generation: Path) -> dict | None:
+    """What the planner really was, from a logged motion plan of this run; None if none yet."""
+    for path in sorted(generation.glob("**/trace/calls/*plan-motion/output.json")):
+        try:
+            out = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        diag = out.get("diagnostics") or {}
+        traj = out.get("trajectory") or {}
+        return {
+            "ik_solver": diag.get("ik_solver"),
+            "trajectory_planner": diag.get("trajectory_planner"),
+            "collision_aware": traj.get("collision_aware"),
+            "curobo_used": "curobo" in f"{diag.get('ik_solver')} {diag.get('trajectory_planner')}",
+            "source": str(path),
+        }
+    return None
+
+
+def _commit(folder: Path) -> str | None:
+    try:
+        out = subprocess.run(
+            ["git", "-C", str(folder), "rev-parse", "--short", "HEAD"],
+            capture_output=True, text=True, timeout=10,
+        )  # fmt: skip
+        return out.stdout.strip() or None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def execution_record(req: Request, skill: dict, root: Path = REPO_ROOT) -> dict:
+    """Everything this run executes with, as it will be used. Written to `execution.json`."""
+    cfg, scene, context = req.settings, skill["scene"], skill["scene_context"]
+    gen = skill["generation"]
+    return {
+        "task": req.task,
+        "video": str(req.video or ""),
+        "code": {"ants": _commit(root), "aspire": _commit(root / "ASPIRE")},
+        "extraction": skill["extraction"],
+        "scene": {**scene, "scene_text": context["text"], "scene_level": context["level"]},
+        "synthesizer": {
+            "enabled": cfg["synthesizer"],
+            "model": "muse-wonder-1.0",
+            "temperature": gen["temperature"],
+            "max_retries": cfg["max_retries"],
+            "evidence": context["evidence"],
+            "contacts": context["evidence"] != "none",
+            "explain": True,
+            "token_cap": cfg["token_cap"],
+        },
+        "planner": {
+            "setting": "default",
+            "curobo_requested": False,
+            "observed": None,
+            "note": "Observed values are read from the run's first logged motion plan.",
+        },
+        "adversary": {
+            "enabled": cfg["adversary"],
+            "backend": scene["backend"],
+            "proposer_model": "muse-spark-1.3"
+            if cfg.get("spark")
+            else skill["loop"]["proposer_model"],
+            "spark_token_cap": cfg.get("spark_token_cap") if cfg.get("spark") else 0,
+            "strategy": cfg["strategy"],
+            "eta": cfg["eta"],
+            "attacks": cfg["attacks"],
+            "seeds": cfg["seeds"],
+            "stall_window": skill["loop"]["stall_window"],
+        },
+    }
 
 
 class Stopped(Exception):
@@ -453,6 +552,8 @@ class Pipeline:
         prompt_preview: Callable[..., dict] = build_prompt_preview,
         deploy_dir: Path | None = None,
     ) -> None:
+        self.waiting = False
+        self.resume = threading.Event()
         self.req, self.skill, self._emit = req, skill, emit
         self.run_loop, self.run_attacks, self.stop_requested = run_loop, run_attacks, stop_requested
         self.popen, self.root = popen, root
@@ -495,6 +596,27 @@ class Pipeline:
     def check_stop(self) -> None:
         if self.stop_requested():
             raise Stopped
+
+    def show_candidate(self, program: Path) -> None:
+        """Keep the recording of the candidate in the run folder and show it on the page."""
+        video = candidate_video(program)
+        if video is None:
+            return
+        shutil.copyfile(video, self.req.run_dir / "candidate_v0.mp4")
+        self._emit({"kind": "pipeline_candidate", "program": program.name})
+
+    def wait_for_human(self, program: Path) -> None:
+        """Hold before the Adversary until the person continues or stops. Nothing is spent here."""
+        self.stage("review", "started", f"{program.name} passed its nominal seed. Waiting for you.")
+        self.waiting = True
+        self._emit({"kind": "pipeline_wait", "program": program.name})
+        try:
+            while not self.resume.wait(0.5):
+                self.check_stop()
+        finally:
+            self.waiting = False
+        self.check_stop()
+        self.stage("review", "done", "Continued by you")
 
     def run_cmd(self, stage: str, cmd: list[str], cwd: Path, log: Path) -> int:
         self.check_stop()
@@ -562,6 +684,7 @@ class Pipeline:
             )  # fmt: skip
             return None
         self.stage("extract", "done", "All quality gates passed", demo=str(c["npz"]))
+        self.start_overlay(c["npz"])
         self.stage("demospec", "started", "Building the DemoSpec")
         code = self.run_cmd("demospec", c["demospec"], self.root, log)
         spec = c["demospec_json"]
@@ -570,6 +693,43 @@ class Pipeline:
             self.finish("demospec_failed", "demospec", "Could not build the DemoSpec.")
             return None
         return spec
+
+    def start_overlay(self, npz: Path) -> None:
+        """Render the demo over its clip in the background; a failure never stops the pipeline."""
+        threading.Thread(target=self._render_overlay, args=(npz,), daemon=True).start()
+
+    def _render_overlay(self, npz: Path) -> None:
+        e = self.skill["extraction"]
+        out = self.req.run_dir / "demo"
+        raw, final = out / "overlay_raw.mp4", out / "overlay.mp4"
+        log = out / "overlay.log"
+        draw = [
+            str(self.root / e["python"]), str(self.root / "tools" / "hurobo_overlay.py"), str(npz),
+            "--video", str(self.req.video), "--setup", e["setup"], "--intrinsics", e["intrinsics"],
+            "--marker-size-m", str(e["marker_size_m"]), "--out", str(raw),
+        ]  # fmt: skip
+        encode = [
+            "ffmpeg", "-y", "-v", "error", "-i", str(raw), "-c:v", "libx264",
+            "-pix_fmt", "yuv420p", "-movflags", "+faststart", "-preset", "veryfast", str(final),
+        ]  # fmt: skip
+        self._emit({"kind": "pipeline_demo_video", "state": "rendering"})
+        try:
+            with log.open("a", encoding="utf-8") as fh:
+                for cmd, cwd in ((draw, self.root / e["cwd"]), (encode, self.root)):
+                    self._log({"kind": "command", "stage": "overlay", "cmd": cmd, "cwd": str(cwd)})
+                    subprocess.run(cmd, cwd=str(cwd), stdout=fh, stderr=fh, check=True)
+            raw.unlink(missing_ok=True)
+            self._emit({"kind": "pipeline_demo_video", "state": "overlay"})
+        except (OSError, subprocess.SubprocessError) as err:
+            self._log({"kind": "overlay_failed", "error": str(err)})
+            self._emit({"kind": "pipeline_demo_video", "state": "failed", "detail": f"see {log}"})
+
+    def write_execution(self, observed: dict | None = None) -> None:
+        path = self.req.run_dir / "execution.json"
+        record = execution_record(self.req, self.skill, self.root)
+        record["planner"]["observed"] = observed
+        path.write_text(json.dumps(record, indent=2), encoding="utf-8")
+        self._log({"kind": "execution", **record})
 
     def _report_generation(self, out: Path, seen: list[int]) -> None:
         """Turn new rows of the generator's event log into stages: `program` means a call ended and
@@ -628,6 +788,16 @@ class Pipeline:
         g = self.skill["generation"]
         arm = g["arm_with_video"] if has_demo else g["arm_without_video"]
         program, record = passing_program(out, arm)
+        observed = observed_planner(out)
+        self.write_execution(observed)
+        if observed:
+            self.note(
+                "execution", "ok",
+                f"Planner used: IK {observed['ik_solver']}, trajectory "
+                f"{observed['trajectory_planner']}, collision aware: "
+                f"{observed['collision_aware']}, cuRobo: {observed['curobo_used']}. "
+                f"All settings: {self.req.run_dir / 'execution.json'}",
+            )  # fmt: skip
         sent = out / arm / "sample0" / "messages_attempt0.json"
         saved = self.req.run_dir / "prompt_messages.json"
         if sent.is_file() and saved.is_file():
@@ -656,6 +826,23 @@ class Pipeline:
         self.stage("demospec", "done", json.dumps(summary, indent=1), path=str(spec))
         return spec, summary
 
+    def scene_text(self) -> str | None:
+        """The stock-scene text for the prompt, measured once if missing; None if that failed."""
+        context = self.skill["scene_context"]
+        path = self.root / context["text"]
+        if not path.is_file():
+            self.stage(
+                "prompt", "started", "Measuring the stock scene (one no-op rollout, no tokens)"
+            )
+            cmd = [sys.executable, "-m", "ants.studio.stock_scene"]
+            self.run_cmd("prompt", cmd, self.root, self.req.run_dir / "scene_prep.log")
+            if not path.is_file():
+                return None
+        self._log(
+            {"kind": "scene_context", "scene_text": str(path), "evidence": context["evidence"]}
+        )
+        return path.read_text(encoding="utf-8").strip()
+
     def synthesize(self) -> tuple[Path, int] | None:
         """Video to a program that passed its nominal seed, or None after finishing the run."""
         req = self.req
@@ -663,13 +850,25 @@ class Pipeline:
         if prepared is None:
             return None
         spec, summary = prepared
+        scene_text = self.scene_text()
+        self.check_stop()
+        if scene_text is None:
+            self.stage("prompt", "failed", "The stock scene could not be measured")
+            self.finish(
+                "no_working_policy", "draft",
+                f"The stock scene could not be measured, so no tokens were spent. See "
+                f"{req.run_dir / 'scene_prep.log'}.",
+            )  # fmt: skip
+            return None
         self.stage("prompt", "started", "Building the prompt")
-        preview = self.prompt_preview(req.task, summary, req.run_dir, self.root)
+        preview = self.prompt_preview(req.task, summary, req.run_dir, self.root, scene_text)
         self.stage(
             "prompt", "done",
             f"{preview['chars']:,} characters, "
-            f"{'with' if preview['has_demo'] else 'without'} the demonstration",
+            f"{'with' if preview['has_demo'] else 'without'} the demonstration, "
+            f"{'with' if preview.get('has_scene') else 'without'} the stock scene",
             path=preview["path"],
+            chars=preview["chars"],
         )  # fmt: skip
         out = req.run_dir / "generation"
         program, spent, record = self.generate(out, spec, req.video is not None)
@@ -705,9 +904,19 @@ class Pipeline:
         req, cfg, skill = self.req, self.req.settings, self.skill
         req.run_dir.mkdir(parents=True, exist_ok=True)
         (req.run_dir / "settings.json").write_text(
-            json.dumps({"task": req.task, "video": str(req.video or ""), **cfg}, indent=2),
+            json.dumps(
+                {
+                    "task": req.task,
+                    "video": str(req.video or ""),
+                    "scene_text": str(self.root / skill["scene_context"]["text"]),
+                    "evidence": skill["scene_context"]["evidence"],
+                    **cfg,
+                },
+                indent=2,
+            ),
             encoding="utf-8",
         )
+        self.write_execution()
         self.note(
             "start", "running",
             f"Task: {req.task}\nVideo: {req.video or 'none'}\n"
@@ -730,6 +939,9 @@ class Pipeline:
                 return
             program, spent = made
             self.check_stop()
+            self.show_candidate(program)
+            if cfg["adversary"] and cfg.get("pause_after_v0"):
+                self.wait_for_human(program)
             if not cfg["adversary"]:
                 self.deploy(program, spent)
                 return
@@ -772,6 +984,18 @@ class Manager:
         self.skill = skill or load_skill()
         self.pipeline = pipeline
         self.current: dict | None = None
+        self.active: Any = None
+
+    @property
+    def waiting(self) -> bool:
+        return bool(getattr(self.active, "waiting", False))
+
+    def resume(self) -> dict:
+        """The person continues a run that is holding for review."""
+        if not self.waiting:
+            return {"ok": False, "error": "Nothing is waiting for you."}
+        self.active.resume.set()
+        return {"ok": True}
 
     def start(self, task: str, video: str | None, raw_settings: dict | None = None) -> dict:
         path = Path(video) if video else None
@@ -791,11 +1015,12 @@ class Manager:
 
         def work() -> None:
             try:
-                self.pipeline(
+                self.active = self.pipeline(
                     Request(task, path, run_dir, settings), self.skill, self.emit,
                     run_loop=self.run_loop, run_attacks=self.run_attacks,
                     stop_requested=self.stop_requested,
-                ).run()  # fmt: skip
+                )  # fmt: skip
+                self.active.run()
             except Exception as exc:  # noqa: BLE001 -- surface any failure in the console
                 self.emit({"kind": "error", "message": f"{type(exc).__name__}: {exc}"})
             finally:

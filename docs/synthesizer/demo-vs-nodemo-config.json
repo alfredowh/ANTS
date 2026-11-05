@@ -83,6 +83,6 @@
       "usd_est": 3.34
     }
   },
-  "analysis_notebook": "docs/synthesizer/show-once-vs-task-only/demo_vs_no_demo_analysis.ipynb",
-  "log_snapshot": "docs/synthesizer/show-once-vs-task-only/{demo,nodemo}/"
+  "log_snapshot": "docs/synthesizer/show-once-vs-task-only/{demo,nodemo}/",
+  "analysis_notebook": "docs/synthesizer/show-once-vs-task-only/demo_vs_no_demo_analysis.ipynb"
 }

@@ -10,7 +10,7 @@
   function theme() {
     let t = null;
     try { t = localStorage.getItem("ants-studio-theme"); } catch (e) {}
-    if (t === "light") document.documentElement.dataset.theme = "light";
+    if (t !== "dark") document.documentElement.dataset.theme = "light";
     else delete document.documentElement.dataset.theme;
   }
   theme();
@@ -30,6 +30,7 @@
     const hostStop = host.document.getElementById("stop-btn");
     stop.disabled = hostStop.disabled;
     stop.textContent = hostStop.textContent;
-    document.getElementById("ants-pill").textContent = pill.textContent;
+    const tokens = host.document.getElementById("token-pill");
+    document.getElementById("ants-pill").textContent = tokens ? `${pill.textContent} · ${tokens.textContent}` : pill.textContent;
   }, 1000);
 })();

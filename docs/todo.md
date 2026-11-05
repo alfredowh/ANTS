@@ -34,7 +34,7 @@ Open items that need you: a measurement, a decision, access or a review. The int
 
 ## Run book (generated, redundant on purpose)
 
-If a session limit hits, copy a command from here and keep going. Full flag tables: [runbook/commands-full.md](runbook/commands-full.md). UI: [ANTS Run Book](https://claude.ai/artifact/AimCCqfBF2ooHEqZwiFVMS) or `docs/runbook.html`. Agent access notes: [runbook/agent-access.md](runbook/agent-access.md). Catalog updated 2026-11-01.
+If a session limit hits, copy a command from here and keep going. Full flag tables: [runbook/commands-full.md](runbook/commands-full.md). UI: [ANTS Run Book](https://claude.ai/artifact/AimCCqfBF2ooHEqZwiFVMS) or `docs/runbook.html`. Catalog updated 2026-11-01.
 
 **Setup and health checks** (reference)
 
@@ -152,16 +152,6 @@ cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 
     --output-root ../data/scaled_test/out
 ```
 
-**System 2 v0: harden with the never-regress gate** (built, no live run)
-
-```bash
-uv run python tools/system2_mock.py data/runs/system2_mock_synthetic
-```
-
-```bash
-uv run python -m ants.evalkit.report data/runs --open
-```
-
 **dev/curobo: why does the planner go through the rack?** (done (dev notes))
 
 ```bash
@@ -171,29 +161,6 @@ cd ASPIRE && ANTS_CARVE_MARGIN_M=0.0 ANTS_ATTACH_FILE=$PWD/../data/runs/curobo/a
 
 ```bash
 cd ASPIRE && ANTS_CONTACT_LOG=../data/evidence/out.jsonl LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../dev/curobo/contact_launch.py scene.json -- run --benchmark libero-pro --suite libero_goal_swap --task-id 8 --seed 51 --init-mode seeded --program ../dev/curobo/programs/exp3_a2_orbit.py
-```
-
-**Research radar maintenance** (tooling)
-
-```bash
-uv run python .claude/skills/robot-research-radar/scripts/radar.py build \
-    --in scratch/orgs.json scratch/works.json \
-    --out scratch/radar_docs.json
-```
-
-```bash
-uv run python .claude/skills/robot-research-radar/scripts/radar.py pending \
-    --dump scratch/pending.json
-```
-
-**Agent skills (slash commands)** (reference)
-
-```bash
-/idea-judge  # then your raw idea text
-```
-
-```bash
-/storyline-judge  # then the storyline text or a storyline_id
 ```
 
 **Exp 05: perceived scene vs oracle** (done (see experiment-05-perceived-scene.md))
@@ -235,16 +202,6 @@ uv run python -m ants.orchestrator.exp_curobo \
     --token-budget 250000
 ```
 
-**Scene reconstruction probe: cuRobo Mapper TSDF/ESDF on the LIBERO scene** (probe working, logged once)
-
-```bash
-LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py
-```
-
-```bash
-LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
-```
-
 **Demo vs no demo on cuRobo (simulator robot mask, attached bowl)** (final (submission experiment, tag submission-experiment))
 
 ```bash
@@ -284,6 +241,49 @@ uv run python -m ants.orchestrator.demo_vs_nodemo \
     --scenes scaled \
     --eval-seeds 1,2,3,4,5 \
     --token-budget 300000
+```
+
+**System 2 v0: harden with the never-regress gate** (built, no live run)
+
+```bash
+uv run python tools/system2_mock.py data/runs/system2_mock_synthetic
+```
+
+```bash
+uv run python -m ants.evalkit.report data/runs --open
+```
+
+**Research radar maintenance** (tooling)
+
+```bash
+uv run python .claude/skills/robot-research-radar/scripts/radar.py build \
+    --in scratch/orgs.json scratch/works.json \
+    --out scratch/radar_docs.json
+```
+
+```bash
+uv run python .claude/skills/robot-research-radar/scripts/radar.py pending \
+    --dump scratch/pending.json
+```
+
+**Agent skills (slash commands)** (reference)
+
+```bash
+/idea-judge  # then your raw idea text
+```
+
+```bash
+/storyline-judge  # then the storyline text or a storyline_id
+```
+
+**Scene reconstruction probe: cuRobo Mapper TSDF/ESDF on the LIBERO scene** (probe working, logged once)
+
+```bash
+LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py
+```
+
+```bash
+LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
 ```
 
 <!-- runbook:end -->

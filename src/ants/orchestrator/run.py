@@ -168,6 +168,13 @@ def main(argv: list[str] | None = None) -> int:
     )
     ap.add_argument("--gate", default="strict", choices=["strict", "off"])
     ap.add_argument("--stall-window", type=int, default=3)
+    ap.add_argument(
+        "--adversary-token-budget",
+        type=int,
+        default=500_000,
+        help="new Muse Spark tokens System 2 may spend in this run (logged). The adapter's own "
+        "default of 100k ran out after 3 attacks in a 10-cycle loop (4 agents per attack).",
+    )
     ap.add_argument("--min-severity", type=float, default=0.3)
     ap.add_argument("--severity-bound", type=float, default=0.8)
     ap.add_argument("--seed", type=int, default=0)
@@ -201,6 +208,7 @@ def main(argv: list[str] | None = None) -> int:
         bounds=Bounds(default=args.severity_bound),
         seed=args.seed,
         aspire=aspire,
+        token_budget=args.adversary_token_budget,
     )
     policy = Policy("bowl_on_plate", 0, args.task, args.policy.read_text(encoding="utf-8"))
     loop_cfg = LoopConfig(

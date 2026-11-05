@@ -48,6 +48,8 @@ class FakeWorld:
                 json.dumps({"summary": {"grasp": 1}}), encoding="utf-8"
             )
             return FakeProc([], 0)
+        if "ants.studio.stock_scene" in text:
+            return FakeProc([], 1)  # writes nothing
         return self._generate(cmd)
 
     def _generate(self, cmd):
@@ -71,18 +73,28 @@ class FakeWorld:
         return FakeProc(lines, 0)
 
 
-def _preview(task, summary, out, root):
-    return {"path": str(out / "prompt_messages.json"), "chars": 10, "has_demo": summary is not None}
+def _preview(task, summary, out, root, scene_text=None):
+    SCENES.append(scene_text)
+    return {"path": str(out / "prompt_messages.json"), "chars": 10, "has_demo": summary is not None,
+            "has_scene": scene_text is not None}  # fmt: skip
+
+
+SCENES: list = []
 
 
 def _settings(**over):
+    over.setdefault("pause_after_v0", False)
     settings, error = pd.parse_settings(over, SKILL)
     assert error is None
     return settings
 
 
-def _run(tmp_path, world, video=True, stop=lambda: False, jobs=(), **over):
+def _run(tmp_path, world, video=True, stop=lambda: False, jobs=(), scene=True, **over):
     events, loops, attacks = [], [], []
+    if scene:
+        text = tmp_path / SKILL["scene_context"]["text"]
+        text.parent.mkdir(parents=True, exist_ok=True)
+        text.write_text("Scene, measured\n", encoding="utf-8")
     clip = tmp_path / "clip.mp4"
     clip.write_bytes(b"v")
     (tmp_path / "run").mkdir(exist_ok=True)
@@ -154,6 +166,52 @@ def test_generation_command_is_demo_arm_stock_scene_acceptance_seed(tmp_path):
     assert get("--eval-seeds") == ""
     assert (get("--suite"), get("--task-id")) == ("libero_goal_swap", "8")
     assert (get("--scenes"), get("--debug-scene")) == ("stock", "stock")
+
+
+def test_generation_sends_the_stock_scene_text_and_e3_evidence(tmp_path):
+    world = FakeWorld()
+    SCENES.clear()
+    _, _, req, _ = _run(tmp_path, world)
+    cmd = next(c for c in world.calls if "ants.orchestrator.demo_vs_nodemo" in c)
+    text = tmp_path / SKILL["scene_context"]["text"]
+    assert cmd[cmd.index("--scene-text-file") + 1] == str(text)
+    assert cmd[cmd.index("--evidence") + 1] == "e3"
+    assert (cmd[cmd.index("--scenes") + 1], cmd[cmd.index("--debug-scene") + 1]) == (
+        "stock",
+        "stock",
+    )
+    assert "S4_L" not in str(text)  # those describe the scaled scene
+    assert SCENES == ["Scene, measured"]  # the preview gets what generation reads (stripped)
+    assert json.loads((req.run_dir / "settings.json").read_text("utf-8"))["scene_text"] == str(text)
+    rows = (req.run_dir / "pipeline.jsonl").read_text("utf-8")
+    assert '"kind": "scene_context"' in rows and str(text) in rows
+
+
+def test_scene_that_cannot_be_measured_spends_nothing(tmp_path):
+    world = FakeWorld()
+    events, loops, _, _ = _run(tmp_path, world, scene=False)
+    assert any("ants.studio.stock_scene" in c for c in world.calls)
+    assert not any("ants.orchestrator.demo_vs_nodemo" in c for c in world.calls)
+    assert ("prompt", "failed") in _stages(events) and not loops
+    assert _done(events)[0]["stopped"] == "no_working_policy"
+
+
+def test_preview_puts_the_scene_in_the_prompt(tmp_path):
+    aspire = tmp_path / "ASPIRE"
+    (aspire / "docs").mkdir(parents=True)
+    (aspire / "docs" / "api-reference.md").write_text("API", encoding="utf-8")
+    from ants.orchestrator.demo_vs_nodemo import EXAMPLE
+
+    (aspire / EXAMPLE).parent.mkdir(parents=True, exist_ok=True)
+    (aspire / EXAMPLE).write_text("EX", encoding="utf-8")
+    info = pd.build_prompt_preview("t", None, tmp_path, tmp_path, "SCENE-MARKER")
+    assert info["has_scene"]
+    assert "SCENE-MARKER" in (tmp_path / "prompt_messages.json").read_text("utf-8")
+
+
+def test_stock_command_with_contacts_uses_the_launcher_only_then():
+    src = (pd.REPO_ROOT / "src/ants/orchestrator/demo_vs_nodemo.py").read_text("utf-8")
+    assert "launcher=launcher if args.contacts else None" in src
 
 
 def test_extraction_uses_the_measured_marker_and_the_logged_setup(tmp_path):
@@ -454,3 +512,129 @@ def test_native_env_drops_snap_library_paths():
     )  # fmt: skip
     assert "LD_LIBRARY_PATH" not in env and "GTK_PATH" not in env
     assert env["DISPLAY"] == ":1" and env["XDG_DATA_DIRS"] == "/usr/share"
+
+
+def test_other_simulator_jobs_ignores_shells_that_only_mention_a_marker(tmp_path):
+    marker = pd.SIMULATOR_MARKERS[0]
+    for pid, argv in {
+        "11": ["/bin/bash", "-c", f"ps | grep {marker}"],
+        "12": ["python", marker],
+    }.items():
+        (tmp_path / pid).mkdir()
+        (tmp_path / pid / "cmdline").write_bytes("\0".join(argv).encode())
+    found = pd.other_simulator_jobs(proc=tmp_path, own=1)
+    assert len(found) == 1 and found[0].startswith("pid 12")
+
+
+def test_execution_record_logs_what_a_run_uses(tmp_path):
+    settings, problem = pd.parse_settings({}, pd.load_skill())
+    assert problem is None
+    req = pd.Request("put the bowl on the plate", None, tmp_path, settings)
+    record = pd.execution_record(req, pd.load_skill(), tmp_path)
+    assert record["synthesizer"]["evidence"] == "e3"
+    assert "S4" in record["scene"]["scene_text"]
+    assert record["planner"]["curobo_requested"] is False
+
+
+def test_observed_planner_reads_a_logged_plan(tmp_path):
+    assert pd.observed_planner(tmp_path) is None
+    call = tmp_path / "a" / "trace" / "calls" / "call-1-plan-motion"
+    call.mkdir(parents=True)
+    plan = {
+        "diagnostics": {"ik_solver": "pyroki", "trajectory_planner": "interpolation"},
+        "trajectory": {"collision_aware": False},
+    }
+    (call / "output.json").write_text(json.dumps(plan), encoding="utf-8")
+    seen = pd.observed_planner(tmp_path)
+    assert seen["ik_solver"] == "pyroki" and seen["curobo_used"] is False
+
+
+def test_generation_asks_for_the_models_reason_and_the_scene_context(tmp_path):
+    cmd = pd.generation_command(
+        "put the bowl on the plate",
+        tmp_path / "d.json",
+        tmp_path,
+        1000,
+        5,
+        True,
+        pd.load_skill(),
+        tmp_path,
+    )
+    assert "--explain" in cmd
+    assert cmd[cmd.index("--evidence") + 1] == "e3"
+    assert "S4" in cmd[cmd.index("--scene-text-file") + 1]
+
+
+def test_muse_spark_setting_defaults_off_and_is_logged(tmp_path):
+    skill = pd.load_skill()
+    settings, _ = pd.parse_settings({}, skill)
+    assert settings["spark"] is False
+    assert "Muse Spark" not in pd.worst_case_note(settings, skill)
+    on, _ = pd.parse_settings({"spark": True, "spark_token_cap": 50000}, skill)
+    assert "50,000" in pd.worst_case_note(on, skill)
+    req = pd.Request("put the bowl on the plate", None, tmp_path, on)
+    record = pd.execution_record(req, skill, tmp_path)
+    assert record["adversary"]["proposer_model"] == "muse-spark-1.3"
+    assert record["adversary"]["spark_token_cap"] == 50000
+
+
+def _pausing(tmp_path, on_wait, stop=lambda: False):
+    events, loops = [], []
+    text = tmp_path / SKILL["scene_context"]["text"]
+    text.parent.mkdir(parents=True, exist_ok=True)
+    text.write_text("Scene, measured\n", encoding="utf-8")
+    clip = tmp_path / "clip.mp4"
+    clip.write_bytes(b"v")
+    (tmp_path / "run").mkdir(exist_ok=True)
+    req = pd.Request(
+        "put the bowl on the plate", clip, tmp_path / "run", _settings(pause_after_v0=True)
+    )
+
+    def emit(event):
+        events.append(event)
+        if event["kind"] == "pipeline_wait":
+            assert p.waiting and not loops  # no attack before the person decides
+            on_wait(p)
+
+    p = pd.Pipeline(
+        req, SKILL, emit, run_loop=lambda *a: loops.append(a), run_attacks=lambda *a: None,
+        stop_requested=stop, popen=FakeWorld(), root=tmp_path, simulator_jobs=lambda: [],
+        prompt_preview=_preview,
+    )  # fmt: skip
+    p.run()
+    return events, loops, p
+
+
+def test_run_holds_after_v0_until_the_person_continues(tmp_path):
+    events, loops, p = _pausing(tmp_path, lambda pipe: pipe.resume.set())
+    assert len(loops) == 1 and not p.waiting
+    assert [s for s in _stages(events) if s[0] == "review"] == [
+        ("review", "started"),
+        ("review", "done"),
+    ]
+
+
+def test_stop_ends_the_hold_without_attacking(tmp_path):
+    flag = []
+    events, loops, p = _pausing(tmp_path, lambda pipe: flag.append(1), stop=lambda: bool(flag))
+    assert not loops and not p.waiting
+    assert _done(events)[-1]["stopped"] == "user_stop"
+
+
+def test_manager_resume_needs_a_waiting_run():
+    m = pd.Manager(
+        lambda e: None, set_running=lambda on: True, run_loop=lambda *a: None,
+        run_attacks=lambda *a: None, stop_requested=lambda: False, clear_stop=lambda: None,
+        runs_dir=lambda: None, skill=SKILL,
+    )  # fmt: skip
+    assert m.resume()["ok"] is False
+
+
+def test_candidate_video_is_the_attempts_agentview(tmp_path):
+    (tmp_path / "program_attempt2.py").write_text("x", encoding="utf-8")
+    assert pd.candidate_video(tmp_path / "program_attempt2.py") is None
+    videos = tmp_path / "debug_attempt2" / "r" / "media" / "videos"
+    videos.mkdir(parents=True)
+    (videos / "agentview.mp4").write_bytes(b"v")
+    (videos / "robot0_eye_in_hand.mp4").write_bytes(b"v")
+    assert pd.candidate_video(tmp_path / "program_attempt2.py").name == "agentview.mp4"

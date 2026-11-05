@@ -2,7 +2,7 @@
   "version": 1,
   "updated": "2026-11-01",
   "artifact_url": "https://claude.ai/artifact/AimCCqfBF2ooHEqZwiFVMS",
-  "about": "Single source of truth for every command that runs an ANTS experiment or tool. Edit this file, then run `uv run python -m ants.evalkit.runbook build` to regenerate docs/runbook.html, docs/runbook/commands-full.md, docs/synthesizer/experiment-commands.md and the Run book block in docs/todo.md.",
+  "about": "Single source of truth for every command that runs an ANTS experiment or tool. Edit this file, then run `uv run python -m ants.evalkit.runbook build` to regenerate docs/runbook.html, docs/runbook/commands-full.md, docs/synthesizer/experiment-commands.md.",
   "repo_url": "https://github.com/alfredowh/ANTS/blob/synthesizer/",
   "runners": {
     "ants": {
@@ -46,7 +46,7 @@
       "out": [
         "demos *.npz"
       ],
-      "doc": "docs/dev/reuse-from-hurobo.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "libero_demos",
@@ -60,7 +60,7 @@
       "out": [
         "states"
       ],
-      "doc": "docs/HANDOFF.md"
+      "doc": "docs/architecture.md"
     },
     {
       "id": "demospec_tools",
@@ -74,7 +74,7 @@
       "out": [
         "data/demospecs/*.json"
       ],
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "contracts",
@@ -84,7 +84,7 @@
       "role": "Shared dataclasses: DemoSpec, Policy, Constraint, Perturbation, CaseSpec, EpisodeTrace, Skill.",
       "in": [],
       "out": [],
-      "doc": "docs/synthesizer/discussion.md"
+      "doc": "docs/synthesizer/experiment-commands.md"
     },
     {
       "id": "generator",
@@ -101,7 +101,7 @@
       "out": [
         "program.py"
       ],
-      "doc": "docs/synthesizer/discussion.md"
+      "doc": "docs/synthesizer/experiment-commands.md"
     },
     {
       "id": "llm",
@@ -118,7 +118,7 @@
         "data/llm_cache/",
         "data/llm_ledger.jsonl"
       ],
-      "doc": "docs/synthesizer/smoke-2026-10-31.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "rollout",
@@ -199,7 +199,7 @@
         "scene text",
         "levels.json"
       ],
-      "doc": "docs/synthesizer/experiment-04-scene-context.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "orch_exp",
@@ -215,7 +215,7 @@
       "out": [
         "data/runs/<name>/"
       ],
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "system2",
@@ -263,7 +263,7 @@
         "episode/steps.jsonl",
         "videos"
       ],
-      "doc": "docs/synthesizer/aspire-assessment.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "services",
@@ -275,7 +275,7 @@
       "out": [
         "services.log"
       ],
-      "doc": "docs/synthesizer/smoke-2026-10-31.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "curobo_dev",
@@ -293,6 +293,20 @@
       "doc": "dev/curobo/README.md"
     },
     {
+      "id": "muse",
+      "name": "Meta API (Muse)",
+      "group": "external",
+      "path": "https://api.meta.ai/v1",
+      "role": "muse-wonder-1.0 is the generator. Paid: about $13.5 per million tokens (logged). Key in .env as META_API_KEY.",
+      "in": [
+        "prompt"
+      ],
+      "out": [
+        "program + reasoning tokens"
+      ],
+      "doc": "docs/architecture.md"
+    },
+    {
       "id": "scene_recon",
       "name": "scene reconstruction probe (cuRobo Mapper)",
       "group": "dev",
@@ -307,20 +321,6 @@
         "data/runs/mapper_probe/reconstructed_view_*.png"
       ],
       "doc": "docs/perception/scene-reconstruction-probe.md"
-    },
-    {
-      "id": "muse",
-      "name": "Meta API (Muse)",
-      "group": "external",
-      "path": "https://api.meta.ai/v1",
-      "role": "muse-wonder-1.0 is the generator. Paid: about $13.5 per million tokens (logged). Key in .env as META_API_KEY.",
-      "in": [
-        "prompt"
-      ],
-      "out": [
-        "program + reasoning tokens"
-      ],
-      "doc": "docs/HANDOFF.md"
     },
     {
       "id": "radar",
@@ -422,7 +422,7 @@
       "status": "reference",
       "kind": "setup",
       "question": "Is the environment ready to run anything?",
-      "doc": "docs/synthesizer/smoke-2026-10-31.md",
+      "doc": "docs/results.md",
       "run_dir": null,
       "modules": [
         "services",
@@ -454,7 +454,7 @@
       "status": "reference",
       "kind": "prep",
       "question": "Turn a human demo into the object-relative summary the generator reads.",
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md",
+      "doc": "docs/results.md",
       "run_dir": "data/demospecs/",
       "modules": [
         "hurobo",
@@ -481,7 +481,7 @@
       "status": "done",
       "kind": "experiment",
       "question": "Arms differ only in the demo section. Does the demo arm write a working program?",
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md",
+      "doc": "docs/results.md",
       "run_dir": "data/runs/demo_vs_nodemo_01",
       "modules": [
         "demospec_tools",
@@ -520,7 +520,7 @@
       "status": "done",
       "kind": "experiment",
       "question": "Same arms, but programs are debugged and repaired in the real-size scene (bowl x1.227, plate x1.855).",
-      "doc": "docs/synthesizer/experiment-02-scaled-scene.md",
+      "doc": "docs/results.md",
       "run_dir": "data/runs/exp02_scaled",
       "modules": [
         "demospec_tools",
@@ -555,7 +555,7 @@
       "status": "done (no write-up)",
       "kind": "experiment",
       "question": "With a WHY: rationale in each repair, how do the 3 good hurobo clips fare? Clip 233859 attempt 2 stalls on the wine rack and motivates exp04 and dev/curobo.",
-      "doc": "docs/synthesizer/proposal-collision-context.md",
+      "doc": "docs/results.md",
       "run_dir": "data/runs/exp03_explain/clip_<id>",
       "modules": [
         "demospec_tools",
@@ -587,7 +587,7 @@
       "status": "done (see experiment-04-scene-context.md)",
       "kind": "experiment",
       "question": "G: which scene section (S0-S4, SP placebo) in the first prompt helps, in levels L1-L3. E: which contact evidence (E0-E3, EP placebo) helps one repair.",
-      "doc": "docs/synthesizer/experiment-04-scene-context.md",
+      "doc": "docs/results.md",
       "run_dir": "data/runs/exp04_scene",
       "modules": [
         "demospec_tools",
@@ -628,7 +628,7 @@
       "status": "done",
       "kind": "experiment",
       "question": "Does a working program survive hand-picked perturbations? (friction x0.4, bowl shift, actuation noise + latency)",
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md",
+      "doc": "docs/results.md",
       "run_dir": "data/runs/perturb_preview/",
       "modules": [
         "launcher",
@@ -649,38 +649,6 @@
         "run dir under --output-root"
       ],
       "result": "Winning exp01 program: 3/3 survived."
-    },
-    {
-      "id": "system2",
-      "title": "System 2 v0: harden with the never-regress gate",
-      "status": "built, no live run",
-      "kind": "experiment",
-      "question": "Does the adversary + diagnoser + gate loop improve a working program without regressions?",
-      "doc": "src/ants/orchestrator/system2.py",
-      "run_dir": "data/runs/system2_mock_synthetic",
-      "modules": [
-        "planner",
-        "diagnoser",
-        "system2",
-        "rollout",
-        "generator",
-        "evalkit",
-        "contracts"
-      ],
-      "commands": [
-        "system2.mock",
-        "report.all",
-        "test.system2"
-      ],
-      "inputs": [
-        "incumbent program",
-        "HardenConfig"
-      ],
-      "outputs": [
-        "system2.jsonl",
-        "Human gate request/answer JSON"
-      ],
-      "result": "Only a synthetic mock world so far (clearly marked); harden() has no CLI. A live run needs a thin driver script (not written)."
     },
     {
       "id": "curobo",
@@ -716,6 +684,181 @@
         "validator JSON"
       ],
       "result": "6 configurations compared; only the scene-aware ones (5, 6) had 0 forbidden-contact steps. One scene, one seed."
+    },
+    {
+      "id": "exp05",
+      "title": "Exp 05: perceived scene vs oracle",
+      "status": "done (see experiment-05-perceived-scene.md)",
+      "kind": "experiment",
+      "question": "Can SAM 3 and depth build the exp04 collision world and S4 text without simulator state, and what is missing?",
+      "doc": "docs/results.md",
+      "run_dir": "data/runs/exp05_perceived_scene",
+      "modules": [
+        "scene_world",
+        "orch_exp",
+        "launcher",
+        "aspire",
+        "services",
+        "evalkit"
+      ],
+      "commands": [
+        "exp05.probe",
+        "exp05.analyse",
+        "exp05.report"
+      ],
+      "inputs": [
+        "data/scenes/L1/contacts_scene.json",
+        "data/scenes/perception_probe2.py",
+        "data/scenes/perception_probe3.py"
+      ],
+      "outputs": [
+        "perception_start.json",
+        "perception_arm.json",
+        "analysis.json",
+        "s4_perceived.txt",
+        "s4_oracle.txt",
+        "report.html"
+      ],
+      "cost": "free (no model call)",
+      "result": "See docs/synthesizer/experiment-05-perceived-scene.md and data/runs/exp05_perceived_scene/report.html."
+    },
+    {
+      "id": "exp06",
+      "title": "Exp 06 to 08: cuRobo on perception, scene understanding off, perceived, privileged",
+      "status": "done (see experiment-06-08-curobo.md)",
+      "kind": "experiment",
+      "question": "With cuRobo planning on the depth cloud (SAM 3 robot mask), does a scene description in the first prompt and contact evidence in repairs help, and how much does perception cost against a digital twin?",
+      "doc": "docs/results.md",
+      "run_dir": "data/runs/curobo/<exp>/<arm>",
+      "modules": [
+        "orch_exp",
+        "generator",
+        "llm",
+        "muse",
+        "rollout",
+        "launcher",
+        "aspire",
+        "services",
+        "evalkit"
+      ],
+      "commands": [
+        "curobo.exp",
+        "report.run"
+      ],
+      "inputs": [
+        "data/demospecs/hurobo_233859.json",
+        "data/demospecs/hurobo_233832.json",
+        "data/runs/exp05_perceived_scene/s4_perceived.txt"
+      ],
+      "outputs": [
+        "data/runs/curobo/"
+      ],
+      "result": "9 runs: solved 1 of 3 (06), 2 of 3 (07), 2 of 3 (08); no blocking contact in any rollout. See the doc."
+    },
+    {
+      "id": "exp09",
+      "title": "Exp 09 to 11: exp06 to 08 again, with the held bowl attached to the hand",
+      "status": "code ready, not run",
+      "kind": "experiment",
+      "question": "Do the cuRobo refusals disappear when the held bowl is an attached object of the known size instead of an obstacle in the cloud, and does that change the solved count?",
+      "doc": "docs/results.md",
+      "run_dir": "data/runs/curobo/<exp>/<arm>",
+      "modules": [
+        "orch_exp",
+        "generator",
+        "llm",
+        "muse",
+        "rollout",
+        "launcher",
+        "aspire",
+        "services",
+        "evalkit",
+        "curobo_dev"
+      ],
+      "commands": [
+        "curobo.service",
+        "curobo.exp",
+        "curobo.viewer",
+        "report.run",
+        "curobo.replay",
+        "curobo.goal-confusion"
+      ],
+      "inputs": [
+        "data/demospecs/hurobo_233859.json",
+        "data/demospecs/hurobo_233832.json",
+        "data/runs/exp05_perceived_scene/s4_perceived.txt",
+        "data/scenes/L1/contacts_scene.json"
+      ],
+      "outputs": [
+        "data/runs/curobo/exp09|exp10|exp11/"
+      ],
+      "result": "Not run yet."
+    },
+    {
+      "id": "exp12",
+      "title": "Demo vs no demo on cuRobo (simulator robot mask, attached bowl)",
+      "status": "final (submission experiment, tag submission-experiment)",
+      "kind": "experiment",
+      "question": "With cuRobo planning and the held bowl attached, does one human demonstration (plus S4 scene text and E3 repair evidence) beat task text only?",
+      "doc": "docs/synthesizer/show-once-vs-task-only/demo_vs_no_demo_analysis.ipynb",
+      "run_dir": "data/runs/demo_e3_s4_sim | data/runs/nodemo_task_only_sim",
+      "modules": [
+        "orch_exp",
+        "generator",
+        "llm",
+        "muse",
+        "rollout",
+        "launcher",
+        "aspire",
+        "services",
+        "evalkit"
+      ],
+      "commands": [
+        "exp12.demo",
+        "exp12.nodemo",
+        "report.run"
+      ],
+      "inputs": [
+        "data/demospecs/hurobo_233859.json",
+        "data/scene_text/S4_L1.txt"
+      ],
+      "outputs": [
+        "data/runs/demo_e3_s4_sim/",
+        "data/runs/nodemo_task_only_sim/"
+      ],
+      "result": "Held-out seeds 1 to 5, two samples (T 0.2, 0.7) per arm. Demo: debug seed solved in 2 and 2 attempts; scaled 5/5 and 2/5, stock 4/5 and 3/5. No-demo: solved in 5 (no) and 3 attempts; scaled 4/5 and 4/5, stock 0/5 and 0/5. The arms also differ in scene text and evidence. Source: events.jsonl of each run. Ran before the attach frame fix: spheres 9.65 cm too high."
+    },
+    {
+      "id": "system2",
+      "title": "System 2 v0: harden with the never-regress gate",
+      "status": "built, no live run",
+      "kind": "experiment",
+      "question": "Does the adversary + diagnoser + gate loop improve a working program without regressions?",
+      "doc": "src/ants/orchestrator/system2.py",
+      "run_dir": "data/runs/system2_mock_synthetic",
+      "modules": [
+        "planner",
+        "diagnoser",
+        "system2",
+        "rollout",
+        "generator",
+        "evalkit",
+        "contracts"
+      ],
+      "commands": [
+        "system2.mock",
+        "report.all",
+        "test.system2"
+      ],
+      "inputs": [
+        "incumbent program",
+        "HardenConfig"
+      ],
+      "outputs": [
+        "system2.jsonl",
+        "Human gate request/answer JSON"
+      ],
+      "result": "Only a synthetic mock world so far (clearly marked); harden() has no CLI. A live run needs a thin driver script (not written)."
     },
     {
       "id": "radar",
@@ -766,115 +909,6 @@
       "result": "Claude Code slash commands. Another agent can follow the SKILL.md files as plain instructions."
     },
     {
-      "id": "exp05",
-      "title": "Exp 05: perceived scene vs oracle",
-      "status": "done (see experiment-05-perceived-scene.md)",
-      "kind": "experiment",
-      "question": "Can SAM 3 and depth build the exp04 collision world and S4 text without simulator state, and what is missing?",
-      "doc": "docs/synthesizer/experiment-05-perceived-scene.md",
-      "run_dir": "data/runs/exp05_perceived_scene",
-      "modules": [
-        "scene_world",
-        "orch_exp",
-        "launcher",
-        "aspire",
-        "services",
-        "evalkit"
-      ],
-      "commands": [
-        "exp05.probe",
-        "exp05.analyse",
-        "exp05.report"
-      ],
-      "inputs": [
-        "data/scenes/L1/contacts_scene.json",
-        "data/scenes/perception_probe2.py",
-        "data/scenes/perception_probe3.py"
-      ],
-      "outputs": [
-        "perception_start.json",
-        "perception_arm.json",
-        "analysis.json",
-        "s4_perceived.txt",
-        "s4_oracle.txt",
-        "report.html"
-      ],
-      "cost": "free (no model call)",
-      "result": "See docs/synthesizer/experiment-05-perceived-scene.md and data/runs/exp05_perceived_scene/report.html."
-    },
-    {
-      "id": "exp06",
-      "title": "Exp 06 to 08: cuRobo on perception, scene understanding off, perceived, privileged",
-      "status": "done (see experiment-06-08-curobo.md)",
-      "kind": "experiment",
-      "question": "With cuRobo planning on the depth cloud (SAM 3 robot mask), does a scene description in the first prompt and contact evidence in repairs help, and how much does perception cost against a digital twin?",
-      "doc": "docs/synthesizer/experiment-06-08-curobo.md",
-      "run_dir": "data/runs/curobo/<exp>/<arm>",
-      "modules": [
-        "orch_exp",
-        "generator",
-        "llm",
-        "muse",
-        "rollout",
-        "launcher",
-        "aspire",
-        "services",
-        "evalkit"
-      ],
-      "commands": [
-        "curobo.exp",
-        "report.run"
-      ],
-      "inputs": [
-        "data/demospecs/hurobo_233859.json",
-        "data/demospecs/hurobo_233832.json",
-        "data/runs/exp05_perceived_scene/s4_perceived.txt"
-      ],
-      "outputs": [
-        "data/runs/curobo/"
-      ],
-      "result": "9 runs: solved 1 of 3 (06), 2 of 3 (07), 2 of 3 (08); no blocking contact in any rollout. See the doc."
-    },
-    {
-      "id": "exp09",
-      "title": "Exp 09 to 11: exp06 to 08 again, with the held bowl attached to the hand",
-      "status": "code ready, not run",
-      "kind": "experiment",
-      "question": "Do the cuRobo refusals disappear when the held bowl is an attached object of the known size instead of an obstacle in the cloud, and does that change the solved count?",
-      "doc": "docs/synthesizer/experiment-09-11-curobo-attach.md",
-      "run_dir": "data/runs/curobo/<exp>/<arm>",
-      "modules": [
-        "orch_exp",
-        "generator",
-        "llm",
-        "muse",
-        "rollout",
-        "launcher",
-        "aspire",
-        "services",
-        "evalkit",
-        "curobo_dev"
-      ],
-      "commands": [
-        "curobo.service",
-        "curobo.exp",
-        "curobo.viewer",
-        "report.run",
-        "curobo.replay",
-        "curobo.goal-confusion"
-      ],
-      "inputs": [
-        "data/demospecs/hurobo_233859.json",
-        "data/demospecs/hurobo_233832.json",
-        "data/runs/exp05_perceived_scene/s4_perceived.txt",
-        "data/scenes/L1/contacts_scene.json"
-      ],
-      "outputs": [
-        "data/runs/curobo/exp09|exp10|exp11/"
-      ],
-      "result": "Not run yet."
-    },
-    {
       "id": "scene_recon",
       "title": "Scene reconstruction probe: cuRobo Mapper TSDF/ESDF on the LIBERO scene",
       "status": "probe working, logged once",
@@ -900,40 +934,6 @@
         "data/runs/mapper_probe/reconstructed_view_*.png"
       ],
       "result": "Logged run, 2026-11-03: 16 orbit frames fused into a mesh (23,441 vertices, 44,253 faces); rendered views match the real scene layout. Virtual orbiting camera, not yet the real arm; not wired into any owned package. See the doc for caveats and next steps."
-    },
-    {
-      "id": "exp12",
-      "title": "Demo vs no demo on cuRobo (simulator robot mask, attached bowl)",
-      "status": "final (submission experiment, tag submission-experiment)",
-      "kind": "experiment",
-      "question": "With cuRobo planning and the held bowl attached, does one human demonstration (plus S4 scene text and E3 repair evidence) beat task text only?",
-      "doc": "docs/synthesizer/show-once-vs-task-only/demo_vs_no_demo_analysis.ipynb",
-      "run_dir": "data/runs/demo_e3_s4_sim | data/runs/nodemo_task_only_sim",
-      "modules": [
-        "orch_exp",
-        "generator",
-        "llm",
-        "muse",
-        "rollout",
-        "launcher",
-        "aspire",
-        "services",
-        "evalkit"
-      ],
-      "commands": [
-        "exp12.demo",
-        "exp12.nodemo",
-        "report.run"
-      ],
-      "inputs": [
-        "data/demospecs/hurobo_233859.json",
-        "data/scene_text/S4_L1.txt"
-      ],
-      "outputs": [
-        "data/runs/demo_e3_s4_sim/",
-        "data/runs/nodemo_task_only_sim/"
-      ],
-      "result": "Held-out seeds 1 to 5, two samples (T 0.2, 0.7) per arm. Demo: debug seed solved in 2 and 2 attempts; scaled 5/5 and 2/5, stock 4/5 and 3/5. No-demo: solved in 5 (no) and 3 attempts; scaled 4/5 and 4/5, stock 0/5 and 0/5. The arms also differ in scene text and evidence. Source: events.jsonl of each run. Ran before the attach frame fix: spheres 9.65 cm too high, see docs/synthesizer/handoff-curobo-debug.md."
     }
   ],
   "commands": [
@@ -1070,7 +1070,7 @@
           "desc": "Default of the dialog's Muse token cap for /policy-dev."
         }
       ],
-      "description": "Start the server, click the /policy-dev chip, choose a marker clip with +, type the task, press Enter; a settings dialog opens; Run starts it. Stages: preflight, hurobo extraction (5.75 cm marker; 7 of 26 clips pass, listed in docs/studio/live-console-handoff.md), DemoSpec, prompt, one Muse generation on seed 51 in the stock scene, then the Adversary loop on real cap_harness rollouts with the mock proposer. Dialog defaults (docs/studio/skills/policy-dev.json): Synthesizer on, 5 retries, Adversary on, Thompson, 2 attacks, 1 seed, 300000 token cap. Synthesizer off attacks a given .py and reports, with no tokens. Adversary off saves the program to data/deploy/. Bowl-on-plate only. Spends Muse tokens up to the cap (about $4 at 300000). Stops and spends nothing if preflight fails or another simulator is running.",
+      "description": "Start the server, click the /policy-dev chip, choose a marker clip with +, type the task, press Enter; a settings dialog opens; Run starts it. Stages: preflight, hurobo extraction (5.75 cm marker; 7 of 26 clips pass: 233607, 233646, 233859, 234314, 234347, 234603, 234827), DemoSpec, prompt, one Muse generation on seed 51 in the stock scene (prompt includes the measured stock scene, S4 format, and repairs add e3 contact evidence), then the Adversary loop on real cap_harness rollouts with the mock proposer. Dialog defaults (docs/studio/skills/policy-dev.json): Synthesizer on, 5 retries, Adversary on, Thompson, 2 attacks, 1 seed, 300000 token cap. Synthesizer off attacks a given .py and reports, with no tokens. Adversary off saves the program to data/deploy/. Bowl-on-plate only. Spends Muse tokens up to the cap (about $4 at 300000). Stops and spends nothing if preflight fails or another simulator is running.",
       "examples": [
         {
           "title": "Start the server, then use the chip",
@@ -1085,6 +1085,57 @@
       "paid": true,
       "cost": "about $4 at most (300k tokens)",
       "minutes": 40
+    },
+    {
+      "id": "studio.stock-scene",
+      "title": "Studio: measure the stock scene /policy-dev sends",
+      "group": "viewer",
+      "runner": "ants",
+      "where": "ANTS repo root",
+      "base": "-m ants.studio.stock_scene",
+      "args": [],
+      "description": "One no-op rollout in the stock scene on seed 51 (no model, no tokens) through the launcher, then writes data/scenes/stock/contacts_scene.json and data/scene_text/stock_seed51_S4.txt. /policy-dev runs this itself if the text is missing. The S4_L* files describe the scaled scene and must not be sent to a stock run. Needs the simulator to be free.",
+      "examples": [
+        {
+          "title": "Measure once",
+          "cmd": "uv run python -m ants.studio.stock_scene"
+        }
+      ],
+      "modules": [],
+      "in": [],
+      "out": [
+        "data/scene_text/stock_seed51_S4.txt",
+        "data/scenes/stock/contacts_scene.json"
+      ],
+      "paid": false,
+      "minutes": 1
+    },
+    {
+      "id": "studio.hurobo-overlay",
+      "title": "Studio: render a demo over its clip",
+      "group": "viewer",
+      "runner": "hurobo",
+      "where": "hurobo folder",
+      "base": ".venv/bin/python ../tools/hurobo_overlay.py <demo.npz> --video <clip.mp4> --setup data/raw/setup_01/measurements.yaml --intrinsics data/camera_intrinsics_s10e.npz --marker-size-m 0.0575 --out <overlay.mp4>",
+      "args": [],
+      "description": "Draws hurobo's overlay (hand skeleton, marker detections, TCP trajectory, object centres, gripper gauge) on the clip at recorded speed. /policy-dev runs this on its own after extraction and transcodes the result to H.264 for the browser. No model, no tokens, no GPU; about 75 s for a 20 s clip (measured once).",
+      "examples": [
+        {
+          "title": "Render one demo",
+          "cmd": ".venv/bin/python ../tools/hurobo_overlay.py ../data/hurobo_e1/demos_marker_0.06/20261016_233859.npz --video data/raw/e1/clips/20261016_233859.mp4 --setup data/raw/setup_01/measurements.yaml --intrinsics data/camera_intrinsics_s10e.npz --marker-size-m 0.0575 --out /tmp/overlay.mp4",
+          "note": ""
+        }
+      ],
+      "modules": [],
+      "in": [
+        "hurobo demo .npz",
+        "source clip"
+      ],
+      "out": [
+        "overlay .mp4"
+      ],
+      "paid": false,
+      "minutes": 2
     },
     {
       "id": "setup.sync",
@@ -1202,7 +1253,7 @@
       ],
       "cost": "free",
       "minutes": 3,
-      "doc": "docs/synthesizer/smoke-2026-10-31.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "services.doctor",
@@ -1361,7 +1412,7 @@
       ],
       "cost": "free",
       "minutes": 5,
-      "doc": "docs/synthesizer/smoke-2026-10-31.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "demo.hurobo",
@@ -1684,7 +1735,7 @@
       ],
       "cost": "about 20-25k tokens per Muse call; exp01 total 284k",
       "minutes": 40,
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp01b.run",
@@ -1728,7 +1779,7 @@
       ],
       "cost": "up to 600k tokens",
       "minutes": 90,
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp01b.rescore",
@@ -1777,7 +1828,7 @@
       ],
       "cost": "free (simulation only)",
       "minutes": 15,
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp02.run",
@@ -1829,7 +1880,7 @@
       ],
       "cost": "866k tokens total over two passes",
       "minutes": 120,
-      "doc": "docs/synthesizer/experiment-02-scaled-scene.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp02.resume",
@@ -1868,7 +1919,7 @@
       ],
       "cost": "the new budget at most",
       "minutes": 60,
-      "doc": "docs/synthesizer/experiment-02-scaled-scene.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp03.run",
@@ -1939,7 +1990,7 @@
       ],
       "cost": "up to 250k tokens per clip",
       "minutes": 45,
-      "doc": "docs/synthesizer/proposal-collision-context.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp04.prep",
@@ -1988,7 +2039,7 @@
       ],
       "cost": "free",
       "minutes": 5,
-      "doc": "docs/synthesizer/experiment-04-scene-context.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp04.dry",
@@ -2055,7 +2106,7 @@
       ],
       "cost": "free",
       "minutes": 1,
-      "doc": "docs/synthesizer/experiment-04-scene-context.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp04.run",
@@ -2205,7 +2256,7 @@
       ],
       "cost": "30-65k tokens per cell; default cap 900k",
       "minutes": 120,
-      "doc": "docs/synthesizer/experiment-04-scene-context.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "report.run",
@@ -2486,7 +2537,7 @@
       ],
       "cost": "free",
       "minutes": 2,
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "perturb.contacts",
@@ -2555,33 +2606,6 @@
       "cost": "free",
       "minutes": 2,
       "doc": "tools/aspire_launch.py"
-    },
-    {
-      "id": "system2.mock",
-      "title": "Write a synthetic System 2 run (no sim, no model)",
-      "group": "system2",
-      "runner": "ants",
-      "base": "tools/system2_mock.py data/runs/system2_mock_synthetic",
-      "args": [],
-      "description": "Fake world: program v0 breaks on size and physics, v1 fixes size but breaks pose (the gate must reject it), v2 fixes both. Clearly marked synthetic in config.json. Use it to try the System 2 tab; it is not a result.",
-      "examples": [
-        {
-          "title": "Then view",
-          "cmd": "uv run python -m ants.evalkit.report data/runs --open"
-        }
-      ],
-      "modules": [
-        "system2",
-        "evalkit"
-      ],
-      "in": [],
-      "out": [
-        "system2.jsonl",
-        "config.json"
-      ],
-      "cost": "free",
-      "minutes": 0,
-      "doc": "tools/system2_mock.py"
     },
     {
       "id": "test.system2",
@@ -2834,6 +2858,572 @@
       "doc": "dev/curobo/README.md"
     },
     {
+      "id": "exp05.probe",
+      "title": "Exp 05 step 1: perceive the L1 start state (SAM 3, two arm poses)",
+      "group": "exp05",
+      "runner": "ants",
+      "base": "-m ants.orchestrator.perceived_scene --probe",
+      "args": [
+        {
+          "flag": "--out",
+          "value": "data/runs/exp05_perceived_scene",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "desc": "Run dir."
+        },
+        {
+          "flag": "--aspire",
+          "value": "ASPIRE",
+          "kind": "value",
+          "on": true,
+          "desc": "ASPIRE checkout (services sam3 and pyroki must run)."
+        }
+      ],
+      "description": "Simulation and SAM 3 only, no model call. Writes perception_start.json and perception_arm.json (all masks of 13 prompts in both cameras). The committed results come from the same probes run by hand earlier (probe_L1 and probe_L1_arm/run2).",
+      "examples": [
+        {
+          "title": "Run it",
+          "cmd": "uv run python -m ants.orchestrator.perceived_scene --aspire ASPIRE --out data/runs/exp05_perceived_scene --probe"
+        }
+      ],
+      "modules": [
+        "orch_exp",
+        "scene_world",
+        "evalkit",
+        "launcher",
+        "aspire",
+        "services"
+      ],
+      "in": [],
+      "out": [],
+      "cost": "free",
+      "minutes": 5,
+      "doc": "docs/results.md"
+    },
+    {
+      "id": "exp05.analyse",
+      "title": "Exp 05 step 2: build the perceived world and compare with the oracle",
+      "group": "exp05",
+      "runner": "ants",
+      "base": "-m ants.orchestrator.perceived_scene --analyse",
+      "args": [
+        {
+          "flag": "--out",
+          "value": "data/runs/exp05_perceived_scene",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "desc": "Run dir."
+        }
+      ],
+      "description": "Offline, pure Python. Variants V0 to V5, relations, S4 text, robot check. Writes analysis.json, s4_perceived.txt, s4_oracle.txt.",
+      "examples": [
+        {
+          "title": "Run it",
+          "cmd": "uv run python -m ants.orchestrator.perceived_scene --analyse --out data/runs/exp05_perceived_scene"
+        }
+      ],
+      "modules": [
+        "orch_exp",
+        "scene_world",
+        "evalkit"
+      ],
+      "in": [],
+      "out": [],
+      "cost": "free",
+      "minutes": 1,
+      "doc": "docs/results.md"
+    },
+    {
+      "id": "exp05.report",
+      "title": "Exp 05 step 3: write the HTML report",
+      "group": "exp05",
+      "runner": "ants",
+      "base": "-m ants.evalkit.perceived_report",
+      "args": [
+        {
+          "flag": "--out",
+          "value": "data/runs/exp05_perceived_scene",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "desc": "Run dir."
+        }
+      ],
+      "description": "Writes report.html (self-contained, light and dark) next to analysis.json.",
+      "examples": [
+        {
+          "title": "Run it",
+          "cmd": "uv run python -m ants.evalkit.perceived_report --out data/runs/exp05_perceived_scene"
+        }
+      ],
+      "modules": [
+        "orch_exp",
+        "scene_world",
+        "evalkit"
+      ],
+      "in": [],
+      "out": [],
+      "cost": "free",
+      "minutes": 1,
+      "doc": "docs/results.md"
+    },
+    {
+      "id": "curobo.exp",
+      "title": "Exp 06 to 08: cuRobo on perception, with and without scene understanding",
+      "group": "experiments",
+      "runner": "ants",
+      "paid": true,
+      "base": "-m ants.orchestrator.exp_curobo",
+      "args": [
+        {
+          "flag": "--exp",
+          "value": "exp06,exp08,exp07",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "choices": [
+            "exp06",
+            "exp07",
+            "exp08",
+            "exp09",
+            "exp10",
+            "exp11",
+            "exp09,exp10,exp11"
+          ],
+          "desc": "exp06: no scene text, WHY only. exp07: S4 from perception + E3 evidence. exp08: S4 from the simulator + E3, simulator robot mask. exp09 to exp11 repeat exp06 to 08 with the held bowl attached to the hand (known bowl size) and save the planning clouds."
+        },
+        {
+          "flag": "--token-budget",
+          "value": "250000",
+          "kind": "value",
+          "on": true,
+          "desc": "Per run (3 arms per experiment: clip 233859, clip 233832, no demo). Up to 9 runs, about 30 USD at the high end."
+        },
+        {
+          "flag": "--arms",
+          "value": "clip_233859,clip_233832,nodemo",
+          "kind": "value",
+          "on": false,
+          "desc": "Subset of arms."
+        },
+        {
+          "flag": "--total-token-budget",
+          "kind": "value",
+          "on": false,
+          "desc": "Stop starting new runs once this many NEW tokens were spent in this command (counted from data/llm_ledger.jsonl). Default: no total cap."
+        },
+        {
+          "flag": "--arm-major",
+          "kind": "switch",
+          "on": false,
+          "desc": "Loop arms outside and experiments inside, so a stop leaves comparable arms."
+        },
+        {
+          "flag": "--print",
+          "kind": "switch",
+          "on": false,
+          "desc": "Print the demo_vs_nodemo commands and stop."
+        }
+      ],
+      "description": "Needs the ASPIRE services (SAM 3, PyRoki) and the dev cuRobo service (dev/curobo/service_dev.py, port 8118). Runs write to data/runs/curobo/<exp>/<arm>/. Success is the footprint rule (half of the bowl inside the plate); a clean success also has no blocking contact. Repeat the command to resume.",
+      "examples": [
+        {
+          "title": "Overnight, all three",
+          "cmd": "uv run python -m ants.orchestrator.exp_curobo --exp exp06,exp08,exp07 --token-budget 250000"
+        },
+        {
+          "title": "Show the commands only",
+          "cmd": "uv run python -m ants.orchestrator.exp_curobo --exp exp07 --print"
+        },
+        {
+          "title": "Exp 09 to 11, attach the held bowl",
+          "cmd": "uv run python -m ants.orchestrator.exp_curobo --exp exp09,exp10,exp11 --token-budget 250000"
+        }
+      ],
+      "modules": [
+        "orch_exp",
+        "generator",
+        "llm",
+        "muse",
+        "rollout",
+        "launcher",
+        "aspire",
+        "services",
+        "evalkit"
+      ],
+      "in": [
+        "DemoSpec JSON",
+        "data/runs/exp05_perceived_scene/s4_*.txt"
+      ],
+      "out": [
+        "data/runs/curobo/<exp>/<arm>/"
+      ],
+      "cost": "up to 250k tokens per run, 9 runs",
+      "minutes": 600,
+      "doc": "docs/results.md"
+    },
+    {
+      "id": "curobo.viewer",
+      "title": "Build the cuRobo plan viewer for one run attempt",
+      "group": "dev-curobo",
+      "runner": "shell",
+      "where": "cd to the ANTS repo root",
+      "base": "PYTHONPATH=src ASPIRE/.venv-libero/bin/python dev/curobo/make_viewer.py",
+      "args": [
+        {
+          "flag": "data/runs/curobo/exp09/clip_233859",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "desc": "Run folder (needs --save-clouds, on by default in exp09 to exp11). Passed as the first argument."
+        },
+        {
+          "flag": "--attempt",
+          "value": "4",
+          "kind": "value",
+          "on": false,
+          "desc": "Attempt to replay; default the last."
+        }
+      ],
+      "description": "Replays every cuRobo plan call of one attempt (cloud, robot spheres, straight vs planned path, before/after attaching the bowl by my own collision check) and writes <run>/plan_viewer/index.html and plans2d.html. View it in the run viewer's Doc tab: uv run python -m ants.evalkit.report data/runs/curobo --serve --open",
+      "examples": [
+        {
+          "title": "All three arms of exp09, last attempt",
+          "cmd": "for a in clip_233859 clip_233832 nodemo; do PYTHONPATH=src ASPIRE/.venv-libero/bin/python dev/curobo/make_viewer.py data/runs/curobo/exp09/$a; done"
+        }
+      ],
+      "modules": [
+        "curobo_dev",
+        "evalkit"
+      ],
+      "in": [
+        "data/runs/curobo/<exp>/<arm>/*/sample0/debug_attempt*/clouds"
+      ],
+      "out": [
+        "data/runs/curobo/<exp>/<arm>/plan_viewer/"
+      ],
+      "cost": "free",
+      "minutes": 2,
+      "doc": "dev/curobo/make_viewer.py"
+    },
+    {
+      "id": "exp12.demo",
+      "title": "Demo vs no demo, demo arm: demo + S4 + E3 on cuRobo",
+      "group": "experiments",
+      "runner": "ants",
+      "paid": true,
+      "base": "-m ants.orchestrator.demo_vs_nodemo",
+      "args": [
+        {
+          "flag": "--aspire",
+          "value": "ASPIRE",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "desc": "ASPIRE checkout."
+        },
+        {
+          "flag": "--out",
+          "value": "data/runs/demo_e3_s4_sim",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "desc": "Run folder. Repeat the same --out to resume."
+        },
+        {
+          "flag": "--demospec",
+          "value": "data/demospecs/hurobo_233859.json",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "desc": "DemoSpec of clip 233859 (the no-demo arm ignores its content but the flag is required)."
+        },
+        {
+          "flag": "--arms",
+          "value": "demo",
+          "kind": "value",
+          "on": true,
+          "desc": "demo or nodemo."
+        },
+        {
+          "flag": "--temperatures",
+          "value": "0.2,0.7",
+          "kind": "value",
+          "on": true,
+          "desc": "One sample per temperature."
+        },
+        {
+          "flag": "--explain",
+          "kind": "switch",
+          "on": true,
+          "desc": "Repair replies start with WHY."
+        },
+        {
+          "flag": "--repairs",
+          "value": "4",
+          "kind": "value",
+          "on": true,
+          "desc": "Max repairs per sample (5 attempts)."
+        },
+        {
+          "flag": "--planner",
+          "value": "curobo-sim",
+          "kind": "value",
+          "on": true,
+          "desc": "cuRobo with the robot mask from the simulator (privileged)."
+        },
+        {
+          "flag": "--attach-known",
+          "kind": "switch",
+          "on": true,
+          "desc": "Attach the held bowl with its known size (privileged). Needs the dev cuRobo service with ANTS_ATTACH_FILE=data/runs/curobo/attach.json; do not run two such commands at once (one shared attach file)."
+        },
+        {
+          "flag": "--save-clouds",
+          "kind": "switch",
+          "on": true,
+          "desc": "Keep every planning cloud for dev/curobo/make_viewer.py."
+        },
+        {
+          "flag": "--debug-scene",
+          "value": "scaled",
+          "kind": "value",
+          "on": true,
+          "desc": "Debug and repair in the scaled scene."
+        },
+        {
+          "flag": "--scenes",
+          "value": "scaled",
+          "kind": "value",
+          "on": true,
+          "desc": "As run on 2026-11-04. The run also logged stock-scene evaluation."
+        },
+        {
+          "flag": "--eval-seeds",
+          "value": "1,2,3,4,5",
+          "kind": "value",
+          "on": true,
+          "desc": "Held-out seeds, reporting only."
+        },
+        {
+          "flag": "--token-budget",
+          "value": "300000",
+          "kind": "value",
+          "on": true,
+          "desc": "Hard cap on new tokens per command. Observed: demo 204,933, no-demo 247,243 (about 2.8 and 3.3 USD)."
+        },
+        {
+          "flag": "--evidence",
+          "value": "e3",
+          "kind": "value",
+          "on": true,
+          "desc": "Repair adds the contact log, the scene text and stall readings."
+        },
+        {
+          "flag": "--contacts",
+          "kind": "switch",
+          "on": true,
+          "desc": "Log simulator contacts per attempt."
+        },
+        {
+          "flag": "--scene-text-file",
+          "value": "data/scene_text/S4_L1.txt",
+          "kind": "value",
+          "on": true,
+          "desc": "S4 scene text (regenerate with g_scene_text('S4','L1') in ants.orchestrator.scene_context_exp)."
+        }
+      ],
+      "description": "Needs the SAM 3 and PyRoki services and the dev cuRobo service on port 8118 (runbook entries services.start and curobo.service). Settings saved in docs/synthesizer/demo-vs-nodemo-config.json. Run the demo and no-demo commands one after the other, not in parallel.",
+      "examples": [
+        {
+          "title": "Demo vs no demo, demo arm: demo + S4 + E3 on cuRobo",
+          "cmd": "uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --temperatures 0.2,0.7 --explain --repairs 4 --planner curobo-sim --attach-known --save-clouds --debug-scene scaled --scenes scaled --eval-seeds 1,2,3,4,5 --token-budget 300000 --demospec data/demospecs/hurobo_233859.json --out data/runs/demo_e3_s4_sim --arms demo --evidence e3 --contacts --scene-text-file data/scene_text/S4_L1.txt"
+        }
+      ],
+      "modules": [
+        "orch_exp",
+        "generator",
+        "llm",
+        "muse",
+        "rollout",
+        "launcher",
+        "aspire",
+        "services",
+        "evalkit"
+      ],
+      "in": [
+        "data/demospecs/hurobo_233859.json",
+        "data/scene_text/S4_L1.txt",
+        "data/scenes/L1/contacts_scene.json"
+      ],
+      "out": [
+        "data/runs/demo_e3_s4_sim"
+      ]
+    },
+    {
+      "id": "exp12.nodemo",
+      "title": "Demo vs no demo, no-demo arm: task text only on cuRobo",
+      "group": "experiments",
+      "runner": "ants",
+      "paid": true,
+      "base": "-m ants.orchestrator.demo_vs_nodemo",
+      "args": [
+        {
+          "flag": "--aspire",
+          "value": "ASPIRE",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "desc": "ASPIRE checkout."
+        },
+        {
+          "flag": "--out",
+          "value": "data/runs/nodemo_task_only_sim",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "desc": "Run folder. Repeat the same --out to resume."
+        },
+        {
+          "flag": "--demospec",
+          "value": "data/demospecs/hurobo_233859.json",
+          "kind": "value",
+          "on": true,
+          "required": true,
+          "desc": "DemoSpec of clip 233859 (the no-demo arm ignores its content but the flag is required)."
+        },
+        {
+          "flag": "--arms",
+          "value": "nodemo",
+          "kind": "value",
+          "on": true,
+          "desc": "demo or nodemo."
+        },
+        {
+          "flag": "--temperatures",
+          "value": "0.2,0.7",
+          "kind": "value",
+          "on": true,
+          "desc": "One sample per temperature."
+        },
+        {
+          "flag": "--explain",
+          "kind": "switch",
+          "on": true,
+          "desc": "Repair replies start with WHY."
+        },
+        {
+          "flag": "--repairs",
+          "value": "4",
+          "kind": "value",
+          "on": true,
+          "desc": "Max repairs per sample (5 attempts)."
+        },
+        {
+          "flag": "--planner",
+          "value": "curobo-sim",
+          "kind": "value",
+          "on": true,
+          "desc": "cuRobo with the robot mask from the simulator (privileged)."
+        },
+        {
+          "flag": "--attach-known",
+          "kind": "switch",
+          "on": true,
+          "desc": "Attach the held bowl with its known size (privileged). Needs the dev cuRobo service with ANTS_ATTACH_FILE=data/runs/curobo/attach.json; do not run two such commands at once (one shared attach file)."
+        },
+        {
+          "flag": "--save-clouds",
+          "kind": "switch",
+          "on": true,
+          "desc": "Keep every planning cloud for dev/curobo/make_viewer.py."
+        },
+        {
+          "flag": "--debug-scene",
+          "value": "scaled",
+          "kind": "value",
+          "on": true,
+          "desc": "Debug and repair in the scaled scene."
+        },
+        {
+          "flag": "--scenes",
+          "value": "scaled",
+          "kind": "value",
+          "on": true,
+          "desc": "As run on 2026-11-04. The run also logged stock-scene evaluation."
+        },
+        {
+          "flag": "--eval-seeds",
+          "value": "1,2,3,4,5",
+          "kind": "value",
+          "on": true,
+          "desc": "Held-out seeds, reporting only."
+        },
+        {
+          "flag": "--token-budget",
+          "value": "300000",
+          "kind": "value",
+          "on": true,
+          "desc": "Hard cap on new tokens per command. Observed: demo 204,933, no-demo 247,243 (about 2.8 and 3.3 USD)."
+        }
+      ],
+      "description": "Needs the SAM 3 and PyRoki services and the dev cuRobo service on port 8118 (runbook entries services.start and curobo.service). Settings saved in docs/synthesizer/demo-vs-nodemo-config.json. Run the demo and no-demo commands one after the other, not in parallel.",
+      "examples": [
+        {
+          "title": "Demo vs no demo, no-demo arm: task text only on cuRobo",
+          "cmd": "uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --temperatures 0.2,0.7 --explain --repairs 4 --planner curobo-sim --attach-known --save-clouds --debug-scene scaled --scenes scaled --eval-seeds 1,2,3,4,5 --token-budget 300000 --demospec data/demospecs/hurobo_233859.json --out data/runs/nodemo_task_only_sim --arms nodemo"
+        }
+      ],
+      "modules": [
+        "orch_exp",
+        "generator",
+        "llm",
+        "muse",
+        "rollout",
+        "launcher",
+        "aspire",
+        "services",
+        "evalkit"
+      ],
+      "in": [
+        "data/demospecs/hurobo_233859.json",
+        "data/scene_text/S4_L1.txt",
+        "data/scenes/L1/contacts_scene.json"
+      ],
+      "out": [
+        "data/runs/nodemo_task_only_sim"
+      ]
+    },
+    {
+      "id": "system2.mock",
+      "title": "Write a synthetic System 2 run (no sim, no model)",
+      "group": "system2",
+      "runner": "ants",
+      "base": "tools/system2_mock.py data/runs/system2_mock_synthetic",
+      "args": [],
+      "description": "Fake world: program v0 breaks on size and physics, v1 fixes size but breaks pose (the gate must reject it), v2 fixes both. Clearly marked synthetic in config.json. Use it to try the System 2 tab; it is not a result.",
+      "examples": [
+        {
+          "title": "Then view",
+          "cmd": "uv run python -m ants.evalkit.report data/runs --open"
+        }
+      ],
+      "modules": [
+        "system2",
+        "evalkit"
+      ],
+      "in": [],
+      "out": [
+        "system2.jsonl",
+        "config.json"
+      ],
+      "cost": "free",
+      "minutes": 0,
+      "doc": "tools/system2_mock.py"
+    },
+    {
       "id": "radar.build",
       "title": "Radar: merge JSON sources into documents",
       "group": "tools",
@@ -3016,257 +3606,6 @@
       "cost": "agent time",
       "minutes": 20,
       "doc": ".claude/skills/robot-research-radar/SKILL.md"
-    },
-    {
-      "id": "exp05.probe",
-      "title": "Exp 05 step 1: perceive the L1 start state (SAM 3, two arm poses)",
-      "group": "exp05",
-      "runner": "ants",
-      "base": "-m ants.orchestrator.perceived_scene --probe",
-      "args": [
-        {
-          "flag": "--out",
-          "value": "data/runs/exp05_perceived_scene",
-          "kind": "value",
-          "on": true,
-          "required": true,
-          "desc": "Run dir."
-        },
-        {
-          "flag": "--aspire",
-          "value": "ASPIRE",
-          "kind": "value",
-          "on": true,
-          "desc": "ASPIRE checkout (services sam3 and pyroki must run)."
-        }
-      ],
-      "description": "Simulation and SAM 3 only, no model call. Writes perception_start.json and perception_arm.json (all masks of 13 prompts in both cameras). The committed results come from the same probes run by hand earlier (probe_L1 and probe_L1_arm/run2).",
-      "examples": [
-        {
-          "title": "Run it",
-          "cmd": "uv run python -m ants.orchestrator.perceived_scene --aspire ASPIRE --out data/runs/exp05_perceived_scene --probe"
-        }
-      ],
-      "modules": [
-        "orch_exp",
-        "scene_world",
-        "evalkit",
-        "launcher",
-        "aspire",
-        "services"
-      ],
-      "in": [],
-      "out": [],
-      "cost": "free",
-      "minutes": 5,
-      "doc": "docs/synthesizer/experiment-05-perceived-scene.md"
-    },
-    {
-      "id": "exp05.analyse",
-      "title": "Exp 05 step 2: build the perceived world and compare with the oracle",
-      "group": "exp05",
-      "runner": "ants",
-      "base": "-m ants.orchestrator.perceived_scene --analyse",
-      "args": [
-        {
-          "flag": "--out",
-          "value": "data/runs/exp05_perceived_scene",
-          "kind": "value",
-          "on": true,
-          "required": true,
-          "desc": "Run dir."
-        }
-      ],
-      "description": "Offline, pure Python. Variants V0 to V5, relations, S4 text, robot check. Writes analysis.json, s4_perceived.txt, s4_oracle.txt.",
-      "examples": [
-        {
-          "title": "Run it",
-          "cmd": "uv run python -m ants.orchestrator.perceived_scene --analyse --out data/runs/exp05_perceived_scene"
-        }
-      ],
-      "modules": [
-        "orch_exp",
-        "scene_world",
-        "evalkit"
-      ],
-      "in": [],
-      "out": [],
-      "cost": "free",
-      "minutes": 1,
-      "doc": "docs/synthesizer/experiment-05-perceived-scene.md"
-    },
-    {
-      "id": "exp05.report",
-      "title": "Exp 05 step 3: write the HTML report",
-      "group": "exp05",
-      "runner": "ants",
-      "base": "-m ants.evalkit.perceived_report",
-      "args": [
-        {
-          "flag": "--out",
-          "value": "data/runs/exp05_perceived_scene",
-          "kind": "value",
-          "on": true,
-          "required": true,
-          "desc": "Run dir."
-        }
-      ],
-      "description": "Writes report.html (self-contained, light and dark) next to analysis.json.",
-      "examples": [
-        {
-          "title": "Run it",
-          "cmd": "uv run python -m ants.evalkit.perceived_report --out data/runs/exp05_perceived_scene"
-        }
-      ],
-      "modules": [
-        "orch_exp",
-        "scene_world",
-        "evalkit"
-      ],
-      "in": [],
-      "out": [],
-      "cost": "free",
-      "minutes": 1,
-      "doc": "docs/synthesizer/experiment-05-perceived-scene.md"
-    },
-    {
-      "id": "curobo.exp",
-      "title": "Exp 06 to 08: cuRobo on perception, with and without scene understanding",
-      "group": "experiments",
-      "runner": "ants",
-      "paid": true,
-      "base": "-m ants.orchestrator.exp_curobo",
-      "args": [
-        {
-          "flag": "--exp",
-          "value": "exp06,exp08,exp07",
-          "kind": "value",
-          "on": true,
-          "required": true,
-          "choices": [
-            "exp06",
-            "exp07",
-            "exp08",
-            "exp09",
-            "exp10",
-            "exp11",
-            "exp09,exp10,exp11"
-          ],
-          "desc": "exp06: no scene text, WHY only. exp07: S4 from perception + E3 evidence. exp08: S4 from the simulator + E3, simulator robot mask. exp09 to exp11 repeat exp06 to 08 with the held bowl attached to the hand (known bowl size) and save the planning clouds."
-        },
-        {
-          "flag": "--token-budget",
-          "value": "250000",
-          "kind": "value",
-          "on": true,
-          "desc": "Per run (3 arms per experiment: clip 233859, clip 233832, no demo). Up to 9 runs, about 30 USD at the high end."
-        },
-        {
-          "flag": "--arms",
-          "value": "clip_233859,clip_233832,nodemo",
-          "kind": "value",
-          "on": false,
-          "desc": "Subset of arms."
-        },
-        {
-          "flag": "--total-token-budget",
-          "kind": "value",
-          "on": false,
-          "desc": "Stop starting new runs once this many NEW tokens were spent in this command (counted from data/llm_ledger.jsonl). Default: no total cap."
-        },
-        {
-          "flag": "--arm-major",
-          "kind": "switch",
-          "on": false,
-          "desc": "Loop arms outside and experiments inside, so a stop leaves comparable arms."
-        },
-        {
-          "flag": "--print",
-          "kind": "switch",
-          "on": false,
-          "desc": "Print the demo_vs_nodemo commands and stop."
-        }
-      ],
-      "description": "Needs the ASPIRE services (SAM 3, PyRoki) and the dev cuRobo service (dev/curobo/service_dev.py, port 8118). Runs write to data/runs/curobo/<exp>/<arm>/. Success is the footprint rule (half of the bowl inside the plate); a clean success also has no blocking contact. Repeat the command to resume.",
-      "examples": [
-        {
-          "title": "Overnight, all three",
-          "cmd": "uv run python -m ants.orchestrator.exp_curobo --exp exp06,exp08,exp07 --token-budget 250000"
-        },
-        {
-          "title": "Show the commands only",
-          "cmd": "uv run python -m ants.orchestrator.exp_curobo --exp exp07 --print"
-        },
-        {
-          "title": "Exp 09 to 11, attach the held bowl",
-          "cmd": "uv run python -m ants.orchestrator.exp_curobo --exp exp09,exp10,exp11 --token-budget 250000"
-        }
-      ],
-      "modules": [
-        "orch_exp",
-        "generator",
-        "llm",
-        "muse",
-        "rollout",
-        "launcher",
-        "aspire",
-        "services",
-        "evalkit"
-      ],
-      "in": [
-        "DemoSpec JSON",
-        "data/runs/exp05_perceived_scene/s4_*.txt"
-      ],
-      "out": [
-        "data/runs/curobo/<exp>/<arm>/"
-      ],
-      "cost": "up to 250k tokens per run, 9 runs",
-      "minutes": 600,
-      "doc": "docs/synthesizer/experiment-09-11-curobo-attach.md"
-    },
-    {
-      "id": "curobo.viewer",
-      "title": "Build the cuRobo plan viewer for one run attempt",
-      "group": "dev-curobo",
-      "runner": "shell",
-      "where": "cd to the ANTS repo root",
-      "base": "PYTHONPATH=src ASPIRE/.venv-libero/bin/python dev/curobo/make_viewer.py",
-      "args": [
-        {
-          "flag": "data/runs/curobo/exp09/clip_233859",
-          "kind": "value",
-          "on": true,
-          "required": true,
-          "desc": "Run folder (needs --save-clouds, on by default in exp09 to exp11). Passed as the first argument."
-        },
-        {
-          "flag": "--attempt",
-          "value": "4",
-          "kind": "value",
-          "on": false,
-          "desc": "Attempt to replay; default the last."
-        }
-      ],
-      "description": "Replays every cuRobo plan call of one attempt (cloud, robot spheres, straight vs planned path, before/after attaching the bowl by my own collision check) and writes <run>/plan_viewer/index.html and plans2d.html. View it in the run viewer's Doc tab: uv run python -m ants.evalkit.report data/runs/curobo --serve --open",
-      "examples": [
-        {
-          "title": "All three arms of exp09, last attempt",
-          "cmd": "for a in clip_233859 clip_233832 nodemo; do PYTHONPATH=src ASPIRE/.venv-libero/bin/python dev/curobo/make_viewer.py data/runs/curobo/exp09/$a; done"
-        }
-      ],
-      "modules": [
-        "curobo_dev",
-        "evalkit"
-      ],
-      "in": [
-        "data/runs/curobo/<exp>/<arm>/*/sample0/debug_attempt*/clouds"
-      ],
-      "out": [
-        "data/runs/curobo/<exp>/<arm>/plan_viewer/"
-      ],
-      "cost": "free",
-      "minutes": 2,
-      "doc": "dev/curobo/make_viewer.py"
     },
     {
       "id": "scene_recon.scan",
@@ -3755,294 +4094,6 @@
       "cost": "free",
       "minutes": 3,
       "doc": "docs/perception/scene-reconstruction-probe.md"
-    },
-    {
-      "id": "exp12.demo",
-      "title": "Demo vs no demo, demo arm: demo + S4 + E3 on cuRobo",
-      "group": "experiments",
-      "runner": "ants",
-      "paid": true,
-      "base": "-m ants.orchestrator.demo_vs_nodemo",
-      "args": [
-        {
-          "flag": "--aspire",
-          "value": "ASPIRE",
-          "kind": "value",
-          "on": true,
-          "required": true,
-          "desc": "ASPIRE checkout."
-        },
-        {
-          "flag": "--out",
-          "value": "data/runs/demo_e3_s4_sim",
-          "kind": "value",
-          "on": true,
-          "required": true,
-          "desc": "Run folder. Repeat the same --out to resume."
-        },
-        {
-          "flag": "--demospec",
-          "value": "data/demospecs/hurobo_233859.json",
-          "kind": "value",
-          "on": true,
-          "required": true,
-          "desc": "DemoSpec of clip 233859 (the no-demo arm ignores its content but the flag is required)."
-        },
-        {
-          "flag": "--arms",
-          "value": "demo",
-          "kind": "value",
-          "on": true,
-          "desc": "demo or nodemo."
-        },
-        {
-          "flag": "--temperatures",
-          "value": "0.2,0.7",
-          "kind": "value",
-          "on": true,
-          "desc": "One sample per temperature."
-        },
-        {
-          "flag": "--explain",
-          "kind": "switch",
-          "on": true,
-          "desc": "Repair replies start with WHY."
-        },
-        {
-          "flag": "--repairs",
-          "value": "4",
-          "kind": "value",
-          "on": true,
-          "desc": "Max repairs per sample (5 attempts)."
-        },
-        {
-          "flag": "--planner",
-          "value": "curobo-sim",
-          "kind": "value",
-          "on": true,
-          "desc": "cuRobo with the robot mask from the simulator (privileged)."
-        },
-        {
-          "flag": "--attach-known",
-          "kind": "switch",
-          "on": true,
-          "desc": "Attach the held bowl with its known size (privileged). Needs the dev cuRobo service with ANTS_ATTACH_FILE=data/runs/curobo/attach.json; do not run two such commands at once (one shared attach file)."
-        },
-        {
-          "flag": "--save-clouds",
-          "kind": "switch",
-          "on": true,
-          "desc": "Keep every planning cloud for dev/curobo/make_viewer.py."
-        },
-        {
-          "flag": "--debug-scene",
-          "value": "scaled",
-          "kind": "value",
-          "on": true,
-          "desc": "Debug and repair in the scaled scene."
-        },
-        {
-          "flag": "--scenes",
-          "value": "scaled",
-          "kind": "value",
-          "on": true,
-          "desc": "As run on 2026-11-04. The run also logged stock-scene evaluation."
-        },
-        {
-          "flag": "--eval-seeds",
-          "value": "1,2,3,4,5",
-          "kind": "value",
-          "on": true,
-          "desc": "Held-out seeds, reporting only."
-        },
-        {
-          "flag": "--token-budget",
-          "value": "300000",
-          "kind": "value",
-          "on": true,
-          "desc": "Hard cap on new tokens per command. Observed: demo 204,933, no-demo 247,243 (about 2.8 and 3.3 USD)."
-        },
-        {
-          "flag": "--evidence",
-          "value": "e3",
-          "kind": "value",
-          "on": true,
-          "desc": "Repair adds the contact log, the scene text and stall readings."
-        },
-        {
-          "flag": "--contacts",
-          "kind": "switch",
-          "on": true,
-          "desc": "Log simulator contacts per attempt."
-        },
-        {
-          "flag": "--scene-text-file",
-          "value": "data/scene_text/S4_L1.txt",
-          "kind": "value",
-          "on": true,
-          "desc": "S4 scene text (regenerate with g_scene_text('S4','L1') in ants.orchestrator.scene_context_exp)."
-        }
-      ],
-      "description": "Needs the SAM 3 and PyRoki services and the dev cuRobo service on port 8118 (runbook entries services.start and curobo.service). Settings saved in docs/synthesizer/demo-vs-nodemo-config.json. Run the demo and no-demo commands one after the other, not in parallel.",
-      "examples": [
-        {
-          "title": "Demo vs no demo, demo arm: demo + S4 + E3 on cuRobo",
-          "cmd": "uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --temperatures 0.2,0.7 --explain --repairs 4 --planner curobo-sim --attach-known --save-clouds --debug-scene scaled --scenes scaled --eval-seeds 1,2,3,4,5 --token-budget 300000 --demospec data/demospecs/hurobo_233859.json --out data/runs/demo_e3_s4_sim --arms demo --evidence e3 --contacts --scene-text-file data/scene_text/S4_L1.txt"
-        }
-      ],
-      "modules": [
-        "orch_exp",
-        "generator",
-        "llm",
-        "muse",
-        "rollout",
-        "launcher",
-        "aspire",
-        "services",
-        "evalkit"
-      ],
-      "in": [
-        "data/demospecs/hurobo_233859.json",
-        "data/scene_text/S4_L1.txt",
-        "data/scenes/L1/contacts_scene.json"
-      ],
-      "out": [
-        "data/runs/demo_e3_s4_sim"
-      ]
-    },
-    {
-      "id": "exp12.nodemo",
-      "title": "Demo vs no demo, no-demo arm: task text only on cuRobo",
-      "group": "experiments",
-      "runner": "ants",
-      "paid": true,
-      "base": "-m ants.orchestrator.demo_vs_nodemo",
-      "args": [
-        {
-          "flag": "--aspire",
-          "value": "ASPIRE",
-          "kind": "value",
-          "on": true,
-          "required": true,
-          "desc": "ASPIRE checkout."
-        },
-        {
-          "flag": "--out",
-          "value": "data/runs/nodemo_task_only_sim",
-          "kind": "value",
-          "on": true,
-          "required": true,
-          "desc": "Run folder. Repeat the same --out to resume."
-        },
-        {
-          "flag": "--demospec",
-          "value": "data/demospecs/hurobo_233859.json",
-          "kind": "value",
-          "on": true,
-          "required": true,
-          "desc": "DemoSpec of clip 233859 (the no-demo arm ignores its content but the flag is required)."
-        },
-        {
-          "flag": "--arms",
-          "value": "nodemo",
-          "kind": "value",
-          "on": true,
-          "desc": "demo or nodemo."
-        },
-        {
-          "flag": "--temperatures",
-          "value": "0.2,0.7",
-          "kind": "value",
-          "on": true,
-          "desc": "One sample per temperature."
-        },
-        {
-          "flag": "--explain",
-          "kind": "switch",
-          "on": true,
-          "desc": "Repair replies start with WHY."
-        },
-        {
-          "flag": "--repairs",
-          "value": "4",
-          "kind": "value",
-          "on": true,
-          "desc": "Max repairs per sample (5 attempts)."
-        },
-        {
-          "flag": "--planner",
-          "value": "curobo-sim",
-          "kind": "value",
-          "on": true,
-          "desc": "cuRobo with the robot mask from the simulator (privileged)."
-        },
-        {
-          "flag": "--attach-known",
-          "kind": "switch",
-          "on": true,
-          "desc": "Attach the held bowl with its known size (privileged). Needs the dev cuRobo service with ANTS_ATTACH_FILE=data/runs/curobo/attach.json; do not run two such commands at once (one shared attach file)."
-        },
-        {
-          "flag": "--save-clouds",
-          "kind": "switch",
-          "on": true,
-          "desc": "Keep every planning cloud for dev/curobo/make_viewer.py."
-        },
-        {
-          "flag": "--debug-scene",
-          "value": "scaled",
-          "kind": "value",
-          "on": true,
-          "desc": "Debug and repair in the scaled scene."
-        },
-        {
-          "flag": "--scenes",
-          "value": "scaled",
-          "kind": "value",
-          "on": true,
-          "desc": "As run on 2026-11-04. The run also logged stock-scene evaluation."
-        },
-        {
-          "flag": "--eval-seeds",
-          "value": "1,2,3,4,5",
-          "kind": "value",
-          "on": true,
-          "desc": "Held-out seeds, reporting only."
-        },
-        {
-          "flag": "--token-budget",
-          "value": "300000",
-          "kind": "value",
-          "on": true,
-          "desc": "Hard cap on new tokens per command. Observed: demo 204,933, no-demo 247,243 (about 2.8 and 3.3 USD)."
-        }
-      ],
-      "description": "Needs the SAM 3 and PyRoki services and the dev cuRobo service on port 8118 (runbook entries services.start and curobo.service). Settings saved in docs/synthesizer/demo-vs-nodemo-config.json. Run the demo and no-demo commands one after the other, not in parallel.",
-      "examples": [
-        {
-          "title": "Demo vs no demo, no-demo arm: task text only on cuRobo",
-          "cmd": "uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --temperatures 0.2,0.7 --explain --repairs 4 --planner curobo-sim --attach-known --save-clouds --debug-scene scaled --scenes scaled --eval-seeds 1,2,3,4,5 --token-budget 300000 --demospec data/demospecs/hurobo_233859.json --out data/runs/nodemo_task_only_sim --arms nodemo"
-        }
-      ],
-      "modules": [
-        "orch_exp",
-        "generator",
-        "llm",
-        "muse",
-        "rollout",
-        "launcher",
-        "aspire",
-        "services",
-        "evalkit"
-      ],
-      "in": [
-        "data/demospecs/hurobo_233859.json",
-        "data/scene_text/S4_L1.txt",
-        "data/scenes/L1/contacts_scene.json"
-      ],
-      "out": [
-        "data/runs/nodemo_task_only_sim"
-      ]
     },
     {
       "id": "curobo.replay",

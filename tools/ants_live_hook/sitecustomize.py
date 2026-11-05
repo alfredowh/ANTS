@@ -6,6 +6,9 @@ command behaves as before. It covers `cap-harness` run directly and through
 `tools/aspire_launch.py`, because it wraps `cap_harness.artifacts.RunRecorder` when that module is
 imported.
 
+`ants_live_mirror.py` beside this file adds the 3D Live mirror's data the same way: read-only, from
+state the simulator has already computed.
+
 It renders nothing and never touches the simulator or a random generator: it receives the arrays
 the recorder has already rendered for `media/videos`, after the original method has run. Files are
 replaced atomically, so a reader never sees half a frame. Any error here switches the tee off and
@@ -50,8 +53,9 @@ class _Tee:
         self._json, self._time, self._image = json, time, Image
         self.dir = Path(folder)
         self.dir.mkdir(parents=True, exist_ok=True)
-        for old in self.dir.glob("*.jpg"):  # a previous rollout's frames must never look current
-            old.unlink(missing_ok=True)
+        for pattern in ("*.jpg", "mirror_*"):  # a previous rollout's data must never look current
+            for old in self.dir.glob(pattern):
+                old.unlink(missing_ok=True)
         self.period = 1.0 / fps
         self.last = 0.0
         self.frames = 0
@@ -73,6 +77,14 @@ class _Tee:
         if now - self.last < self.period:
             return
         self.last = now
+        if _SIM["sim"] is not None and not _SIM["dead"]:
+            try:  # before the frames, so a reader sees state at least as new as the status
+                import ants_live_mirror
+
+                ants_live_mirror.write(_SIM["sim"], self.dir, step, _SIM)
+                self.status["mirror"] = _SIM.get("mirror_id")
+            except Exception:  # noqa: BLE001 -- losing the 3D view must not lose the frames
+                _SIM["dead"] = True
         for name, camera in cameras.items():
             tmp = self.dir / f".{name}.{os.getpid()}.tmp"
             self._image.fromarray(camera.rgb).save(tmp, format="JPEG", quality=70)
@@ -89,6 +101,20 @@ class _Tee:
             self._write_status()
         except OSError:
             pass
+
+
+_SIM: dict = {"sim": None, "dead": False}  # the simulator of this rollout, read-only
+
+
+def _install_sim(module) -> None:
+    sim_class = module.MjSim
+    original = sim_class.__init__
+
+    def init(self, *args, **kwargs):
+        original(self, *args, **kwargs)
+        _SIM["sim"] = self  # a rebuilt scene replaces the old simulator
+
+    sim_class.__init__ = init
 
 
 def _install(module) -> None:
@@ -115,14 +141,20 @@ if LIVE_DIR:
     import importlib.util
     import sys
 
+    _TARGETS = {"cap_harness.artifacts": _install, "robosuite.utils.binding_utils": _install_sim}
+
     class _Finder(importlib.abc.MetaPathFinder):
-        """Runs `_install` right after `cap_harness.artifacts` is imported."""
+        """Runs the matching `_install*` right after its module is imported."""
 
         def find_spec(self, name, path=None, target=None):
-            if name != "cap_harness.artifacts":
+            install = _TARGETS.get(name)
+            if install is None:
                 return None
             sys.meta_path.remove(self)
-            spec = importlib.util.find_spec(name)
+            try:
+                spec = importlib.util.find_spec(name)
+            finally:
+                sys.meta_path.insert(0, self)
             if spec is None or spec.loader is None:
                 return spec
             exec_module = spec.loader.exec_module
@@ -130,7 +162,7 @@ if LIVE_DIR:
             def wrapped(module):
                 exec_module(module)
                 try:
-                    _install(module)
+                    install(module)
                 except Exception:  # noqa: BLE001 -- the live view never affects a rollout
                     pass
 

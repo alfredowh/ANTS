@@ -1,6 +1,6 @@
 {
  "version": 2,
- "note": "Block hierarchy of the live process-flow panel (static/flow.js). The top-level blocks with a 'stage' are driven by SSE events; see process-flow-design.md. status: built or planned. live.signal: live, after_the_fact, grouped or static. There is no production view (D18).",
+ "note": "Block hierarchy of the live process-flow panel (static/flow.js). status: built or planned. live.signal: live, after_the_fact, grouped or static. There is no production view (D18).",
  "stages": [
   "video",
   "extract",
@@ -8,6 +8,7 @@
   "prompt",
   "generate",
   "nominal",
+  "review",
   "attack",
   "diagnose",
   "rewrite",
@@ -17,7 +18,7 @@
  "blocks": [
   {
    "id": "video",
-   "label": "Human video",
+   "label": "Human demo V",
    "owner": "io",
    "status": "built",
    "summary": "One marker clip and a task sentence enter the pipeline.",
@@ -25,9 +26,7 @@
    "code": [
     "hurobo/data/raw/e1/clips"
    ],
-   "docs": [
-    "docs/dev/reuse-from-hurobo.md"
-   ],
+   "docs": [],
    "children": [],
    "live": {
     "signal": "live",
@@ -37,22 +36,21 @@
    "pos": {
     "col": 0,
     "row": 0
-   }
+   },
+   "model": "one phone clip"
   },
   {
    "id": "extract",
-   "label": "Extract demo",
+   "label": "Demo extraction",
    "owner": "synthesizer",
    "status": "built",
-   "summary": "hurobo turns the clip into metric hand and object data (HumanDemo .npz).",
+   "summary": "Differs from the paper: demos use hand tracking and fiducial markers from hurobo, not SAM 3.1. Only marker-setup clips work. SAM 3 is used in the rollouts instead.",
    "details": "Controlled setup: one static camera, known intrinsics, markers. A rejected clip stops the pipeline.",
    "code": [
     "hurobo/scripts/02_extract_demos.py",
     "hurobo/src/hurobo/extract.py"
    ],
-   "docs": [
-    "docs/dev/reuse-from-hurobo.md"
-   ],
+   "docs": [],
    "children": [
     "x_hand",
     "x_markers",
@@ -67,7 +65,8 @@
    "pos": {
     "col": 1,
     "row": 0
-   }
+   },
+   "model": "hurobo: hand + ArUco"
   },
   {
    "id": "x_hand",
@@ -79,9 +78,7 @@
    "code": [
     "hurobo/src/hurobo/hand.py"
    ],
-   "docs": [
-    "docs/dev/reuse-from-hurobo.md"
-   ],
+   "docs": [],
    "children": [],
    "live": {
     "signal": "grouped",
@@ -99,9 +96,7 @@
    "code": [
     "hurobo/src/hurobo/markers.py"
    ],
-   "docs": [
-    "docs/dev/reuse-from-hurobo.md"
-   ],
+   "docs": [],
    "children": [],
    "live": {
     "signal": "grouped",
@@ -119,9 +114,7 @@
    "code": [
     "hurobo/src/hurobo/extract.py"
    ],
-   "docs": [
-    "docs/dev/reuse-from-hurobo.md"
-   ],
+   "docs": [],
    "children": [],
    "live": {
     "signal": "grouped",
@@ -131,7 +124,7 @@
   },
   {
    "id": "demospec",
-   "label": "DemoSpec",
+   "label": "Abstraction z",
    "owner": "synthesizer",
    "status": "built",
    "summary": "Object-relative JSON: keyframes, end-effector path, aperture, summary for the prompt.",
@@ -151,14 +144,15 @@
    "pos": {
     "col": 2,
     "row": 0
-   }
+   },
+   "model": "DemoSpec JSON"
   },
   {
    "id": "prompt",
-   "label": "Build prompt",
+   "label": "Prompt",
    "owner": "synthesizer",
    "status": "built",
-   "summary": "Rules, API reference, example, demo summary, scene and constraints.",
+   "summary": "The context the generator reads: task, demo abstraction, API signatures, scene text and, for repairs, E3 contact evidence.",
    "details": "Improvement happens only through this context; nothing is trained.",
    "code": [
     "src/ants/synthesizer/prompt_generator.py"
@@ -175,14 +169,38 @@
    "pos": {
     "col": 3,
     "row": 0
-   }
+   },
+   "model": "task, z, S4 scene text"
+  },
+  {
+   "id": "cache",
+   "label": "Reply cache",
+   "owner": "synthesizer",
+   "status": "built",
+   "summary": "Generation and its repairs: every model call is cached on disk by model, messages and temperature, so a resumed run spends nothing on repeated calls.",
+   "details": "A cache hit is marked on the attempt card. Rewrites in the Adversary loop go through Muse Code and are not in this disk cache.",
+   "code": [
+    "src/ants/synthesizer/llm.py"
+   ],
+   "docs": [],
+   "children": [],
+   "live": {
+    "signal": "static",
+    "note": "not reported live; attempts show from_cache"
+   },
+   "flow": true,
+   "pos": {
+    "col": 2,
+    "row": 1
+   },
+   "model": "disk, per request"
   },
   {
    "id": "generate",
-   "label": "Muse writes program",
+   "label": "Program generator",
    "owner": "synthesizer",
    "status": "built",
-   "summary": "The frozen model writes a plain cap_harness script, then repairs it on the debug seed.",
+   "summary": "Writes a plain cap_harness script over ASPIRE primitives, not the paper's four-primitive run(robot). Direct API call with --explain, repaired on the nominal seed.",
    "details": "Develop-and-repair runs up to the retry limit, under a hard token cap.",
    "code": [
     "src/ants/orchestrator/demo_vs_nodemo.py",
@@ -203,9 +221,10 @@
    "stage": "generate",
    "flow": true,
    "pos": {
-    "col": 4,
-    "row": 0
-   }
+    "col": 3,
+    "row": 1
+   },
+   "model": "Muse Wonder 1.0"
   },
   {
    "id": "g_model",
@@ -267,7 +286,7 @@
   },
   {
    "id": "nominal",
-   "label": "Nominal check",
+   "label": "Nominal replay",
    "owner": "orchestrator",
    "status": "built",
    "summary": "The policy must pass its nominal cases before it may be attacked.",
@@ -285,16 +304,40 @@
    },
    "stage": "nominal",
    "pos": {
-    "col": 5,
+    "col": 4,
+    "row": 1
+   },
+   "model": "LIBERO, no perturbation"
+  },
+  {
+   "id": "review",
+   "label": "Human check",
+   "owner": "orchestrator",
+   "status": "built",
+   "summary": "The run holds with the rollout of candidate v0 on screen. The Adversary starts only when the person continues.",
+   "details": "",
+   "code": [
+    "src/ants/studio/policy_dev.py"
+   ],
+   "docs": [],
+   "children": [],
+   "live": {
+    "signal": "live",
+    "note": "pipeline_stage review"
+   },
+   "stage": "review",
+   "pos": {
+    "col": 4,
     "row": 0
-   }
+   },
+   "model": "continue or stop"
   },
   {
    "id": "attack",
-   "label": "Adversary attack",
+   "label": "Rollout",
    "owner": "adversary",
    "status": "built",
-   "summary": "Pick a category, propose a bounded perturbation, roll the policy out.",
+   "summary": "Sandboxed program in cap_harness on LIBERO-Pro. Perception by SAM 3 (sam-3.1 is optional), IK by PyRoki, interpolated trajectories. cuRobo is not used in /policy-dev; see execution.json.",
    "details": "Adversary.attack() runs selector, proposer, rollout and diagnoser in one synchronous call.",
    "code": [
     "src/ants/adversary/adversary.py"
@@ -306,7 +349,8 @@
     "selector",
     "proposer",
     "rollout",
-    "history"
+    "history",
+    "explainer"
    ],
    "live": {
     "signal": "live",
@@ -317,14 +361,15 @@
    "pos": {
     "col": 5,
     "row": 1
-   }
+   },
+   "model": "LIBERO · SAM 3 · PyRoki"
   },
   {
    "id": "selector",
    "label": "Category selector",
    "owner": "adversary",
    "status": "built",
-   "summary": "Thompson sampling over categories with eta-uniform exploration.",
+   "summary": "Beta posterior per category, or uniform at η = 1. Categories wired: pose, physics, size, actuation, camera, lighting.",
    "details": "eta=1.0 is the uniform baseline.",
    "code": [
     "src/ants/adversary/planner/selector.py"
@@ -337,14 +382,19 @@
     "signal": "grouped",
     "note": "Inside Adversary.attack(): one synchronous call, no per-step events. All inner steps show the same grouped state; their order and timing are not observed live."
    },
-   "inherit": true
+   "inherit": true,
+   "model": "Thompson, η 0.2",
+   "pos": {
+    "col": 6,
+    "row": 0
+   }
   },
   {
    "id": "proposer",
-   "label": "Perturbation proposer",
+   "label": "Proposer + clamp",
    "owner": "adversary",
    "status": "built",
-   "summary": "M agents propose parameters; severity is clamped to rho in code.",
+   "summary": "muse-spark-1.3 through the Meta Model API. Whether the API exposes the Instant, Thinking and Contemplating modes by name is not confirmed; effort levels map to them in models/base.py. M = 4 independent calls. Severity is clamped in code whatever the model returned.",
    "details": "",
    "code": [
     "src/ants/adversary/planner/proposer.py",
@@ -358,7 +408,14 @@
     "signal": "grouped",
     "note": "Inside Adversary.attack(): one synchronous call, no per-step events. All inner steps show the same grouped state; their order and timing are not observed live."
    },
-   "inherit": true
+   "inherit": true,
+   "model": "Muse Spark, s ≤ ρ",
+   "spark_only": true,
+   "off_model": "uniform (Spark off), s ≤ ρ",
+   "pos": {
+    "col": 6,
+    "row": 1
+   }
   },
   {
    "id": "rollout",
@@ -479,7 +536,7 @@
   },
   {
    "id": "history",
-   "label": "Failure history",
+   "label": "Failure history H",
    "owner": "adversary",
    "status": "built",
    "summary": "Append-only attack log and per-category counts; F_n for the gate.",
@@ -495,14 +552,46 @@
     "signal": "grouped",
     "note": "Inside Adversary.attack(): one synchronous call, no per-step events. All inner steps show the same grouped state; their order and timing are not observed live."
    },
-   "inherit": true
+   "inherit": true,
+   "model": "per-category counts",
+   "pos": {
+    "col": 5,
+    "row": 0
+   }
+  },
+  {
+   "id": "explainer",
+   "label": "Explainer",
+   "owner": "adversary",
+   "status": "built",
+   "summary": "muse-spark-1.3 through the Meta Model API. Whether the API exposes the Instant, Thinking and Contemplating modes by name is not confirmed; effort levels map to them in models/base.py. ",
+   "details": "",
+   "code": [
+    "src/ants/adversary/explainer.py"
+   ],
+   "docs": [
+    "docs/adversary/spec.md"
+   ],
+   "children": [],
+   "live": {
+    "signal": "grouped",
+    "note": "Inside Adversary.attack(): one synchronous call, no per-step events. All inner steps show the same grouped state; their order and timing are not observed live."
+   },
+   "inherit": true,
+   "model": "Muse Spark",
+   "spark_only": true,
+   "off_model": "off (Muse Spark off)",
+   "pos": {
+    "col": 6,
+    "row": 2
+   }
   },
   {
    "id": "diagnose",
-   "label": "Diagnose failure",
+   "label": "Diagnoser",
    "owner": "adversary",
    "status": "built",
-   "summary": "Rules or model name the mode, root cause and a constraint.",
+   "summary": "muse-spark-1.3 through the Meta Model API. Whether the API exposes the Instant, Thinking and Contemplating modes by name is not confirmed; effort levels map to them in models/base.py. Compares against the nominal run. Rules are the fallback, and the only diagnoser when the model is mock.",
    "details": "Runs inside attack(), so it finishes with it. Skipped when the attack did not fail the policy.",
    "code": [
     "src/ants/adversary/diagnoser/rules.py",
@@ -518,16 +607,18 @@
    },
    "stage": "diagnose",
    "pos": {
-    "col": 4,
-    "row": 1
-   }
+    "col": 5,
+    "row": 2
+   },
+   "model": "Muse Spark + rules",
+   "off_model": "rules (Muse Spark off)"
   },
   {
    "id": "rewrite",
-   "label": "Muse rewrites",
+   "label": "Rewrite π′",
    "owner": "synthesizer",
    "status": "built",
-   "summary": "One blocking muse exec per failure, with the constraint in context.",
+   "summary": "Run by muse exec with docs/orchestrator/phases.md at the top of the prompt. The class is named MuseOrchestrator, but the model only writes the candidate: the loop, gate and stop rules stay in code.",
    "details": "About 46k tokens per rewrite in the logged test runs.",
    "code": [
     "src/ants/orchestrator/muse_orchestrator.py",
@@ -544,15 +635,16 @@
    "stage": "rewrite",
    "pos": {
     "col": 3,
-    "row": 1
-   }
+    "row": 2
+   },
+   "model": "Muse Wonder (Muse Code)"
   },
   {
    "id": "gate",
    "label": "Regression gate",
    "owner": "orchestrator",
    "status": "built",
-   "summary": "Accept a candidate only if no worse on every case and better on at least one.",
+   "summary": "No worse on every case seen and better on at least one. One pure function; no model decides.",
    "details": "A crash on a case the incumbent passed is a regression. The candidate replays every case seen so far.",
    "code": [
     "src/ants/orchestrator/gate.py"
@@ -567,9 +659,10 @@
    },
    "stage": "gate",
    "pos": {
-    "col": 2,
-    "row": 1
-   }
+    "col": 4,
+    "row": 3
+   },
+   "model": "code: no case worse"
   },
   {
    "id": "deploy",
@@ -589,16 +682,17 @@
    },
    "stage": "deploy",
    "pos": {
-    "col": 1,
-    "row": 1
-   }
+    "col": 5,
+    "row": 3
+   },
+   "model": "data/deploy"
   },
   {
    "id": "memory",
-   "label": "Experience memory",
+   "label": "Experience memory M",
    "owner": "orchestrator",
    "status": "planned",
-   "summary": "Store policies and retrieve by similarity. Cut for the hackathon (D18).",
+   "summary": "Not built (decision D18). In the paper; concept only for the hackathon.",
    "details": "Concept slide only, no code. Never lights up.",
    "code": [],
    "docs": [
@@ -611,15 +705,16 @@
    },
    "pos": {
     "col": 1,
-    "row": 2
-   }
+    "row": 1
+   },
+   "model": "planned"
   },
   {
    "id": "escalation",
    "label": "Ask a human",
    "owner": "orchestrator",
    "status": "built",
-   "summary": "After W stalled cycles, ask a person for one targeted answer that becomes a constraint.",
+   "summary": "After W stalled cycles. Implemented as a typed answer that becomes a constraint; the paper's targeted demonstration V′ is not built.",
    "details": "",
    "code": [
     "src/ants/orchestrator/human_gate.py"
@@ -634,9 +729,10 @@
    },
    "stage": "escalation",
    "pos": {
-    "col": 2,
-    "row": 2
-   }
+    "col": 3,
+    "row": 3
+   },
+   "model": "text answer"
   }
  ],
  "edges": [
@@ -657,12 +753,34 @@
    "to": "generate"
   },
   {
-   "from": "generate",
-   "to": "nominal"
+   "from": "cache",
+   "to": "generate"
   },
   {
-   "from": "nominal",
+   "from": "memory",
+   "to": "cache",
+   "planned": true
+  },
+  {
+   "from": "generate",
+   "to": "nominal",
+   "label": "π"
+  },
+  {
+   "from": "history",
+   "to": "selector"
+  },
+  {
+   "from": "selector",
+   "to": "proposer"
+  },
+  {
+   "from": "proposer",
    "to": "attack"
+  },
+  {
+   "from": "attack",
+   "to": "history"
   },
   {
    "from": "attack",
@@ -670,7 +788,12 @@
   },
   {
    "from": "diagnose",
-   "to": "rewrite"
+   "to": "explainer"
+  },
+  {
+   "from": "diagnose",
+   "to": "rewrite",
+   "label": "constraint"
   },
   {
    "from": "rewrite",
@@ -688,19 +811,22 @@
   },
   {
    "from": "gate",
-   "to": "memory",
-   "planned": true
-  },
-  {
-   "from": "gate",
-   "to": "escalation",
-   "label": "stalled"
+   "to": "escalation"
   },
   {
    "from": "escalation",
-   "to": "attack",
+   "to": "rewrite",
    "loop": true,
    "label": "answer"
+  },
+  {
+   "from": "nominal",
+   "to": "review",
+   "label": "v0"
+  },
+  {
+   "from": "review",
+   "to": "history"
   }
  ]
 }

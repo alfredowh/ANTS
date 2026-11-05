@@ -1,6 +1,6 @@
 {
   "name": "policy-dev",
-  "version": 3,
+  "version": 6,
   "description": "/policy-dev: attach a human video, type the task, send; a settings dialog opens; Run starts the pipeline. Stages: video, extract (hurobo, markers required), demospec, prompt, generate, nominal, attack, diagnose, rewrite, gate, deploy. Plain data: any agent can read these defaults and limits; the Studio server and dialog read them from this file. Bowl-on-plate only. Muse tokens cost about $13.5 per million.",
   "command": "/policy-dev <task>",
   "scene": {
@@ -13,6 +13,13 @@
     "debug_seed": 51,
     "backend": "cap_harness",
     "scene": "stock"
+  },
+  "scene_context": {
+    "dump": "data/scenes/stock/contacts_scene.json",
+    "text": "data/scene_text/stock_seed51_S4.txt",
+    "level": "combo",
+    "evidence": "e3",
+    "note": "Same S4 description and e3 repair evidence as the experiments, but measured in the stock scene these runs simulate, on the debug seed. The S4_L* files describe the scaled scene. Made by ants.studio.stock_scene on first use: one no-op rollout, no tokens."
   },
   "video": {
     "folder": "hurobo/data/raw/e1/clips",
@@ -83,6 +90,12 @@
       "label": "Adversary module",
       "help": "Off: after generation, save the main program to data/deploy/; no attacks."
     },
+    "pause_after_v0": {
+      "type": "bool",
+      "default": true,
+      "label": "Stop after candidate v0",
+      "help": "Hold before the Adversary with the rollout of v0 on screen until you continue. Spends nothing while waiting."
+    },
     "strategy": {
       "type": "choice",
       "default": "thompson",
@@ -114,6 +127,20 @@
       "max": 15,
       "label": "Acceptance seeds",
       "help": "Seeds 51 upward."
+    },
+    "spark": {
+      "type": "bool",
+      "default": false,
+      "label": "Muse Spark (Adversary)",
+      "help": "On: Muse Spark proposes attacks, diagnoses failures and explains them; adds cost. Off: uniform proposals and rule diagnosis, free."
+    },
+    "spark_token_cap": {
+      "type": "int",
+      "default": 100000,
+      "min": 10000,
+      "max": 1000000,
+      "label": "Muse Spark token cap",
+      "help": "Separate from the Synthesizer cap. When it is spent, the Adversary falls back to the free behaviour."
     },
     "token_cap": {
       "type": "int",

@@ -129,14 +129,16 @@ function renderScene2D(kind) {
   if (!scene) {
     svg.innerHTML = "";
     asofEl.textContent = "";
-    noteEl.textContent = "This run's prompt has no scene text. /policy-dev debugs in the stock scene (libero_goal_swap task 8) and the program finds objects at run time.";
+    noteEl.textContent = "Not measured yet. The first /policy-dev run measures the stock scene (libero_goal_swap task 8, seed 51) with one no-op rollout and sends that description to the Synthesizer; reload to see it.";
     noteEl.title = "Start the server with --scene <contacts_scene.json> to show a scene file here.";
     document.querySelector(".scene2d").classList.add("no-scene");
     return;
   }
   asofEl.textContent = "as of " + scene.as_of;
-  noteEl.textContent = "Scene file: " + (s2d.source || "unknown") + " (shown for reference; /policy-dev does not send it to the Synthesizer)";
-  noteEl.title = "From --scene: oracle geometry, no robot trajectory.";
+  noteEl.textContent = s2d.sent
+    ? "Stock scene, seed 51, as sent to the Synthesizer: " + s2d.source
+    : "Scene file: " + (s2d.source || "unknown") + " (shown for reference; /policy-dev sends the stock scene instead)";
+  noteEl.title = "Simulator truth (oracle geometry) before the arm moves, no robot trajectory.";
 
   const pad = 14;
   let xs = [], ys = [];
@@ -280,12 +282,18 @@ const NAV_KEY = "ants-studio-nav", PANELS_KEY = "ants-studio-panels";
   const labels = { left: "context panel (primitives, scene prompt)", right: "run details (usage, reply, settings)" };
   let panels = { left: false, right: false };
   try { panels = Object.assign(panels, JSON.parse(localStorage.getItem(PANELS_KEY) || "{}")); } catch (e) {}
+  const forced = new Set(); // reasons the right column is open for now (live view, human demo)
+  window.studioForceRight = (reason, on) => {
+    if (on) forced.add(reason); else forced.delete(reason);
+    applyPanels();
+  };
   function applyPanels() {
     for (const side of ["left", "right"]) {
-      main.classList.toggle("show-" + side, !!panels[side]);
-      btns[side].classList.toggle("on", !!panels[side]);
-      btns[side].title = (panels[side] ? "Hide " : "Show ") + labels[side];
-      btns[side].innerHTML = (side === "left") === !!panels[side] ? "&#9666;" : "&#9656;";
+      const open = !!panels[side] || (side === "right" && forced.size > 0);
+      main.classList.toggle("show-" + side, open);
+      btns[side].classList.toggle("on", open);
+      btns[side].title = (open ? "Hide " : "Show ") + labels[side];
+      btns[side].innerHTML = (side === "left") === open ? "&#9666;" : "&#9656;";
     }
     try { localStorage.setItem(PANELS_KEY, JSON.stringify(panels)); } catch (e) {}
   }
@@ -304,6 +312,28 @@ function refreshRunList() {
   }).catch(() => { document.getElementById("navruns").innerHTML = `<div class="navnote">runs unavailable</div>`; });
 }
 refreshRunList();
+
+/* ---------- tokens this session has spent. The number is real: it comes from the session's logs and
+   grows when a call ends. A running call is shown after it, with ~ on any rough size, and is never
+   added to the number. ---------- */
+function tokenInFlightText(c) {
+  const clock = `${Math.floor(c.elapsed_s / 60)}:${String(c.elapsed_s % 60).padStart(2, "0")}`;
+  const sizes = [];
+  if (c.approx_input_tokens) sizes.push(`~${c.approx_input_tokens.toLocaleString()} in`);
+  if (c.approx_output_tokens) sizes.push(`~${c.approx_output_tokens.toLocaleString()} out`);
+  return ` + ${sizes.length ? sizes.join(", ") + ", " : ""}model call running ${clock}`;
+}
+function refreshTokens() {
+  fetch("/session/tokens").then((r) => r.json()).then((t) => {
+    const el = document.getElementById("token-pill"), c = t.in_flight;
+    el.textContent = `${t.total.toLocaleString()} tokens · $${t.usd.toFixed(2)}` + (c ? tokenInFlightText(c) : "");
+    el.classList.toggle("in-flight", !!c);
+    el.title = `Exact, this session's new tokens at the observed $13.5 per million:\ngeneration ${t.generation.toLocaleString()}\nrewrites ${t.rewrites.toLocaleString()}\nMuse Spark ${t.spark.toLocaleString()}\nchat ${t.chat.toLocaleString()}\n` +
+      (c ? `\nRunning now: ${c.label}. Its real count arrives when the call ends and is not in the total yet.` + (c.approx_input_tokens || c.approx_output_tokens ? " ~ is a rough size from the text, about 4 characters per token." : " Its size is unknown until then.") : "\nNo model call is running. Muse Spark updates after each attack.");
+  }).catch(() => {});
+}
+refreshTokens();
+setInterval(refreshTokens, 1000);
 
 /* ---------- session: one folder per session on the server (chat, events, runs); "New session" resets ---------- */
 let currentSessionId = null;
@@ -665,6 +695,8 @@ function openStream() {
     const data = JSON.parse(ev.data);
     if (window.studioEvent) window.studioEvent(data); // Adversary view refresh
     if (window.flowEvent) window.flowEvent(data); // live process-flow panel
+    if (window.demoEvent) window.demoEvent(data);
+    if (window.attemptsEvent) window.attemptsEvent(data);
     if (window.wizardEvent) window.wizardEvent(data); // one shared connection (browsers allow only ~6 per site)
     if (data.kind === "loop_event") handleLoopEvent(data.row);
     else if (data.kind === "attack_event") handleAttackEvent(data);
