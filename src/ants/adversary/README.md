@@ -2,7 +2,7 @@
 
 System 2 takes a robot program written by System 1 and tries to make it fail in simulation. It explains each failure and hands it back as a constraint System 1 can follow. It only reports. It never edits code, never accepts or rejects rewrites, and never decides to escalate.
 
-> Status: the full System 2 cycle runs offline. Implemented and tested: model layer, perturbation space wired to the ASPIRE launcher, selector and test planner, rule diagnoser, failure history, sandboxed runner, a mock world that runs System 1's v0 policy (`examples/bowl_on_plate/policy.py`) unchanged, and the `Adversary` entry point. With `model="muse-spark"`, four Muse Spark agents propose each attack from the program's code, Muse Spark diagnoses each failure and writes a plain-language explanation, all with rule fallbacks; tested against a fake API, not yet run live. The cap_harness backend (`rollout/aspire_backend.py`) runs each attack in ASPIRE on LIBERO-Pro through System 1's launcher; it is tested against a fake harness that writes ASPIRE's run-directory format, **not yet run on the GPU**. Mock-world numbers are test fixtures, not results; nothing is measured on the simulator yet. Full-system context: [`docs/architecture.md`](../../../docs/architecture.md). Hard rules, layout and build order are in [`docs/adversary/spec.md`](../../../docs/adversary/spec.md).
+> Status: the full System 2 cycle runs offline and on the cap_harness backend (`docs/results.md`). Implemented and tested: model layer, perturbation space wired to the ASPIRE launcher, selector and test planner, rule diagnoser, failure history, sandboxed runner, a mock world that runs System 1's v0 policy (`examples/bowl_on_plate/policy.py`) unchanged, and the `Adversary` entry point. With `model="muse-spark"`, four Muse Spark agents propose each attack from the program's code, Muse Spark diagnoses each failure and writes a plain-language explanation, all with rule fallbacks; tested against a fake API, not yet run live. The cap_harness backend (`rollout/aspire_backend.py`) runs each attack in ASPIRE on LIBERO-Pro through System 1's launcher; it is tested against a fake harness that writes ASPIRE's run-directory format, **not yet run on the GPU**. Mock-world numbers are test fixtures, not results; nothing is measured on the simulator yet. Full-system context: [`docs/architecture.md`](../../../docs/architecture.md). Hard rules, layout and build order are in [`docs/adversary/spec.md`](../../../docs/adversary/spec.md).
 
 ## One adversarial cycle
 
@@ -42,7 +42,7 @@ When System 1 writes a new version, the counts start fresh, because the old prog
 
 ### 2. Category selector (`planner/selector`)
 
-Decides *where* to attack: pose, physics, clutter, camera and so on. Each category keeps an estimate of how often it breaks the current program, a Beta distribution built from its failures and successes. Each cycle it draws a sample from every category's estimate and attacks the highest (Thompson sampling).
+Decides *where* to attack: pose, physics, size, actuation, camera or lighting. Each category keeps an estimate of how often it breaks the current program, a Beta distribution built from its failures and successes. Each cycle it draws a sample from every category's estimate and attacks the highest (Thompson sampling).
 
 - A category that keeps causing failures gets attacked more often.
 - A category that has barely been tried still gets chances, because its estimate is wide.
@@ -139,7 +139,7 @@ On the mock world it checks the pipeline only; reported numbers come from the ca
 |---|---|---|
 | `model` | `"mock"` | `"muse-spark"`, `"provider:model"` (OpenAI-compatible) or `"mock"` |
 | `backend` | `"mock"` | `"cap_harness"` (ASPIRE on LIBERO-Pro) or `"mock"` |
-| `categories` | pose, physics, clutter, camera | selector arms (also: lighting, occlusion, actuation) |
+| `categories` | pose, physics, size, actuation, camera, lighting | selector arms |
 | `rho` | 0.8 | severity bound ρ |
 | `eta` | 0.2 | uniform exploration rate η (`1.0` = uniform baseline) |
 | `n_agents` | 4 | parallel proposer agents |

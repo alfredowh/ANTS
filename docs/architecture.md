@@ -28,26 +28,9 @@ when work starts, imported from the root `CLAUDE.md`.
 
 ## The loop
 
-```
- human demo V ──▶ SYSTEM 1 (synthesizer)                       SYSTEM 2 (adversary)
-                  SAM 3.1 perception → DemoSpec z                failure history H
-                  Muse Wonder writes run(robot)  ◀── context ──  Thompson selector over categories
-                  static checks + nominal replay   constraints   M Muse Spark proposers (Contemplating)
-                  experience memory + skill library    + skills  severity clamp s(p) ≤ ρ
-                              │ Policy π                         sandboxed rollout in LIBERO
-                              ▼                                  diagnoser (Muse Spark Thinking + rules)
-                  ┌─────────── ORCHESTRATOR ───────────┐                 │ AttackReport
-                  │ send π to System 2 ────────────────┼────────────────▶│
-                  │ on failure: Feedback → System 1    │◀────────────────┘
-                  │ regression gate on Pacc ∪ Fn       │
-                  │ skill admission after gate pass    │
-                  │ stop: max_c Q0.95(θc) < τ          │──▶ certified skill
-                  │ escalate: W cycles stalled         │──▶ request one targeted demo V′
-                  └────────────────────────────────────┘
-                              │ traces of every cycle (read-only)
-                              ▼
-                  observability: failure explainer, replay timeline, version history, robustness board
-```
+![ANTS architecture](images/architecture.svg)
+
+Solid boxes are built and running; dashed boxes are future work. Observability (ANTS Studio) reads the traces of every cycle and never influences a decision.
 
 Per cycle (paper Algorithm 1): select category → propose and clamp perturbation → roll out the
 current best program → update that category's Beta posterior → on failure diagnose, add the case to
@@ -89,15 +72,12 @@ Agreed with System 1 on 2026-11-01, arriving as follow-up contracts PRs (both ap
    extraction quality scores.
 3. **Program generation.** Muse Wonder writes a plain `cap_harness` script: API functions in scope,
    a top-level `result`. The backend also puts `params` (object-relative values from the DemoSpec)
-   and `phase()` in scope. Context: task, z, API signatures, all active constraints, retrieved
-   guidance skills.
+   and `phase()` in scope. Context: task, z, API signatures, scene text, and for repairs the
+   active constraints and contact evidence.
 4. **Static checks.** Pre-flight AST check: syntax, call whitelist, no imports except `math`.
 5. **Nominal replay.** A develop-and-repair loop on the nominal seed, up to K attempts. Only a
    policy that passes is `attackable`; otherwise the run ends as `no_working_policy` and escalates.
-6. **Entry point.** `synthesize(demo, constraints, skills, memory, *, task, incumbent=None) ->
-   Policy`; a spent token budget raises `BudgetExceeded`, which the orchestrator maps to a budget
-   stop. A deterministic mock `synthesize()` maps failure signatures to code patches for offline
-   tests.
+6. **Entry point.** The loop calls System 1 only through `Synthesizer.rewrite()` (`orchestrator/synthesis.py`); `ants.orchestrator.demo_vs_nodemo` generates from a DemoSpec, and `ants.studio.policy_dev` runs the whole path from a video. A fixture maps failure signatures to code patches for offline tests.
 
 ### System 2: adversary (Daniel)
 
@@ -128,14 +108,15 @@ first diverged from nominal.
   from Beta(1, n + 1)). `min_tests` (cheap, for demo runs under the token cap): every category
   tested at least k times with no failure. The mode is logged.
 - **Escalation.** If the same failure signature stalls for W = 3 cycles (configurable, logged),
-  ask a human for one demonstration targeted at that failure. Also when a draft never becomes
-  attackable.
-- **Skill admission.** After a gate pass, promote the skills the accepted policy used (or proposed)
-  into the library and increment their help counts.
+  ask a person; a typed answer becomes a constraint. A demonstration targeted at that failure is
+  future work. A draft that never becomes attackable ends as `no_working_policy`.
+- **Skill admission (not built).** Cut for the hackathon (D18).
 - **Split enforcement.** Only acceptance-set failures produce `Feedback`; held-out cases never reach
   System 1. A test asserts that a held-out case cannot produce `Feedback`.
 
-### Skill library (System 1 retrieves and proposes, orchestrator admits)
+### Skill library (not built, future work, D18)
+
+The plan, kept as a design note:
 
 Two kinds, one library:
 
@@ -173,8 +154,9 @@ rewrite and gate verdict per attack. Only logged data is shown; video appears on
 
 | Stage | Role | Model (mode) |
 |---|---|---|
-| Perception | hand and object masks | SAM 3.1 |
-| Synthesis | write and rewrite programs, propose skills | Muse Wonder (via Muse Code) |
+| Demo tracking | hand and object paths | hurobo hand tracking, ArUco markers (no model from this list) |
+| Robot perception | object masks in rollouts | SAM 3 (`sam-3.1` optional) |
+| Synthesis | write and rewrite programs | Muse Wonder (Meta API; rewrites by API or Muse Code) |
 | Proposal | M parallel attack agents | Muse Spark (Contemplating) |
 | Diagnosis | mode, cause, constraint | Muse Spark (Thinking) |
 | Explanation | plain-language failure report | Muse Spark (Instant) |
@@ -187,6 +169,8 @@ API selects Muse Spark's Instant / Thinking / Contemplating modes is still to co
 `uv run python -m ants.adversary.models.probe`; until then PARALLEL is four independent calls.
 
 ## Evaluation protocol (paper, Section IX)
+
+The plan from the paper. What actually ran is in [results.md](results.md); the arms without memory and skill library do not exist because those parts are not built.
 
 - Hypotheses: H1a adaptive selection finds more failures per rollout than uniform; H1b adversarial
   feedback raises held-out robustness with weights frozen; H2 synthesis needs fewer demonstrations
@@ -208,12 +192,12 @@ uniform, cost per cycle).
 
 | Piece | State |
 |---|---|
-| contracts | PR #3 with cap_harness signatures (#4) merged in; System 1 follow-up PRs agreed |
-| adversary | `feature/system2`: full cycle offline (`Adversary.attack/replay/discovered_failures/status`) on System 1's launcher mapping, planner interface and rule diagnoser, with history, sandboxed runner, a mock world that runs the PR #5 v0 policy, Muse Spark proposer/diagnoser/explainer, and a cap_harness backend (subprocess, seeded acceptance seeds 51–65) tested against a fake harness; first GPU run next |
-| synthesizer | branch `synthesizer`: Muse client with cache and token budget, prompt builder, develop-and-repair loop, DemoSpec converters, demo vs no-demo experiment with logged runs |
-| orchestrator | `feature/orchestrator`: closed loop (`Loop`), outcome gate (`orchestrator/gate.py`), stall escalation and human gate, ported from System 1's `harden()`; runs offline with a patch fixture standing in for System 1 ([spec](orchestrator/spec.md)); Muse `synthesize()` plugs in next |
-| evalkit, observability | System 1: run logging, report viewer with a System 2 tab, on `synthesizer` |
-| LIBERO integration | runs on System 1's `cap_harness` checkout (RTX A5500), not in CI |
+| Synthesizer | Muse client with cache and token budget, prompt builder, develop-and-repair loop, DemoSpec from hurobo clips |
+| Adversary | full cycle on the cap_harness backend and offline, Muse Spark or mock model |
+| Orchestrator | closed loop, outcome gate, stall escalation, human gate, held-out evaluation |
+| ANTS Studio | console, `/policy-dev`, Adversary view, live view, process flow |
+| Results | logged runs in [results.md](results.md) |
+| Not built | experience memory, skill library, targeted demonstrations, deployment loop, recovery skills, clutter and occlusion attacks |
 
 ## Open decisions
 
@@ -227,8 +211,8 @@ uniform, cost per cycle).
    per 20 attacks; held-out 42% to 100%) and says the offline loop is covered by tests. No such loop
    or run log is in this repo. Per AGENTS.md, do not quote these numbers in repo docs until they are
    reproduced from a logged run here (or the source run is linked).
-3. **Project name.** Paper: Adversarial Neuro-symbolic Task Synthesis. AGENTS.md: Agentic Task
-   Synthesis.
+3. **Project name: decided 2026-11-05.** Agentic Task Synthesis. The paper's title page should
+   follow.
 4. **Gate strictness: decided 2026-11-01.** The paper's rule: no worse on every case and better on
    at least one. AGENTS.md, README and concept updated.
 5. **Escalation window: decided 2026-11-01,** W = 3, configurable and logged. CaP-X stays the

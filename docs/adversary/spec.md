@@ -95,7 +95,7 @@ status: RobustnessStatus = adv.status(policy)  # .robust when max_c Q_0.95(θ_c)
 |---|---|---|
 | `model` | `"mock"` | `"muse-spark"`, `"provider:model"` (any OpenAI-compatible endpoint), or `"mock"` |
 | `backend` | `"mock"` | `"libero"` or `"mock"` |
-| `categories` | pose, physics, clutter, camera | arms of the selector (also available: lighting, occlusion, actuation) |
+| `categories` | pose, physics, size, actuation, camera, lighting | arms of the selector (clutter and occlusion are not built) |
 | `rho` | 0.8 | severity bound |
 | `eta` | 0.2 | uniform exploration rate (`eta=1.0` is the uniform baseline for evaluation) |
 | `n_agents` | 4 | M parallel proposers |
@@ -114,8 +114,7 @@ adversary/
 ├── config.py                AdversaryConfig
 ├── models/
 │   ├── base.py              ReasoningModel protocol, Effort, Message, ModelResponse
-│   ├── muse_spark.py        Meta Model API adapter
-│   ├── openai_compat.py     any OpenAI-compatible endpoint, stdlib only
+│   ├── meta.py              Meta Model API adapter (Muse Spark)
 │   ├── mock.py              deterministic offline model
 │   └── __init__.py          get_model(spec)
 ├── perturbations/
@@ -181,7 +180,7 @@ Build in this order. Each step must pass its tests before the next one starts.
 
 ### ASPIRE backend (`rollout/aspire_backend.py`)
 
-**Built (2026-11-02), not yet run on the GPU.** A `ProgramBackend`: it writes the program to a
+**Built, and run on the GPU (see `docs/results.md`).** A `ProgramBackend`: it writes the program to a
 file and runs `cap-harness run` (nominal) or System 1's `tools/aspire_launch.py` (perturbed) as a
 subprocess with the wall-clock timeout, then reads `outcome.json`, `source/program-result.json`,
 `episode/steps.jsonl` and `media/` into a `RolloutResult`. Seeds: `--init-mode seeded`, attack
@@ -210,7 +209,7 @@ occlusion are not built. The list below is the original plan, kept for the remai
 - `success()`: the LIBERO task predicate plus a no-collision flag.
 - When recording: an mp4, plus keyframes at the start, the grasp, the failure moment and the end.
 
-### Muse Spark adapter (`models/muse_spark.py`)
+### Muse Spark adapter (`models/meta.py`)
 - Confirm the Meta Model API endpoint, auth header, and how the reasoning mode is selected.
 - If there is no native multi-agent mode, emulate PARALLEL with n independent samples.
 - Log tokens per call in `ModelResponse.usage`, so evalkit can report cost per cycle.
@@ -231,7 +230,7 @@ occlusion are not built. The list below is the original plan, kept for the remai
 - Log every decision with its inputs: selector draws, proposals, validated perturbation, diagnosis.
   A judge should be able to replay why each test was chosen.
 - Commit or delete; no dead code. No secrets in the repo: API keys come from environment variables
-  (`META_MODEL_API_KEY`, `META_MODEL_API_BASE`).
+  (`META_API_KEY`).
 
 ## Out of scope for this package
 
