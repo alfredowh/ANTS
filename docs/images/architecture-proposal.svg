@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900" role="img" aria-labelledby="title description">
+  <title id="title">ANTS: show once, test, repair</title>
+  <desc id="description">Proposed architecture overview. ANTS Studio is the interface; Python orchestration controls the policy-development loop. A human demonstration feeds System 1, which extracts the demonstration and generates or repairs a program with Muse Wonder. System 2 uses Muse Spark to select bounded tests and diagnose failures in ASPIRE and LIBERO simulation. Candidate programs replay nominal acceptance cases and discovered failures before a code-enforced regression gate adopts or rejects them. Human guidance supports stalled repairs. Held-out evaluation reports results without feeding them back into synthesis. Experience memory, shared skills and real-robot deployment are planned, not implemented.</desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1L9 5L1 9Z" fill="#526272"/></marker>
+    <symbol id="meta" viewBox="0 0 24 14"><path d="M12 7C9.5 3 7.6 1.5 5.5 1.5 3 1.5 1.5 4 1.5 7S3 12.5 5.3 12.5C7.5 12.5 9.5 11 12 7ZM12 7C14.5 3 16.4 1.5 18.5 1.5 21 1.5 22.5 4 22.5 7S21 12.5 18.7 12.5C16.5 12.5 14.5 11 12 7Z" fill="none" stroke="#0866ff" stroke-width="2.3" stroke-linejoin="round"/></symbol>
+    <symbol id="cache" viewBox="0 0 24 28"><g fill="#455b6d"><ellipse cx="12" cy="5" rx="10" ry="4"/><path d="M2 8C7 12 17 12 22 8V14C22 20 2 20 2 14ZM2 18C7 22 17 22 22 18V23C22 29 2 29 2 23Z"/></g></symbol>
+  </defs>
+  <style>
+    text{font-family:Helvetica,Arial,sans-serif;letter-spacing:0;fill:#162b3b}
+    .heading{font-size:25px;font-weight:700}
+    .title{font-size:21px;font-weight:700}
+    .body{font-size:17px;fill:#455b6d}
+    .small{font-size:15px;fill:#455b6d}
+    .label{font-size:15px;fill:#455b6d;paint-order:stroke;stroke:#fff;stroke-width:6px;stroke-linejoin:round}
+    .eyebrow{font-size:14px;font-weight:700;fill:#455b6d}
+    .edge{fill:none;stroke:#526272;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;marker-end:url(#arrow)}
+    .planned{stroke-dasharray:6 5}
+    .box{fill:#fff;stroke:#8495a4;stroke-width:1.5}
+  </style>
+  <rect width="1400" height="900" fill="#fff"/>
+  <text x="38" y="42" class="heading">ANTS</text>
+  <text x="125" y="41" class="body">One demonstration. Adversarial tests. Auditable repairs.</text>
+
+  <rect x="22" y="67" width="1356" height="625" rx="8" fill="#fff" stroke="#a8b7c3" stroke-width="1.5"/>
+  <path d="M30 67H1370Q1378 67 1378 75V126H22V75Q22 67 30 67Z" fill="#f1f5f8"/>
+  <path d="M22 126H1378" stroke="#d5dee5"/>
+  <text x="42" y="103" class="title">Policy development</text>
+  <text x="1358" y="102" text-anchor="end" class="body">ANTS Studio: interface &amp; monitoring  |  Orchestrator: code-enforced decisions</text>
+
+  <rect x="42" y="207" width="160" height="88" rx="6" fill="#fbeef5" stroke="#bd7d9d" stroke-width="1.5"/>
+  <text x="122" y="243" text-anchor="middle" class="title">Human demo</text>
+  <text x="122" y="269" text-anchor="middle" class="small">One marker video</text>
+
+  <rect x="250" y="171" width="310" height="160" rx="6" fill="#edf5ff" stroke="#387bc1" stroke-width="1.7"/>
+  <g><title>System 1 API reply cache; Muse Code CLI caching is not implied</title><use href="#cache" x="522" y="184" width="22" height="26"/></g>
+  <text x="272" y="201" class="eyebrow">SYSTEM 1</text>
+  <text x="272" y="231" class="title">Synthesizer</text>
+  <text x="272" y="260" class="body">Extract · Generate · Repair</text>
+  <use href="#meta" x="272" y="286" width="24" height="14"/>
+  <text x="305" y="299" class="small">Muse Wonder / Muse Code</text>
+
+  <rect x="640" y="198" width="235" height="107" rx="6" class="box"/>
+  <text x="757" y="229" text-anchor="middle" class="title">Simulation</text>
+  <text x="757" y="256" text-anchor="middle" class="body">ASPIRE / LIBERO</text>
+  <use href="#meta" x="680" y="270" width="24" height="14"/>
+  <text x="713" y="283" class="small">SAM 3 · PyRoki</text>
+
+  <rect x="970" y="171" width="365" height="160" rx="6" fill="#fff5e8" stroke="#b97a28" stroke-width="1.7"/>
+  <g><title>System 2 Meta API reply cache</title><use href="#cache" x="1297" y="184" width="22" height="26"/></g>
+  <text x="992" y="201" class="eyebrow">SYSTEM 2</text>
+  <text x="992" y="231" class="title">Adversary</text>
+  <text x="992" y="260" class="body">Select bounded tests · Diagnose</text>
+  <use href="#meta" x="992" y="286" width="24" height="14"/>
+  <text x="1025" y="299" class="small">Muse Spark · Outcome history</text>
+
+  <path d="M202 251H250" class="edge"/>
+  <path d="M560 228H640" class="edge"/>
+  <text x="600" y="215" text-anchor="middle" class="label">program</text>
+  <path d="M970 225H875" class="edge"/>
+  <text x="922" y="211" text-anchor="middle" class="label">tests</text>
+  <path d="M875 279H970" class="edge"/>
+  <text x="922" y="266" text-anchor="middle" class="label">outcomes</text>
+
+  <path d="M1070 171V150H405V171" class="edge"/>
+  <text x="735" y="155" text-anchor="middle" class="label">failure constraint</text>
+
+  <rect x="640" y="423" width="235" height="121" rx="6" fill="#edf8f1" stroke="#39835c" stroke-width="1.7"/>
+  <text x="757" y="456" text-anchor="middle" class="title">Regression gate</text>
+  <text x="757" y="485" text-anchor="middle" class="small">Acceptance cases + failures</text>
+  <text x="757" y="512" text-anchor="middle" class="small">No worse · Better on one</text>
+  <path d="M560 295H598V460H640" class="edge"/>
+  <text x="587" y="370" text-anchor="end" class="label">candidate</text>
+  <path d="M710 423V305" class="edge"/>
+  <text x="700" y="360" text-anchor="end" class="label">replay</text>
+  <path d="M803 305V423" class="edge"/>
+  <text x="815" y="385" class="label">results</text>
+
+  <rect x="970" y="446" width="365" height="77" rx="6" class="box"/>
+  <text x="1152" y="478" text-anchor="middle" class="title">Current best policy</text>
+  <text x="1152" y="503" text-anchor="middle" class="small">Save version · Continue testing</text>
+  <path d="M875 484H970" class="edge"/>
+  <text x="922" y="472" text-anchor="middle" class="label">accept</text>
+  <path d="M1152 446V331" class="edge"/>
+  <text x="1164" y="388" class="label">next tests</text>
+  <text x="757" y="568" text-anchor="middle" class="small">Rejected: retain the current best</text>
+
+  <rect x="250" y="446" width="310" height="77" rx="6" fill="#fbeef5" stroke="#bd7d9d" stroke-width="1.5"/>
+  <text x="405" y="478" text-anchor="middle" class="title">Human guidance</text>
+  <text x="405" y="503" text-anchor="middle" class="small">When repairs stall</text>
+  <path d="M640 495H560" class="edge"/>
+  <text x="600" y="484" text-anchor="middle" class="label">stalled</text>
+  <path d="M405 446V331" class="edge"/>
+  <text x="417" y="388" class="label">guidance</text>
+
+  <rect x="970" y="593" width="365" height="76" rx="6" class="box"/>
+  <text x="1152" y="625" text-anchor="middle" class="title">Held-out evaluation</text>
+  <text x="1152" y="651" text-anchor="middle" class="small">Report only · No tuning feedback</text>
+  <path d="M1152 523V593" class="edge"/>
+  <text x="1164" y="564" class="label">evaluate separately</text>
+  <text x="250" y="650" class="small">Stop: robustness criterion, budget, cycle limit or human escalation.</text>
+
+  <rect x="250" y="755" width="310" height="82" rx="6" fill="#fff" stroke="#8495a4" stroke-width="1.5" class="planned"/>
+  <text x="405" y="786" text-anchor="middle" class="title">Memory &amp; shared skills</text>
+  <text x="405" y="813" text-anchor="middle" class="small">Planned development extension</text>
+  <path d="M250 796H225V314H250" class="edge planned"/>
+
+  <rect x="970" y="755" width="365" height="82" rx="6" fill="#fff" stroke="#8495a4" stroke-width="1.5" class="planned"/>
+  <text x="1152" y="786" text-anchor="middle" class="title">Real-robot deployment</text>
+  <text x="1152" y="813" text-anchor="middle" class="small">Concept: policy / tree + recovery</text>
+  <path d="M1152 669V755" class="edge planned"/>
+  <text x="1164" y="720" class="label">policy handoff</text>
+
+  <path d="M42 877H76" stroke="#526272" stroke-width="1.8"/>
+  <text x="87" y="882" class="small">Implemented</text>
+  <path d="M230 877H264" stroke="#526272" stroke-width="1.8" class="planned"/>
+  <text x="275" y="882" class="small">Planned</text>
+  <use href="#cache" x="380" y="862" width="18" height="22"/>
+  <text x="410" y="882" class="small">API reply cache</text>
+  <use href="#meta" x="565" y="867" width="24" height="14"/>
+  <text x="600" y="882" class="small">Meta model</text>
+  <text x="1358" y="882" text-anchor="end" class="small">Weights frozen · Improvement through context</text>
+</svg>
