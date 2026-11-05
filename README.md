@@ -25,9 +25,9 @@ Robots learn one task at a time from lots of data, and nobody can say when they 
 
 ## Show once: from one human video to the robot
 
-| One human demonstration (phone, 15 s) | The program Muse Wonder wrote from it (v0, LIBERO-Pro) |
+| One human demonstration, with what extraction read (clip `233859`) | The program Muse Wonder wrote from it (v0, LIBERO-Pro) |
 |---|---|
-| ![a person puts a bowl on a plate](docs/images/demo_human.gif) | ![the Franka arm puts the bowl on the plate in simulation](docs/images/demo_robot.gif) |
+| ![a person puts a bowl on a plate, with the hand skeleton, marker detections, hand path and gripper opening drawn over the video](docs/images/demo_overlay.gif) | ![the Franka arm puts the bowl on the plate in simulation](docs/images/demo_robot.gif) |
 
 - **Tracking:** markers on the bowl, the plate and a ChArUco board give the hand and object paths in metres.
 - **Summary (DemoSpec):** grasp the rim, approach from above, carry height, release over the plate, all as fractions of the object sizes, so they carry over to the simulated objects.
