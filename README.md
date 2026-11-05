@@ -1,6 +1,6 @@
 <p align="center"><img src="docs/images/banner.svg" alt="ants" width="100%"></p>
 
-# ANTS: Agentic Task Synthesis
+# ANTS: Adversarial Agentic Task Synthesis
 
 **Show a robot a task once. An adversary breaks it in simulation. Every failure becomes a readable fix, kept only if nominal acceptance cases and discovered failures do not regress.** No model weights are trained.
 
@@ -15,6 +15,8 @@ Robots learn one task at a time from lots of data, and nobody can say when they 
 [![ANTS architecture: System 1 Synthesizer with planned Author prompt, System 2 Adversary, code-enforced regression checks and separate held-out reporting; dashed stages are planned](docs/images/architecture-proposal.svg)](docs/architecture.md)
 
 *Solid: implemented. Dashed: planned. Cache symbols mark API reply caches; Meta symbols mark Meta models. [Module interfaces and deployment concept](docs/architecture.md#module-interfaces).*
+
+***ANTS Studio UI demo: coming soon!***
 
 **Author prompt (planned):** Muse Spark turns the task, human-video frames and DemoSpec JSON into a reusable task prompt template, guided by a worked bowl-on-plate example. Measured values fill the template before Muse Wonder writes the program. [Detailed flow and current status](docs/concept.md#author-prompt).
 
