@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900" role="img" aria-labelledby="title description">
   <title id="title">ANTS: show once, test, repair</title>
-  <desc id="description">Proposed architecture overview. ANTS Studio is the interface; Python orchestration controls the policy-development loop. A human demonstration feeds System 1, which extracts the demonstration and generates or repairs a program with Muse Wonder. System 2 uses Muse Spark to select bounded tests and diagnose failures in ASPIRE and LIBERO simulation. Candidate programs replay nominal acceptance cases and discovered failures before a code-enforced regression gate adopts or rejects them. Human guidance supports stalled repairs. Held-out evaluation reports results without feeding them back into synthesis. Experience memory, shared skills and real-robot deployment are planned, not implemented.</desc>
+  <desc id="description">ANTS Studio is the interface; Python orchestration controls the policy-development loop. System 1 Synthesizer extracts a human demonstration into DemoSpec. Its planned Author prompt stage uses Muse Spark to prepare a task template from the video, JSON and a worked example; Muse Wonder generates or repairs the robot program. System 2 Adversary proposes bounded tests and diagnoses simulation failures. A code-enforced regression gate replays acceptance cases and discovered failures. Held-out evaluation reports results without feeding synthesis. Dashed stages, including reusable prompt integration, memory, shared skills and deployment, are planned.</desc>
   <defs>
     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M1 1L9 5L1 9Z" fill="#526272"/></marker>
     <symbol id="meta" viewBox="0 0 24 14"><path d="M12 7C9.5 3 7.6 1.5 5.5 1.5 3 1.5 1.5 4 1.5 7S3 12.5 5.3 12.5C7.5 12.5 9.5 11 12 7ZM12 7C14.5 3 16.4 1.5 18.5 1.5 21 1.5 22.5 4 22.5 7S21 12.5 18.7 12.5C16.5 12.5 14.5 11 12 7Z" fill="none" stroke="#0866ff" stroke-width="2.3" stroke-linejoin="round"/></symbol>
@@ -35,10 +35,13 @@
   <rect x="250" y="171" width="310" height="160" rx="6" fill="#edf5ff" stroke="#387bc1" stroke-width="1.7"/>
   <g><title>System 1 API reply cache; Muse Code CLI caching is not implied</title><use href="#cache" x="522" y="184" width="22" height="26"/></g>
   <text x="272" y="201" class="eyebrow">SYSTEM 1</text>
-  <text x="272" y="231" class="title">Synthesizer</text>
-  <text x="272" y="260" class="body">Extract · Generate · Repair</text>
-  <use href="#meta" x="272" y="286" width="24" height="14"/>
-  <text x="305" y="299" class="small">Muse Wonder / Muse Code</text>
+  <text x="272" y="226" class="title">Synthesizer</text>
+  <text x="272" y="249" class="small">Extract demo → DemoSpec</text>
+  <rect x="264" y="259" width="282" height="30" rx="6" fill="#edf5ff" stroke="#387bc1" stroke-width="1.5" stroke-dasharray="6 5"/>
+  <use href="#meta" x="274" y="267" width="24" height="14"/>
+  <text x="305" y="279" class="small">Author prompt · Muse Spark</text>
+  <use href="#meta" x="272" y="304" width="24" height="14"/>
+  <text x="305" y="317" class="small">Wonder: generate / repair</text>
 
   <rect x="640" y="198" width="235" height="107" rx="6" class="box"/>
   <text x="757" y="229" text-anchor="middle" class="title">Simulation</text>

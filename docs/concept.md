@@ -8,13 +8,46 @@ One robot, one task, one policy. Every new task, scenario or robot embodiment ne
 
 ## Components
 
-- **System 1, synthesizer:** a frozen generator turns one video demonstration (hand and object tracks from fiducial markers, gripper aperture) into a policy.
-- **System 2, adversary:** a test planner proposes perturbations within a bounded severity, a simulator runs them, and a diagnoser explains each failure.
+- **System 1, Synthesizer:** a frozen generator turns one video demonstration (hand and object tracks from fiducial markers, gripper aperture) into a policy.
+- **System 2, Adversary:** a test planner proposes perturbations within a bounded severity, a simulator runs them, and a diagnoser explains each failure.
 - **Closed loop:** every failure becomes a constraint added to the generator's context, and the generator proposes a new candidate policy.
 - **Adaptive testing:** the test budget goes to the failure categories most likely to break the policy, not to uniform sampling.
 - **Gate:** a candidate is accepted only if it is no worse than the current best on nominal acceptance cases and discovered failures, and better on at least one. This is a guarantee on retained cases, not unseen scenarios or every successful attack previously sampled.
 - **Memory (not built):** past policies would be stored and retrieved by similarity, weighted by how often they helped, with unused ones fading. This is how skills would be shared.
 - **Stop or escalate:** stop when every category is confidently robust. If the generator stalls, ask a person. Today that is a typed answer that becomes a constraint; one targeted demonstration is future work.
+
+## Author prompt
+
+**Part of System 1, Synthesizer.** Instead of hand-writing a demonstration prompt for every new
+task, Muse Spark would author a reusable task template from the task instruction, sampled human-video
+frames and the extracted DemoSpec JSON. A worked bowl-on-plate example supplies matching frames,
+JSON and the desired prompt to demonstrate the format, not to supply numbers for the new task.
+
+![Author prompt in System 1 Synthesizer: task video frames, DemoSpec, a worked example and fixed robot context feed Muse Spark; a template is validated and filled before Muse Wonder generates the robot program. Dashed blue stages are planned.](images/prompt-authoring-detail.svg)
+
+1. **Author once per new task.** Muse Spark receives demonstration evidence, the worked example,
+	and fixed authoring instructions with robot capabilities and API context. It writes task-specific
+	descriptions plus placeholders bound to measured JSON fields.
+2. **Validate and save.** Check that bindings resolve, units agree and numerical claims have
+	measured sources or explicit derivations. Missing required evidence stops preparation rather
+	than being guessed. Save the validated template for reuse.
+3. **Fill deterministically.** Insert each demonstration's measured values without another model
+	call. The example's object names and measurements must not leak into unrelated tasks.
+4. **Generate the program.** Muse Wonder reads the filled demonstration prompt alongside the fixed
+	robot API and safety rules. Nominal validation follows; System 2, Adversary then tests the runnable
+	policy through the existing orchestrator and regression gate.
+
+The role split is a design choice, not a measured model comparison: Muse Spark interprets and
+organizes demonstration evidence; Muse Wonder writes and repairs executable robot programs. No
+model weights are updated. The prompt author does not rewrite program safety rules or invent
+measurements, and it cannot describe a new action reliably if DemoSpec cannot represent its evidence.
+The example must not force every task into a grasp/carry/release schema.
+
+**Current status:** the [authoring prototype](../src/ants/synthesizer/prompt_generator.py) produces
+a filled demonstration paragraph, not a reusable template. Reusable field bindings, validation and
+integration into the normal policy-generation path are planned. Reproducing the embedded bowl
+example does not establish generalization to a new task. The [saved implementation log](orchestrator/plan-muse-code-orchestrator.md#implementation-log)
+records that limitation; this flow is not the source of the reported policy results.
 
 ## Positioning
 

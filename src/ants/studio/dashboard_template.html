@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ANTS Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#000000; --panel:#0A0A0A; --raise:#111111; --line:#262626; --line2:#1F1F1F;
+  --fg:#EDEDED; --hi:#FFFFFF; --soft:#B5B5B5; --muted:#8A8A8A; --dim:#6E6E6E; --faint:#3D3D3D;
+  --accent:#F59342; --fail:#FF4D4D; --pass:#3D3D3D; --meta:#7AA7FF; --built:#4FD67A; --planned:#6E6E6E;
+  --sans:'IBM Plex Sans',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'IBM Plex Mono','SF Mono',Menlo,Consolas,monospace;
+  color-scheme: dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg)}
+body{font:13px/1.45 var(--sans)}
+.h{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500}
+header{display:flex;align-items:center;gap:24px;min-height:52px;border-bottom:1px solid var(--line);padding:0 20px}
+header .title{font-weight:600}
+nav{display:flex;align-self:stretch;margin-left:12px}
+.tab{display:flex;align-items:center;gap:8px;padding:0 14px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;min-height:52px;background:none;border-top:none;border-left:none;border-right:none;font:inherit}
+.tab.on{color:var(--hi);border-bottom-color:var(--hi);font-weight:500}
+.panel{display:none;padding:20px;max-width:1200px;margin:0 auto}
+.panel.on{display:block}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr));gap:1px;background:var(--line);border:1px solid var(--line);margin-bottom:20px}
+.tile{background:var(--panel);padding:14px 16px}
+.tile .l{font-size:12px;color:var(--muted)} .tile .v{font-family:var(--mono);font-size:22px}
+.arch-grid{display:grid;grid-auto-rows:minmax(70px,auto);gap:10px;margin-bottom:16px}
+.node{border:1px solid var(--line);background:var(--panel);padding:10px 12px;border-left:3px solid var(--faint)}
+.node.s1{border-left-color:var(--meta)} .node.s2{border-left-color:var(--accent)}
+.node.orch{border-left-color:var(--fail)} .node.io{border-left-color:var(--faint)}
+.node .label{font-weight:500}
+.node .status{font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+.node .status.built{color:var(--built)} .node .status.partial{color:var(--accent)} .node .status.planned{color:var(--planned)}
+.node .desc{color:var(--soft);font-size:12px;margin-top:6px}
+.legend{display:flex;gap:20px;font-size:12px;color:var(--muted);margin-bottom:16px}
+.legend span{display:flex;align-items:center;gap:6px}
+.sw{width:10px;height:10px;display:inline-block}
+.code{background:var(--panel);border:1px solid var(--line);padding:8px 0;font:12px/1.85 var(--mono);overflow-x:auto;max-height:420px;overflow-y:auto;white-space:pre}
+.code .add{color:var(--built)} .code .del{color:var(--fail)} .code .hdr{color:var(--meta)}
+table{width:100%;border-collapse:collapse;margin-bottom:16px}
+th{text-align:left;font-weight:500;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim);padding:8px 14px 8px 0;border-bottom:1px solid var(--line)}
+td{padding:7px 14px 7px 0;border-bottom:1px solid #1A1A1A}
+.muted{color:var(--muted)}
+.why{background:var(--panel);border:1px solid var(--line);padding:12px;font-family:var(--mono);font-size:12px;white-space:pre-wrap;margin-bottom:16px}
+iframe{width:100%;height:560px;border:1px solid var(--line);background:var(--panel)}
+.btn{display:inline-block;background:var(--raise);border:1px solid var(--line);color:var(--fg);padding:6px 12px;cursor:pointer;font:inherit;text-decoration:none}
+pre.cmd{background:var(--panel);border:1px solid var(--line);padding:10px;font:12px var(--mono);overflow-x:auto}
+</style>
+</head>
+<body>
+<header>
+  <span class="title">ANTS Dashboard</span>
+  <nav>
+    <button class="tab on" data-tab="architecture">Architecture</button>
+    <button class="tab" data-tab="perception">Perception</button>
+    <button class="tab" data-tab="agentic">Agentic</button>
+  </nav>
+</header>
+
+<section class="panel on" id="panel-architecture">
+  <div class="legend">
+    <span><i class="sw" style="background:var(--meta)"></i> System 1</span>
+    <span><i class="sw" style="background:var(--accent)"></i> System 2</span>
+    <span><i class="sw" style="background:var(--fail)"></i> Orchestrator</span>
+    <span><i class="sw" style="background:var(--faint)"></i> I/O</span>
+  </div>
+  <div class="arch-grid" id="arch-grid"></div>
+  <p class="muted">Status reflects what is committed, not a live pointer into the current run -- nothing generates this manifest from a run yet (see docs/orchestrator/architecture_manifest.json).</p>
+</section>
+
+<section class="panel" id="panel-perception">
+  <h3>ASPIRE's Viser + MCP page</h3>
+  <p class="muted">This tab does not re-render 3D: it points at ASPIRE's own live monitoring page (SAM3 masks, cuRobo-planned trajectories, collision spheres), started from ASPIRE's own stack.</p>
+  <p>Start it:</p>
+  <pre class="cmd" id="perception-cmd"></pre>
+  <p>Then open <a class="btn" id="perception-link" target="_blank" rel="noopener">Open Viser page</a> or view it inline below once it is running:</p>
+  <iframe id="perception-frame" src=""></iframe>
+</section>
+
+<section class="panel" id="panel-agentic">
+  <div class="tiles" id="agentic-tiles"></div>
+  <h3>WHY</h3>
+  <div class="why" id="agentic-why"></div>
+  <h3>Muse Code task trace</h3>
+  <table id="agentic-tasks"><thead><tr><th>Task kind</th><th>Status</th></tr></thead><tbody></tbody></table>
+  <h3>Incumbent &rarr; candidate</h3>
+  <div class="code" id="agentic-diff"></div>
+</section>
+
+<script>
+const DATA = /*__DATA__*/null;
+
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(b => b.classList.remove("on"));
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("on"));
+    btn.classList.add("on");
+    document.getElementById("panel-" + btn.dataset.tab).classList.add("on");
+  });
+});
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+}
+
+function renderArchitecture(arch) {
+  const grid = document.getElementById("arch-grid");
+  const maxCol = Math.max(...arch.nodes.map(n => n.c || 1));
+  const maxRow = Math.max(...arch.nodes.map(n => n.r || 1));
+  grid.style.gridTemplateColumns = `repeat(${maxCol}, 1fr)`;
+  grid.style.gridTemplateRows = `repeat(${maxRow}, auto)`;
+  for (const n of arch.nodes) {
+    const div = document.createElement("div");
+    div.className = `node ${n.sys || "io"}`;
+    div.style.gridColumn = n.c || 1;
+    div.style.gridRow = n.r || 1;
+    div.innerHTML = `<div class="label">${esc(n.label)}</div>
+      <div class="status ${esc(n.status)}">${esc(n.status)}</div>
+      ${n.desc ? `<div class="desc">${esc(n.desc)}</div>` : ""}`;
+    grid.appendChild(div);
+  }
+}
+
+function renderPerception(p) {
+  document.getElementById("perception-cmd").textContent = p.start_cmd;
+  const link = document.getElementById("perception-link");
+  link.href = p.viser_url;
+  link.textContent = `Open Viser page (${p.viser_url})`;
+  document.getElementById("perception-frame").src = p.viser_url;
+}
+
+function renderAgentic(a) {
+  const tiles = document.getElementById("agentic-tiles");
+  const u = a.usage;
+  const rows = [
+    ["Input tokens", u.input_tokens], ["Output tokens", u.output_tokens],
+    ["Reasoning tokens", u.reasoning_tokens], ["Cached tokens", u.cached_tokens],
+    ["Spent / budget", `${u.spent_total} / ${u.budget}`],
+  ];
+  tiles.innerHTML = rows.map(([l, v]) => `<div class="tile"><div class="l">${l}</div><div class="v">${v}</div></div>`).join("");
+  document.getElementById("agentic-why").textContent = a.why || "(no WHY note found)";
+  const tbody = document.querySelector("#agentic-tasks tbody");
+  tbody.innerHTML = a.tasks.map(t => `<tr><td>${esc(t.kind)}</td><td class="muted">${esc(t.status)}</td></tr>`).join("")
+    || `<tr><td class="muted" colspan="2">no task events in trace</td></tr>`;
+  const diffEl = document.getElementById("agentic-diff");
+  if (!a.diff) { diffEl.textContent = "(no incumbent on disk to diff against)"; }
+  else {
+    diffEl.innerHTML = a.diff.split("\n").map(line => {
+      const cls = line.startsWith("+") ? "add" : line.startsWith("-") ? "del" : line.startsWith("@") ? "hdr" : "";
+      return `<div class="${cls}">${esc(line)}</div>`;
+    }).join("");
+  }
+}
+
+renderArchitecture(DATA.architecture);
+renderPerception(DATA.perception);
+renderAgentic(DATA.agentic);
+</script>
+</body>
+</html>
