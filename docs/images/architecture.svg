@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600" font-family="Helvetica,Arial,sans-serif" role="img" aria-label="ANTS architecture: a human video goes to the Synthesizer, which writes a program. The orchestrator checks it and a person continues. The Adversary attacks it in LIBERO and diagnoses failures. Constraints return to the Synthesizer, and a regression gate keeps only rewrites that do no worse. Memory, targeted demonstrations and deployment are future work.">
+<defs><marker id="a" viewBox="0 0 8 8" refX="7" refY="4" markerUnits="userSpaceOnUse" markerWidth="8" markerHeight="8" orient="auto"><path d="M0 0L8 4L0 8z" fill="#475569"/></marker></defs>
+<style>.n{fill:#fff;stroke:#1e293b;stroke-width:1.4}.f{fill:#fff;stroke:#64748b;stroke-width:1.4;stroke-dasharray:6 5}.h{fill:#fbe9f6;stroke:#a3267f;stroke-width:1.4}.t{font-size:15px;font-weight:700;fill:#0f172a}.s{font-size:12px;fill:#475569}.e{fill:none;stroke:#475569;stroke-width:1.5;marker-end:url(#a)}.d{stroke-dasharray:6 5}.l{font-size:12px;fill:#475569}</style>
+<rect width="1200" height="600" fill="#fff"/>
+<rect x="170" y="20" width="1020" height="440" fill="none" stroke="#94a3b8" stroke-dasharray="2 4"/>
+<text x="180" y="14" font-size="12" font-weight="700" fill="#475569">ORCHESTRATOR: runs every step in code; models write and explain, they do not decide</text>
+<rect x="186" y="44" width="384" height="202" fill="#e8f1fd" stroke="#1464d2" stroke-dasharray="6 4"/><text x="196" y="64" font-size="13" font-weight="700" fill="#1464d2">SYNTHESIZER (System 1)</text>
+<rect x="830" y="44" width="346" height="294" fill="#fbf0e0" stroke="#b65f00" stroke-dasharray="6 4"/><text x="840" y="64" font-size="13" font-weight="700" fill="#b65f00">ADVERSARY (System 2)</text>
+<rect x="14" y="76" width="134" height="64" class="h"/><text x="81" y="103" text-anchor="middle" class="t">Human demo</text><text x="81" y="122" text-anchor="middle" class="s">one phone video</text>
+<rect x="200" y="76" width="166" height="64" class="n"/><text x="283" y="103" text-anchor="middle" class="t">Demo extraction</text><text x="283" y="122" text-anchor="middle" class="s">hurobo: hand + ArUco</text>
+<rect x="390" y="76" width="166" height="64" class="n"/><text x="473" y="103" text-anchor="middle" class="t">Abstraction z</text><text x="473" y="122" text-anchor="middle" class="s">DemoSpec, object-relative</text>
+<rect x="390" y="166" width="166" height="64" class="n"/><text x="473" y="189" text-anchor="middle" class="t">Muse Wonder</text><text x="473" y="208" text-anchor="middle" class="s">writes program π,</text><text x="473" y="223" text-anchor="middle" class="s">rewrites from constraints</text>
+<rect x="200" y="166" width="166" height="64" class="f"/><text x="283" y="192" text-anchor="middle" class="t">Experience memory</text><text x="283" y="212" text-anchor="middle" class="s">future work</text>
+
+<rect x="610" y="158" width="170" height="80" class="n"/><text x="695" y="181" text-anchor="middle" class="t">LIBERO rollout</text><text x="695" y="199" text-anchor="middle" class="s">nominal, then under attack</text><text x="695" y="214" text-anchor="middle" class="s">robot sees with SAM 3</text><text x="695" y="229" text-anchor="middle" class="s">plans with PyRoki</text>
+<rect x="610" y="76" width="170" height="64" class="h"/><text x="695" y="103" text-anchor="middle" class="t">Human check</text><text x="695" y="122" text-anchor="middle" class="s">continue or stop</text>
+<rect x="844" y="76" width="150" height="64" class="n"/><text x="919" y="103" text-anchor="middle" class="t">Failure history H</text><text x="919" y="122" text-anchor="middle" class="s">per-category counts</text>
+<rect x="1012" y="76" width="150" height="64" class="n"/><text x="1087" y="103" text-anchor="middle" class="t">Selector</text><text x="1087" y="122" text-anchor="middle" class="s">Thompson sampling</text>
+<rect x="1012" y="166" width="150" height="64" class="n"/><text x="1087" y="189" text-anchor="middle" class="t">Muse Spark ×4</text><text x="1087" y="208" text-anchor="middle" class="s">proposes attacks</text><text x="1087" y="223" text-anchor="middle" class="s">capped in code, s ≤ ρ</text>
+
+<rect x="844" y="258" width="150" height="64" class="n"/><text x="919" y="281" text-anchor="middle" class="t">Muse Spark</text><text x="919" y="300" text-anchor="middle" class="s">diagnoses failure</text><text x="919" y="315" text-anchor="middle" class="s">rules as fallback</text>
+<rect x="1012" y="258" width="150" height="64" class="n"/><text x="1087" y="284" text-anchor="middle" class="t">Muse Spark</text><text x="1087" y="304" text-anchor="middle" class="s">explains it for people</text>
+<rect x="610" y="370" width="170" height="64" class="n"/><text x="695" y="394" text-anchor="middle" class="t">Regression gate</text><text x="695" y="412" text-anchor="middle" class="s">no case seen gets worse,</text><text x="695" y="426" text-anchor="middle" class="s">one gets better</text>
+<rect x="390" y="370" width="166" height="64" class="h"/><text x="473" y="396" text-anchor="middle" class="t">Ask a human</text><text x="473" y="416" text-anchor="middle" class="s">when a failure stalls</text>
+<rect x="844" y="370" width="150" height="64" class="n"/><text x="919" y="396" text-anchor="middle" class="t">Accepted version</text><text x="919" y="416" text-anchor="middle" class="s">save to deploy</text>
+<rect x="14" y="500" width="240" height="64" class="f"/><text x="134" y="526" text-anchor="middle" class="t">Targeted second video</text><text x="134" y="546" text-anchor="middle" class="s">future work</text>
+<rect x="844" y="500" width="318" height="64" class="f"/><text x="1003" y="526" text-anchor="middle" class="t">Deployment on a real robot</text><text x="1003" y="546" text-anchor="middle" class="s">future work: recovery skills, shared skills</text>
+<path class="e" d="M148 108H200"/><path class="e" d="M366 108H390"/><path class="e" d="M473 140V166"/>
+<path class="e" d="M556 198H610"/><text x="578" y="190" class="l">π</text><path class="e" d="M695 158V140"/><text x="701" y="153" class="l">nominal passed</text><path class="e" d="M780 108H844"/>
+<path class="e" d="M994 108H1012"/><path class="e" d="M1087 140V166"/><path class="e" d="M1012 186H780"/><text x="950" y="180" class="l">attack</text><path class="e" d="M780 222H866V258"/><text x="822" y="216" class="l">result</text><path class="e" d="M919 258V140"/><path class="e" d="M994 290H1012"/>
+<path class="e" d="M844 290H530V230"/><text x="640" y="282" class="l">constraint</text>
+<path class="e" d="M475 230V350H660V370"/><text x="566" y="344" class="l">candidate</text>
+<path class="e" d="M780 402H844"/><text x="788" y="394" class="l">accepted</text>
+<path class="e" d="M610 402H556"/><text x="562" y="394" class="l">stalled</text>
+<path class="e" d="M420 370V230"/><text x="376" y="300" class="l">answer</text>
+<path class="e" d="M740 370V340H812V128H844"/><text x="748" y="334" class="l">next attack</text>
+<path class="e d" d="M366 198H390"/>
+<path class="e d" d="M919 434V500"/>
+<path class="e d" d="M390 420H300V532H254"/><text x="306" y="478" class="l">one more video</text>
+<g transform="translate(330,512)"><rect width="22" height="13" class="n"/><text x="28" y="11" class="s">built</text><rect x="68" width="22" height="13" class="f"/><text x="96" y="11" class="s">future work</text><rect x="172" width="22" height="13" class="h"/><text x="200" y="11" class="s">a person</text></g>
+</svg>

@@ -281,7 +281,7 @@ function upd(ev){
 document.addEventListener("input",upd);document.addEventListener("change",upd);
 $("#q").addEventListener("input",()=>{if($("#q").value&&sel!=="all"){sel="all"}render(true)});
 $("#sub").textContent=`${D.experiments.length} experiments, ${D.commands.length} commands, catalog of ${D.updated}. Pick an experiment, tune flags, copy the command.`;
-const a=$("#arch");a.href=href("docs/images/architecture.png");
+const a=$("#arch");a.href=href("docs/images/architecture.svg");
 const h=location.hash.slice(1);sel=EXP[h]?h:h==="all"?"all":"exp04";
 render();
 window.addEventListener("hashchange",()=>{const x=location.hash.slice(1);if(EXP[x]||x==="all"){sel=x;selMod=null;render()}});

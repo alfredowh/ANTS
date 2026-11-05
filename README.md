@@ -2,7 +2,7 @@
 
 # ANTS: Agentic Task Synthesis
 
-**Show a robot a task once. An adversary breaks it in simulation. Every failure becomes a readable fix, kept only if nothing got worse.** No model weights are trained.
+**Show a robot a task once. An adversary breaks it in simulation. Every failure becomes a readable fix, kept only if no case seen so far got worse.** No model weights are trained.
 
 Our entry for the [Meta Global AI Developer Hackathon 2026](https://dev.meta.ai/events/global-hackathon).
 
@@ -12,14 +12,14 @@ Robots learn one task at a time from lots of data, and nobody can say when they 
 
 ## Solution
 
-![ANTS: System 1 writes a program from one human demo, System 2 attacks it in simulation](docs/images/architecture.png)
+![ANTS: the Synthesizer writes a program from one human demo, the Adversary attacks it in simulation, and a regression gate keeps only rewrites that do no worse](docs/images/architecture.svg)
 
-*Figure from the paper. In this build the demo is marker-tracked (SAM 3 is the robot's perception in simulation), the experience memory is future work, and every rewrite passes a regression gate.*
+*Solid boxes are built and running. Dashed boxes are future work.*
 
 | Part | What it does |
 |---|---|
-| **System 1** (synthesizer) | Tracks one demonstration video, summarises it relative to object size, and has Muse Wonder write the robot program (v0), checked in simulation |
-| **System 2** (adversary) | Picks the weakest category (Thompson sampling), four Muse Spark agents propose attacks on the program's assumptions, severity is capped in code, LIBERO runs it, and the failure is diagnosed into a rule |
+| **Synthesizer** (System 1) | Tracks one demonstration video, summarises it relative to object size, and has Muse Wonder write the robot program (v0), checked in simulation |
+| **Adversary** (System 2) | Picks the weakest category (Thompson sampling), four Muse Spark agents propose attacks on the program's assumptions, severity is capped in code, LIBERO runs it, and the failure is diagnosed into a rule |
 | **Gate** (orchestrator) | Replays every case seen so far; a rewrite is accepted only if it is no worse on all of them and better on one |
 | **ANTS Studio** | One window to watch it: the Synthesizer chat and live cameras, and the Adversary's attacks, replays and versions |
 
@@ -84,10 +84,12 @@ Details, run folders and commands: [docs/results.md](docs/results.md).
 | Model | Role |
 |---|---|
 | **Muse Wonder** | writes the program from the demonstration, and rewrites it after each failure |
-| **Muse Spark** (Contemplating) | four agents read the program and each propose an attack on one assumption |
-| **Muse Spark** (Thinking) | diagnoses each failure into a cause and a rule |
-| **Muse Spark** (Instant) | explains each failure in plain language in the studio |
+| **Muse Spark** | four agents read the program and each propose an attack on one assumption |
+| **Muse Spark** | diagnoses each failure into a cause and a rule |
+| **Muse Spark** | explains each failure in plain language in the studio |
 | **SAM 3** | the robot's perception: segments the bowl and the plate in every rollout |
+
+The code maps effort levels to Muse Spark's Contemplating, Thinking and Instant modes; how the API selects those modes is unconfirmed, and "four agents" means four separate calls.
 
 ## Cost
 
@@ -147,6 +149,8 @@ uv run python -m ants.adversary.experiments.adaptive_vs_uniform $A --attacks 40 
 **4. Watch a run:** `uv run python -m ants.studio.console --adversary-run data/runs/loop`. Replay plays each attack's video next to the nominal run, and the call timeline is the scrubber.
 
 Rollouts take about 13 s each on the 5090; a Muse Spark attack takes 1–2 min for its four agents. The README images come from these runs: `tools/make_readme_media.py`.
+
+**5. From your own video, in ANTS Studio:** start the console as in step 4, click `/policy-dev`, click `+` and pick a clip, type the task, press Enter, then choose the settings. The run goes through extraction, DemoSpec, Muse Wonder and a nominal check, then holds for you with the rollout looping before the Adversary starts. Clips need the marker setup; `20261016_233859` is known to pass. This path plans with PyRoki and interpolation, without cuRobo, and writes every setting to `execution.json`.
 
 ## Docs
 

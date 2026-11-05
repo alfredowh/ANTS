@@ -37,8 +37,8 @@ Learn a robot skill from one demonstration with a frozen generative model, then 
 - **Closed loop:** every failure becomes a constraint added to the generator's context, and the generator proposes a new candidate policy.
 - **Adaptive testing:** spend the test budget on the failure categories most likely to break the policy, not uniform sampling.
 - **Gate:** accept a candidate only if it is no worse than the current best on every case seen so far and better on at least one, so robustness never regresses and every accepted version is a real improvement. A crash on a case the incumbent passed is a regression. A skill is admitted only when a policy that uses it passes the gate.
-- **Memory:** store past policies, retrieve by similarity weighted by how often they helped, and fade unused ones. This is how skills are shared.
-- **Stop or escalate:** stop when every category is confidently robust. If the generator stalls, escalate and ask a human for one targeted demonstration.
+- **Memory (not built, D18):** store past policies, retrieve by similarity weighted by how often they helped, and fade unused ones. This is how skills would be shared.
+- **Stop or escalate:** stop when every category is confidently robust. If the generator stalls, escalate and ask a person (a typed answer today; one targeted demonstration is future work).
 
 **Evaluation rules:** tune only on an acceptance set. Report on a held-out test set that is never used for tuning. Numbers in any write-up must come from logged runs.
 
@@ -105,10 +105,11 @@ Before finishing a change, run lint and tests and report the real result.
 - `docs/` detailed documentation; `docs/images/` figures and diagrams
 - `docs/<module>/spec.md` per-module agent spec (rules, architecture, build order); read it before working in that module. Import new ones in `CLAUDE.md`.
 - `src/ants/contracts/` shared types (the only thing both systems import)
-- `src/ants/synthesizer/` System 1: perception, policy synthesis, experience memory
+- `src/ants/synthesizer/` System 1: policy synthesis, model client, prompts
 - `src/ants/adversary/` System 2: test planner, simulator rollouts, diagnoser, failure history
 - `src/ants/orchestrator/` closed loop, regression gate, escalation (the only place that knows both systems)
 - `src/ants/evalkit/` acceptance / held-out split, metrics, logging
+- `src/ants/studio/` ANTS Studio: console, `/policy-dev` pipeline, Adversary view (read-only on decisions)
 - `tests/` pytest tests, mirroring the package structure (`tests/adversary/`, `tests/synthesizer/`); every test folder has an `__init__.py` so test files with the same name in different folders do not collide
 - `pyproject.toml` single config for dependencies, ruff and pytest
 
@@ -134,8 +135,7 @@ The user wants every significant change traceable, so agents commit and push on 
 ```
 main              stable: demos and milestones; PRs from integration only
 └─ integration    where System 1 and System 2 meet; PRs from feature branches
-   ├─ feature/system2   System 2 (adversary)
-   └─ synthesizer       System 1 (synthesizer)
+   └─ feature/*, synthesizer   one branch per piece of work
 ```
 
 - **Never commit or push to `main` or `integration` directly.** Work on the feature branch that is checked out. Create or switch branches only when the user asks.
