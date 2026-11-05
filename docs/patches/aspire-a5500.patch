@@ -1,0 +1,55 @@
+ANTS local hardware overlay: RTX A5500 Laptop (sm_86)
+Base ASPIRE commit: fa00f0ef2bc1d91d594b9aa502c22133c9f538f7
+
+Preserves only the hardware profile and CUDA architecture entry. No cuRobo
+collision-filter changes or generated environment reports are included.
+No ASPIRE fork or submodule commit change is required.
+
+From the ANTS root, after initializing the ASPIRE submodule:
+    git -C ASPIRE apply --check ../docs/patches/aspire-a5500.patch
+    git -C ASPIRE apply ../docs/patches/aspire-a5500.patch
+
+Apply once. If the check fails, inspect the checkout rather than forcing it.
+To check whether this overlay is already present:
+    git -C ASPIRE apply --reverse --check ../docs/patches/aspire-a5500.patch
+
+diff --git a/configs/dependency-lock.json b/configs/dependency-lock.json
+--- a/configs/dependency-lock.json
++++ b/configs/dependency-lock.json
+@@ -47,6 +47,12 @@
+           "l40",
+           "rtx4090"
+         ]
++      },
++      "sm_86": {
++        "cuda_arch_list": "8.6",
++        "profiles": [
++          "a5500"
++        ]
+       }
+     },
+     "cuda_runtime": "12.8",
+diff --git a/configs/profiles/a5500.json b/configs/profiles/a5500.json
+new file mode 100644
+--- /dev/null
++++ b/configs/profiles/a5500.json
+@@ -0,0 +1,19 @@
++{
++  "schema": "cap-harness/profile/1",
++  "name": "a5500",
++  "arch": "sm_86",
++  "description": "Single Ampere RTX A5500 Laptop 16 GB (sm_86); all providers share GPU 0, serialized.",
++  "venv_root": null,
++  "gpus": {
++    "sam3": 0,
++    "contact_graspnet": 0,
++    "curobo": 0
++  },
++  "concurrency": {
++    "sam3": 1,
++    "contact_graspnet": 1,
++    "pyroki": 2,
++    "curobo": 1
++  },
++  "ports": {}
++}
