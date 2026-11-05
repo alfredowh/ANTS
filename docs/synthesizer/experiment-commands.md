@@ -6,7 +6,7 @@ Rule of thumb: start the services, run with a small `--token-budget`, view the r
 
 ## Setup and health checks
 
-Is the environment ready to run anything? Details: `docs/synthesizer/smoke-2026-10-31.md`.
+Is the environment ready to run anything? Details: `docs/results.md`.
 
 **Install / sync the ANTS env**
 
@@ -38,7 +38,7 @@ cd ASPIRE && .venv-libero/bin/python -m cap_harness.cli doctor \
 
 ## Make a DemoSpec from a demonstration
 
-Turn a human demo into the object-relative summary the generator reads. Details: `docs/synthesizer/experiment-01-demo-vs-nodemo.md`.
+Turn a human demo into the object-relative summary the generator reads. Details: `docs/results.md`.
 
 **hurobo: extract demos from clips**
 
@@ -61,7 +61,7 @@ hurobo/.venv/bin/python -I tools/hurobo_demospec.py data/hurobo_e1/demos_marker_
 
 ## Exp 01: does one demo help? (bowl on plate)
 
-Arms differ only in the demo section. Does the demo arm write a working program? Details: `docs/synthesizer/experiment-01-demo-vs-nodemo.md`.
+Arms differ only in the demo section. Does the demo arm write a working program? Details: `docs/results.md`.
 
 **Exp 01: demo vs no demo (as originally run)** (spends Muse tokens)
 
@@ -84,7 +84,7 @@ uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --demospec dat
 
 ## Exp 02: debug in the scaled scene
 
-Same arms, but programs are debugged and repaired in the real-size scene (bowl x1.227, plate x1.855). Details: `docs/synthesizer/experiment-02-scaled-scene.md`.
+Same arms, but programs are debugged and repaired in the real-size scene (bowl x1.227, plate x1.855). Details: `docs/results.md`.
 
 **Exp 02: debug in the scaled scene** (spends Muse tokens)
 
@@ -104,7 +104,7 @@ uv run python -m ants.orchestrator.demo_vs_nodemo --aspire ASPIRE --demospec dat
 
 ## Exp 03: explain-then-repair, one run per clip
 
-With a WHY: rationale in each repair, how do the 3 good hurobo clips fare? Clip 233859 attempt 2 stalls on the wine rack and motivates exp04 and dev/curobo. Details: `docs/synthesizer/proposal-collision-context.md`.
+With a WHY: rationale in each repair, how do the 3 good hurobo clips fare? Clip 233859 attempt 2 stalls on the wine rack and motivates exp04 and dev/curobo. Details: `docs/results.md`.
 
 **Exp 03: explain-then-repair for one clip** (spends Muse tokens)
 
@@ -124,7 +124,7 @@ uv run python -m ants.evalkit.report data/runs/exp04_scene \
 
 ## Exp 04: which scene description helps?
 
-G: which scene section (S0-S4, SP placebo) in the first prompt helps, in levels L1-L3. E: which contact evidence (E0-E3, EP placebo) helps one repair. Details: `docs/synthesizer/experiment-04-scene-context.md`.
+G: which scene section (S0-S4, SP placebo) in the first prompt helps, in levels L1-L3. E: which contact evidence (E0-E3, EP placebo) helps one repair. Details: `docs/results.md`.
 
 **Exp 04 step 1: settle and dump every scene level**
 
@@ -142,7 +142,7 @@ uv run python -m ants.orchestrator.scene_context_exp --aspire ASPIRE --dry-run \
 
 ## Perturbation preview (System 2 hook)
 
-Does a working program survive hand-picked perturbations? (friction x0.4, bowl shift, actuation noise + latency) Details: `docs/synthesizer/experiment-01-demo-vs-nodemo.md`.
+Does a working program survive hand-picked perturbations? (friction x0.4, bowl shift, actuation noise + latency) Details: `docs/results.md`.
 
 **Run a program under a perturbation**
 
@@ -172,22 +172,6 @@ cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 
     --output-root ../data/scaled_test/out
 ```
 
-## System 2 v0: harden with the never-regress gate
-
-Does the adversary + diagnoser + gate loop improve a working program without regressions? Details: `src/ants/orchestrator/system2.py`.
-
-**Write a synthetic System 2 run (no sim, no model)**
-
-```bash
-uv run python tools/system2_mock.py data/runs/system2_mock_synthetic
-```
-
-**View all runs (incl. synthetic System 2 mock)**
-
-```bash
-uv run python -m ants.evalkit.report data/runs --open
-```
-
 ## dev/curobo: why does the planner go through the rack?
 
 Tune cuRobo's robot carve, add a robot mask, validate no forbidden collisions. Details: `dev/curobo/README.md`.
@@ -205,13 +189,9 @@ cd ASPIRE && ANTS_CARVE_MARGIN_M=0.0 ANTS_ATTACH_FILE=$PWD/../data/runs/curobo/a
 cd ASPIRE && ANTS_CONTACT_LOG=../data/evidence/out.jsonl LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../dev/curobo/contact_launch.py scene.json -- run --benchmark libero-pro --suite libero_goal_swap --task-id 8 --seed 51 --init-mode seeded --program ../dev/curobo/programs/exp3_a2_orbit.py
 ```
 
-## Agent skills (slash commands)
-
-Prompts that write into the ANTS To-do artifact. Details: `docs/runbook/agent-access.md`.
-
 ## Exp 05: perceived scene vs oracle
 
-Can SAM 3 and depth build the exp04 collision world and S4 text without simulator state, and what is missing? Details: `docs/synthesizer/experiment-05-perceived-scene.md`.
+Can SAM 3 and depth build the exp04 collision world and S4 text without simulator state, and what is missing? Details: `docs/results.md`.
 
 **Exp 05 step 1: perceive the L1 start state (SAM 3, two arm poses)**
 
@@ -230,7 +210,7 @@ uv run python -m ants.orchestrator.perceived_scene --analyse \
 
 ## Exp 06 to 08: cuRobo on perception, scene understanding off, perceived, privileged
 
-With cuRobo planning on the depth cloud (SAM 3 robot mask), does a scene description in the first prompt and contact evidence in repairs help, and how much does perception cost against a digital twin? Details: `docs/synthesizer/experiment-06-08-curobo.md`.
+With cuRobo planning on the depth cloud (SAM 3 robot mask), does a scene description in the first prompt and contact evidence in repairs help, and how much does perception cost against a digital twin? Details: `docs/results.md`.
 
 **Exp 06 to 08: cuRobo on perception, with and without scene understanding** (spends Muse tokens)
 
@@ -249,7 +229,7 @@ uv run python -m ants.evalkit.report data/runs/exp04_scene \
 
 ## Exp 09 to 11: exp06 to 08 again, with the held bowl attached to the hand
 
-Do the cuRobo refusals disappear when the held bowl is an attached object of the known size instead of an obstacle in the cloud, and does that change the solved count? Details: `docs/synthesizer/experiment-09-11-curobo-attach.md`.
+Do the cuRobo refusals disappear when the held bowl is an attached object of the known size instead of an obstacle in the cloud, and does that change the solved count? Details: `docs/results.md`.
 
 **cuRobo service (dev): carve margin and attached held object**
 

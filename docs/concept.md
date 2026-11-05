@@ -18,7 +18,7 @@ One robot, one task, one policy. Every new task, scenario or robot embodiment ne
 
 ## Positioning
 
-Closest published work (details in [synthesizer/aspire-assessment.md](synthesizer/aspire-assessment.md) §2.3):
+Closest published work (details in synthesizer/aspire-assessment.md §2.3):
 
 | | ASPIRE / CaP-X (NVIDIA) | RAPID (MIT, NUS) | ANTS |
 |---|---|---|---|

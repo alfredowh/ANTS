@@ -171,7 +171,6 @@ def todo_block(data: dict) -> str:
            "[runbook/commands-full.md](runbook/commands-full.md). "
         f"UI: [ANTS Run Book]({data['artifact_url']}) "
         "or `docs/runbook.html`. "
-           "Agent access notes: [runbook/agent-access.md](runbook/agent-access.md). "
            f"Catalog updated {data['updated']}.", ""]  # fmt: skip
     for e in data["experiments"]:
         out += [f"**{e['title']}** ({e['status']})", ""]

@@ -10,7 +10,7 @@ Interactive version: `docs/runbook.html`. Essential commands only: [experiment-c
 
 *reference.* Is the environment ready to run anything?
 
-- Docs: `docs/synthesizer/smoke-2026-10-31.md`
+- Docs: `docs/results.md`
 - Inputs: uv; ASPIRE with venvs; GPU; META_API_KEY in .env
 - Outputs: services up on 8114/8116 (+8118); tests green
 - Result so far: ASPIRE example passes in 36 s on the RTX A5500 laptop (smoke §1).
@@ -102,7 +102,7 @@ nvidia-smi --query-gpu=memory.used,memory.total --format=csv && (ss -ltnp 2>/dev
 
 *reference.* Turn a human demo into the object-relative summary the generator reads.
 
-- Docs: `docs/synthesizer/experiment-01-demo-vs-nodemo.md` · run dir: `data/demospecs/`
+- Docs: `docs/results.md` · run dir: `data/demospecs/`
 - Inputs: hurobo clips + setup yaml, or LIBERO demo hdf5
 - Outputs: data/demospecs/*.json
 - Result so far: 4 of 26 hurobo clips usable at 6.0 cm marker (smoke §3); the measured marker is 5.75 cm, so re-extract with --marker-size-m 0.0575.
@@ -187,7 +187,7 @@ cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 
 
 *done.* Arms differ only in the demo section. Does the demo arm write a working program?
 
-- Docs: `docs/synthesizer/experiment-01-demo-vs-nodemo.md` · run dir: `data/runs/demo_vs_nodemo_01`
+- Docs: `docs/results.md` · run dir: `data/runs/demo_vs_nodemo_01`
 - Inputs: data/demospecs/hurobo_233832.json; services up; Muse tokens
 - Outputs: data/runs/demo_vs_nodemo_01/ (programs, diffs, feedback, record.json, summary.md); report.html
 - Cost: 284,304 tokens in the original run (cap 600k)
@@ -365,7 +365,7 @@ Camera + lighting (spec):
 
 *done.* Same arms, but programs are debugged and repaired in the real-size scene (bowl x1.227, plate x1.855).
 
-- Docs: `docs/synthesizer/experiment-02-scaled-scene.md` · run dir: `data/runs/exp02_scaled`
+- Docs: `docs/results.md` · run dir: `data/runs/exp02_scaled`
 - Inputs: data/demospecs/hurobo_233832.json
 - Outputs: data/runs/exp02_scaled/
 - Cost: 866,299 tokens (about $11.7), first pass 600k then resumed with 320k
@@ -449,7 +449,7 @@ uv run python -m ants.evalkit.report data/runs/exp02_scaled --serve --open
 
 *done (no write-up).* With a WHY: rationale in each repair, how do the 3 good hurobo clips fare? Clip 233859 attempt 2 stalls on the wine rack and motivates exp04 and dev/curobo.
 
-- Docs: `docs/synthesizer/proposal-collision-context.md` · run dir: `data/runs/exp03_explain/clip_<id>`
+- Docs: `docs/results.md` · run dir: `data/runs/exp03_explain/clip_<id>`
 - Inputs: data/demospecs/hurobo_233832|233859|234314.json
 - Outputs: data/runs/exp03_explain/clip_*/
 - Result so far: Config only (see run dirs and data/exp03.log); no results doc yet. Reconstructed command, taken from config.json.
@@ -509,7 +509,7 @@ uv run python -m ants.evalkit.report data/runs/exp02_scaled --serve --open
 
 *done (see experiment-04-scene-context.md).* G: which scene section (S0-S4, SP placebo) in the first prompt helps, in levels L1-L3. E: which contact evidence (E0-E3, EP placebo) helps one repair.
 
-- Docs: `docs/synthesizer/experiment-04-scene-context.md` · run dir: `data/runs/exp04_scene`
+- Docs: `docs/results.md` · run dir: `data/runs/exp04_scene`
 - Inputs: data/demospecs/hurobo_233859.json; data/scenes/levels.json; exp03 program_attempt2.py (for E)
 - Outputs: data/runs/exp04_scene/{G,E}-<variant>/; contacts.jsonl; overlay.json; scenes/
 - Cost: default cap 900,000 new tokens
@@ -626,7 +626,7 @@ uv run python -m ants.evalkit.report data/runs/exp02_scaled --serve --open
 
 *done.* Does a working program survive hand-picked perturbations? (friction x0.4, bowl shift, actuation noise + latency)
 
-- Docs: `docs/synthesizer/experiment-01-demo-vs-nodemo.md` · run dir: `data/runs/perturb_preview/`
+- Docs: `docs/results.md` · run dir: `data/runs/perturb_preview/`
 - Inputs: a program.py; perturbation.json
 - Outputs: run dir under --output-root
 - Result so far: Winning exp01 program: 3/3 survived.
@@ -744,45 +744,6 @@ Spec:
 {"scale": {"bodies": {"akita_black_bowl_1_main": 1.227, "plate_1_main": 1.855}}, "contacts": {"path": "../data/evidence/run/contacts.jsonl"}}
 ```
 
-## System 2 v0: harden with the never-regress gate
-
-*built, no live run.* Does the adversary + diagnoser + gate loop improve a working program without regressions?
-
-- Docs: `src/ants/orchestrator/system2.py` · run dir: `data/runs/system2_mock_synthetic`
-- Inputs: incumbent program; HardenConfig
-- Outputs: system2.jsonl; Human gate request/answer JSON
-- Result so far: Only a synthetic mock world so far (clearly marked); harden() has no CLI. A live run needs a thin driver script (not written).
-
-### `system2.mock`: Write a synthetic System 2 run (no sim, no model)
-
-Fake world: program v0 breaks on size and physics, v1 fixes size but breaks pose (the gate must reject it), v2 fixes both. Clearly marked synthetic in config.json. Use it to try the System 2 tab; it is not a result.
-
-```bash
-uv run python tools/system2_mock.py data/runs/system2_mock_synthetic
-```
-
-Then view:
-
-```bash
-uv run python -m ants.evalkit.report data/runs --open
-```
-
-### `report.all`: View all runs (incl. synthetic System 2 mock)
-
-Opens the run selector.
-
-```bash
-uv run python -m ants.evalkit.report data/runs --open
-```
-
-### `test.system2`: Tests for the System 2 loop, gate, planner
-
-harden() has no CLI; its behaviour is exercised here with fake run_case and generate callables.
-
-```bash
-uv run pytest tests/orchestrator tests/adversary -q
-```
-
 ## dev/curobo: why does the planner go through the rack?
 
 *done (dev notes).* Tune cuRobo's robot carve, add a robot mask, validate no forbidden collisions.
@@ -873,20 +834,11 @@ ontop_test.py has no CLI of its own; set ANTS_ONTOP_TEST in curobo.contact.
 echo 'run curobo.contact with ANTS_ONTOP_TEST=out.json (ontop_test.py is called by contact_launch.py)'
 ```
 
-## Agent skills (slash commands)
-
-*reference.* Prompts that write into the ANTS To-do artifact.
-
-- Docs: `docs/runbook/agent-access.md`
-- Inputs: free text
-- Outputs: artifact db documents
-- Result so far: Claude Code slash commands. Another agent can follow the SKILL.md files as plain instructions.
-
 ## Exp 05: perceived scene vs oracle
 
 *done (see experiment-05-perceived-scene.md).* Can SAM 3 and depth build the exp04 collision world and S4 text without simulator state, and what is missing?
 
-- Docs: `docs/synthesizer/experiment-05-perceived-scene.md` · run dir: `data/runs/exp05_perceived_scene`
+- Docs: `docs/results.md` · run dir: `data/runs/exp05_perceived_scene`
 - Inputs: data/scenes/L1/contacts_scene.json; data/scenes/perception_probe2.py; data/scenes/perception_probe3.py
 - Outputs: perception_start.json; perception_arm.json; analysis.json; s4_perceived.txt; s4_oracle.txt; report.html
 - Cost: free (no model call)
@@ -955,7 +907,7 @@ uv run python -m ants.evalkit.perceived_report --out data/runs/exp05_perceived_s
 
 *done (see experiment-06-08-curobo.md).* With cuRobo planning on the depth cloud (SAM 3 robot mask), does a scene description in the first prompt and contact evidence in repairs help, and how much does perception cost against a digital twin?
 
-- Docs: `docs/synthesizer/experiment-06-08-curobo.md` · run dir: `data/runs/curobo/<exp>/<arm>`
+- Docs: `docs/results.md` · run dir: `data/runs/curobo/<exp>/<arm>`
 - Inputs: data/demospecs/hurobo_233859.json; data/demospecs/hurobo_233832.json; data/runs/exp05_perceived_scene/s4_perceived.txt
 - Outputs: data/runs/curobo/
 - Result so far: 9 runs: solved 1 of 3 (06), 2 of 3 (07), 2 of 3 (08); no blocking contact in any rollout. See the doc.
@@ -1028,7 +980,7 @@ uv run python -m ants.evalkit.report data/runs/exp02_scaled --serve --open
 
 *code ready, not run.* Do the cuRobo refusals disappear when the held bowl is an attached object of the known size instead of an obstacle in the cloud, and does that change the solved count?
 
-- Docs: `docs/synthesizer/experiment-09-11-curobo-attach.md` · run dir: `data/runs/curobo/<exp>/<arm>`
+- Docs: `docs/results.md` · run dir: `data/runs/curobo/<exp>/<arm>`
 - Inputs: data/demospecs/hurobo_233859.json; data/demospecs/hurobo_233832.json; data/runs/exp05_perceived_scene/s4_perceived.txt; data/scenes/L1/contacts_scene.json
 - Outputs: data/runs/curobo/exp09|exp10|exp11/
 - Result so far: Not run yet.

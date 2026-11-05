@@ -26,9 +26,7 @@
    "code": [
     "hurobo/data/raw/e1/clips"
    ],
-   "docs": [
-    "docs/dev/reuse-from-hurobo.md"
-   ],
+   "docs": [],
    "children": [],
    "live": {
     "signal": "live",
@@ -52,9 +50,7 @@
     "hurobo/scripts/02_extract_demos.py",
     "hurobo/src/hurobo/extract.py"
    ],
-   "docs": [
-    "docs/dev/reuse-from-hurobo.md"
-   ],
+   "docs": [],
    "children": [
     "x_hand",
     "x_markers",
@@ -82,9 +78,7 @@
    "code": [
     "hurobo/src/hurobo/hand.py"
    ],
-   "docs": [
-    "docs/dev/reuse-from-hurobo.md"
-   ],
+   "docs": [],
    "children": [],
    "live": {
     "signal": "grouped",
@@ -102,9 +96,7 @@
    "code": [
     "hurobo/src/hurobo/markers.py"
    ],
-   "docs": [
-    "docs/dev/reuse-from-hurobo.md"
-   ],
+   "docs": [],
    "children": [],
    "live": {
     "signal": "grouped",
@@ -122,9 +114,7 @@
    "code": [
     "hurobo/src/hurobo/extract.py"
    ],
-   "docs": [
-    "docs/dev/reuse-from-hurobo.md"
-   ],
+   "docs": [],
    "children": [],
    "live": {
     "signal": "grouped",

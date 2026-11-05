@@ -46,7 +46,7 @@
       "out": [
         "demos *.npz"
       ],
-      "doc": "docs/dev/reuse-from-hurobo.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "libero_demos",
@@ -74,7 +74,7 @@
       "out": [
         "data/demospecs/*.json"
       ],
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "contracts",
@@ -118,7 +118,7 @@
         "data/llm_cache/",
         "data/llm_ledger.jsonl"
       ],
-      "doc": "docs/synthesizer/smoke-2026-10-31.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "rollout",
@@ -199,7 +199,7 @@
         "scene text",
         "levels.json"
       ],
-      "doc": "docs/synthesizer/experiment-04-scene-context.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "orch_exp",
@@ -215,7 +215,7 @@
       "out": [
         "data/runs/<name>/"
       ],
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "system2",
@@ -263,7 +263,7 @@
         "episode/steps.jsonl",
         "videos"
       ],
-      "doc": "docs/synthesizer/aspire-assessment.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "services",
@@ -275,7 +275,7 @@
       "out": [
         "services.log"
       ],
-      "doc": "docs/synthesizer/smoke-2026-10-31.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "curobo_dev",
@@ -392,7 +392,7 @@
       "status": "reference",
       "kind": "setup",
       "question": "Is the environment ready to run anything?",
-      "doc": "docs/synthesizer/smoke-2026-10-31.md",
+      "doc": "docs/results.md",
       "run_dir": null,
       "modules": [
         "services",
@@ -424,7 +424,7 @@
       "status": "reference",
       "kind": "prep",
       "question": "Turn a human demo into the object-relative summary the generator reads.",
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md",
+      "doc": "docs/results.md",
       "run_dir": "data/demospecs/",
       "modules": [
         "hurobo",
@@ -451,7 +451,7 @@
       "status": "done",
       "kind": "experiment",
       "question": "Arms differ only in the demo section. Does the demo arm write a working program?",
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md",
+      "doc": "docs/results.md",
       "run_dir": "data/runs/demo_vs_nodemo_01",
       "modules": [
         "demospec_tools",
@@ -490,7 +490,7 @@
       "status": "done",
       "kind": "experiment",
       "question": "Same arms, but programs are debugged and repaired in the real-size scene (bowl x1.227, plate x1.855).",
-      "doc": "docs/synthesizer/experiment-02-scaled-scene.md",
+      "doc": "docs/results.md",
       "run_dir": "data/runs/exp02_scaled",
       "modules": [
         "demospec_tools",
@@ -525,7 +525,7 @@
       "status": "done (no write-up)",
       "kind": "experiment",
       "question": "With a WHY: rationale in each repair, how do the 3 good hurobo clips fare? Clip 233859 attempt 2 stalls on the wine rack and motivates exp04 and dev/curobo.",
-      "doc": "docs/synthesizer/proposal-collision-context.md",
+      "doc": "docs/results.md",
       "run_dir": "data/runs/exp03_explain/clip_<id>",
       "modules": [
         "demospec_tools",
@@ -557,7 +557,7 @@
       "status": "done (see experiment-04-scene-context.md)",
       "kind": "experiment",
       "question": "G: which scene section (S0-S4, SP placebo) in the first prompt helps, in levels L1-L3. E: which contact evidence (E0-E3, EP placebo) helps one repair.",
-      "doc": "docs/synthesizer/experiment-04-scene-context.md",
+      "doc": "docs/results.md",
       "run_dir": "data/runs/exp04_scene",
       "modules": [
         "demospec_tools",
@@ -598,7 +598,7 @@
       "status": "done",
       "kind": "experiment",
       "question": "Does a working program survive hand-picked perturbations? (friction x0.4, bowl shift, actuation noise + latency)",
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md",
+      "doc": "docs/results.md",
       "run_dir": "data/runs/perturb_preview/",
       "modules": [
         "launcher",
@@ -619,38 +619,6 @@
         "run dir under --output-root"
       ],
       "result": "Winning exp01 program: 3/3 survived."
-    },
-    {
-      "id": "system2",
-      "title": "System 2 v0: harden with the never-regress gate",
-      "status": "built, no live run",
-      "kind": "experiment",
-      "question": "Does the adversary + diagnoser + gate loop improve a working program without regressions?",
-      "doc": "src/ants/orchestrator/system2.py",
-      "run_dir": "data/runs/system2_mock_synthetic",
-      "modules": [
-        "planner",
-        "diagnoser",
-        "system2",
-        "rollout",
-        "generator",
-        "evalkit",
-        "contracts"
-      ],
-      "commands": [
-        "system2.mock",
-        "report.all",
-        "test.system2"
-      ],
-      "inputs": [
-        "incumbent program",
-        "HardenConfig"
-      ],
-      "outputs": [
-        "system2.jsonl",
-        "Human gate request/answer JSON"
-      ],
-      "result": "Only a synthetic mock world so far (clearly marked); harden() has no CLI. A live run needs a thin driver script (not written)."
     },
     {
       "id": "curobo",
@@ -688,30 +656,12 @@
       "result": "6 configurations compared; only the scene-aware ones (5, 6) had 0 forbidden-contact steps. One scene, one seed."
     },
     {
-      "id": "agent-skills",
-      "title": "Agent skills (slash commands)",
-      "status": "reference",
-      "kind": "tool",
-      "question": "Prompts that write into the ANTS To-do artifact.",
-      "doc": "docs/runbook/agent-access.md",
-      "run_dir": null,
-      "modules": [],
-      "commands": [],
-      "inputs": [
-        "free text"
-      ],
-      "outputs": [
-        "artifact db documents"
-      ],
-      "result": "Claude Code slash commands. Another agent can follow the SKILL.md files as plain instructions."
-    },
-    {
       "id": "exp05",
       "title": "Exp 05: perceived scene vs oracle",
       "status": "done (see experiment-05-perceived-scene.md)",
       "kind": "experiment",
       "question": "Can SAM 3 and depth build the exp04 collision world and S4 text without simulator state, and what is missing?",
-      "doc": "docs/synthesizer/experiment-05-perceived-scene.md",
+      "doc": "docs/results.md",
       "run_dir": "data/runs/exp05_perceived_scene",
       "modules": [
         "scene_world",
@@ -748,7 +698,7 @@
       "status": "done (see experiment-06-08-curobo.md)",
       "kind": "experiment",
       "question": "With cuRobo planning on the depth cloud (SAM 3 robot mask), does a scene description in the first prompt and contact evidence in repairs help, and how much does perception cost against a digital twin?",
-      "doc": "docs/synthesizer/experiment-06-08-curobo.md",
+      "doc": "docs/results.md",
       "run_dir": "data/runs/curobo/<exp>/<arm>",
       "modules": [
         "orch_exp",
@@ -781,7 +731,7 @@
       "status": "code ready, not run",
       "kind": "experiment",
       "question": "Do the cuRobo refusals disappear when the held bowl is an attached object of the known size instead of an obstacle in the cloud, and does that change the solved count?",
-      "doc": "docs/synthesizer/experiment-09-11-curobo-attach.md",
+      "doc": "docs/results.md",
       "run_dir": "data/runs/curobo/<exp>/<arm>",
       "modules": [
         "orch_exp",
@@ -1164,7 +1114,7 @@
       ],
       "cost": "free",
       "minutes": 3,
-      "doc": "docs/synthesizer/smoke-2026-10-31.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "services.doctor",
@@ -1323,7 +1273,7 @@
       ],
       "cost": "free",
       "minutes": 5,
-      "doc": "docs/synthesizer/smoke-2026-10-31.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "demo.hurobo",
@@ -1646,7 +1596,7 @@
       ],
       "cost": "about 20-25k tokens per Muse call; exp01 total 284k",
       "minutes": 40,
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp01b.run",
@@ -1690,7 +1640,7 @@
       ],
       "cost": "up to 600k tokens",
       "minutes": 90,
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp01b.rescore",
@@ -1739,7 +1689,7 @@
       ],
       "cost": "free (simulation only)",
       "minutes": 15,
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp02.run",
@@ -1791,7 +1741,7 @@
       ],
       "cost": "866k tokens total over two passes",
       "minutes": 120,
-      "doc": "docs/synthesizer/experiment-02-scaled-scene.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp02.resume",
@@ -1830,7 +1780,7 @@
       ],
       "cost": "the new budget at most",
       "minutes": 60,
-      "doc": "docs/synthesizer/experiment-02-scaled-scene.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp03.run",
@@ -1901,7 +1851,7 @@
       ],
       "cost": "up to 250k tokens per clip",
       "minutes": 45,
-      "doc": "docs/synthesizer/proposal-collision-context.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp04.prep",
@@ -1950,7 +1900,7 @@
       ],
       "cost": "free",
       "minutes": 5,
-      "doc": "docs/synthesizer/experiment-04-scene-context.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp04.dry",
@@ -2017,7 +1967,7 @@
       ],
       "cost": "free",
       "minutes": 1,
-      "doc": "docs/synthesizer/experiment-04-scene-context.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp04.run",
@@ -2167,7 +2117,7 @@
       ],
       "cost": "30-65k tokens per cell; default cap 900k",
       "minutes": 120,
-      "doc": "docs/synthesizer/experiment-04-scene-context.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "report.run",
@@ -2448,7 +2398,7 @@
       ],
       "cost": "free",
       "minutes": 2,
-      "doc": "docs/synthesizer/experiment-01-demo-vs-nodemo.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "perturb.contacts",
@@ -2517,33 +2467,6 @@
       "cost": "free",
       "minutes": 2,
       "doc": "tools/aspire_launch.py"
-    },
-    {
-      "id": "system2.mock",
-      "title": "Write a synthetic System 2 run (no sim, no model)",
-      "group": "system2",
-      "runner": "ants",
-      "base": "tools/system2_mock.py data/runs/system2_mock_synthetic",
-      "args": [],
-      "description": "Fake world: program v0 breaks on size and physics, v1 fixes size but breaks pose (the gate must reject it), v2 fixes both. Clearly marked synthetic in config.json. Use it to try the System 2 tab; it is not a result.",
-      "examples": [
-        {
-          "title": "Then view",
-          "cmd": "uv run python -m ants.evalkit.report data/runs --open"
-        }
-      ],
-      "modules": [
-        "system2",
-        "evalkit"
-      ],
-      "in": [],
-      "out": [
-        "system2.jsonl",
-        "config.json"
-      ],
-      "cost": "free",
-      "minutes": 0,
-      "doc": "tools/system2_mock.py"
     },
     {
       "id": "test.system2",
@@ -2837,7 +2760,7 @@
       "out": [],
       "cost": "free",
       "minutes": 5,
-      "doc": "docs/synthesizer/experiment-05-perceived-scene.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp05.analyse",
@@ -2871,7 +2794,7 @@
       "out": [],
       "cost": "free",
       "minutes": 1,
-      "doc": "docs/synthesizer/experiment-05-perceived-scene.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "exp05.report",
@@ -2905,7 +2828,7 @@
       "out": [],
       "cost": "free",
       "minutes": 1,
-      "doc": "docs/synthesizer/experiment-05-perceived-scene.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "curobo.exp",
@@ -3000,7 +2923,7 @@
       ],
       "cost": "up to 250k tokens per run, 9 runs",
       "minutes": 600,
-      "doc": "docs/synthesizer/experiment-09-11-curobo-attach.md"
+      "doc": "docs/results.md"
     },
     {
       "id": "curobo.viewer",
