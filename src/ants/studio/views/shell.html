@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ANTS Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/console.css">
+<link rel="stylesheet" href="/static/flow.css">
+<link rel="stylesheet" href="/static/live.css">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='8' viewBox='0 0 14 8' shape-rendering='crispEdges'%3E%3Cpath fill='%231877F2' d='M12 0h.86v.86H12zM11 1h.86v.86H11zM1 2h.86v.86H1zM2 2h.86v.86H2zM3 2h.86v.86H3zM10 2h.86v.86H10zM11 2h.86v.86H11zM12 2h.86v.86H12zM0 3h.86v.86H0zM1 3h.86v.86H1zM2 3h.86v.86H2zM3 3h.86v.86H3zM4 3h.86v.86H4zM6 3h.86v.86H6zM7 3h.86v.86H7zM8 3h.86v.86H8zM10 3h.86v.86H10zM11 3h.86v.86H11zM12 3h.86v.86H12zM13 3h.86v.86H13zM0 4h.86v.86H0zM1 4h.86v.86H1zM2 4h.86v.86H2zM3 4h.86v.86H3zM4 4h.86v.86H4zM6 4h.86v.86H6zM7 4h.86v.86H7zM8 4h.86v.86H8zM10 4h.86v.86H10zM11 4h.86v.86H11zM12 4h.86v.86H12zM1 5h.86v.86H1zM2 5h.86v.86H2zM3 5h.86v.86H3zM5 5h.86v.86H5zM7 5h.86v.86H7zM9 5h.86v.86H9zM4 6h.86v.86H4zM7 6h.86v.86H7zM10 6h.86v.86H10zM3 7h.86v.86H3zM7 7h.86v.86H7zM11 7h.86v.86H11z'/%3E%3C/svg%3E">
+<script>
+try {
+  var t = localStorage.getItem("ants-studio-theme");
+  document.documentElement.dataset.theme = t === "dark" ? "dark" : "light"; // white and blue unless the viewer chose dark
+} catch (e) {}
+</script>
+</head>
+<body>
+<header>
+  <svg class="logo" width="42" height="24" viewBox="0 0 14 8" shape-rendering="crispEdges" role="img" aria-label="ANTS" style="fill:#1877F2;display:block"><path d="M12 0h.86v.86H12zM11 1h.86v.86H11zM1 2h.86v.86H1zM2 2h.86v.86H2zM3 2h.86v.86H3zM10 2h.86v.86H10zM11 2h.86v.86H11zM12 2h.86v.86H12zM0 3h.86v.86H0zM1 3h.86v.86H1zM2 3h.86v.86H2zM3 3h.86v.86H3zM4 3h.86v.86H4zM6 3h.86v.86H6zM7 3h.86v.86H7zM8 3h.86v.86H8zM10 3h.86v.86H10zM11 3h.86v.86H11zM12 3h.86v.86H12zM13 3h.86v.86H13zM0 4h.86v.86H0zM1 4h.86v.86H1zM2 4h.86v.86H2zM3 4h.86v.86H3zM4 4h.86v.86H4zM6 4h.86v.86H6zM7 4h.86v.86H7zM8 4h.86v.86H8zM10 4h.86v.86H10zM11 4h.86v.86H11zM12 4h.86v.86H12zM1 5h.86v.86H1zM2 5h.86v.86H2zM3 5h.86v.86H3zM5 5h.86v.86H5zM7 5h.86v.86H7zM9 5h.86v.86H9zM4 6h.86v.86H4zM7 6h.86v.86H7zM10 6h.86v.86H10zM3 7h.86v.86H3zM7 7h.86v.86H7zM11 7h.86v.86H11z"/></svg>
+  <button class="icon-btn" id="nav-toggle" type="button" title="Hide navigator" aria-label="Toggle navigator"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="9" y1="4" x2="9" y2="20"/></svg></button>
+  <span class="title">ANTS Studio</span>
+  <div class="view-switch" role="group" aria-label="View"><button type="button" data-view="adversary">Adversary</button><button type="button" data-view="synthesizer">Synthesizer</button></div>
+  <span style="flex:1"></span>
+  <span class="status-pill" id="status-pill">idle</span>
+  <span class="token-pill" id="token-pill" title="New model tokens this session spent">0 tokens</span>
+  <button class="btn stop-btn" id="stop-btn" type="button" hidden title="Stop the whole run: kills the running model/simulator processes and ends the loop">Stop</button>
+  <span class="phase" id="run-folder" title="Every run is saved to its own timestamped folder: loop.jsonl (the run log), history.jsonl, muse/cycleN/ (each repair's reply + token usage). Nothing is overwritten."></span>
+  <button class="theme-toggle" id="theme-toggle" type="button" title="Toggle light/dark theme">&#9789;</button>
+</header>
+
+<div class="app" id="app">
+  <aside class="nav" id="nav" aria-label="Navigator">
+    <div class="h navh">Session</div>
+    <div class="navsess">
+      <div class="navnote mono" id="session-id" title="Everything from this session (chat, events, runs) is stored in data/console_sessions/&lt;id&gt;/">&hellip;</div>
+      <button class="btn sm" id="new-session" type="button" title="Start a fresh session: clears the page and the server's chat state, and opens a new storage folder. The old session folder is kept.">New session</button>
+      <div class="navnote" id="session-msg"></div>
+    </div>
+    <div class="h navh">Runs</div>
+    <div class="navruns" id="navruns"><div class="navnote">loading&hellip;</div></div>
+  </aside>
+  <div class="content" id="content">
+<!--__AGENT_CONSOLE__-->
+  </div>
+</div>
+
+<iframe id="adversary-view" title="Adversary view"></iframe>
+
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal" id="modal">
+    <span class="close" id="modal-close">&times;</span>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+</script>
+<script src="/static/console.js"></script>
+<script src="/static/flow.js"></script>
+<script src="/static/live.js"></script>
+<script src="/static/live_mirror.js"></script>
+<script src="/static/wizard.js"></script>
+<script src="/static/demo_media.js"></script>
+<script src="/static/attempts.js"></script>
+<script src="/static/studio_switch.js"></script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+[submodule "hurobo"]
+	path = hurobo
+	url = https://github.com/alfredowh/hurobo
+[submodule "ASPIRE"]
+	path = ASPIRE
+	url = https://github.com/NVlabs/ASPIRE

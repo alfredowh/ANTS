@@ -1,0 +1,79 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>What cuRobo sees</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--fg:#1c2230;--mut:#6a7385;--line:#dfe3ea;--acc:#2f5fd0;--bad:#c4392f;--ok:#2a8a57;--warn:#d4800f;--cloud:#9aa3b5}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#12151c;--card:#1b202a;--fg:#e6e9f0;--mut:#98a1b3;--line:#2b3240;--acc:#7aa2ff;--bad:#ff7a70;--ok:#5fd093;--warn:#f2a64a;--cloud:#5d677c;color-scheme:dark}}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.5 system-ui,sans-serif;padding:16px max(16px,env(safe-area-inset-left,0px))}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:0 0 8px}.mut{color:var(--mut)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin:0 0 12px}
+.wrap{max-width:1200px;margin:0 auto}.row{display:flex;gap:12px;flex-wrap:wrap}.row>*{min-width:0}
+.why li{margin:4px 0}.k{font-weight:600}
+table{border-collapse:collapse;width:100%}td,th{padding:4px 8px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+button{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:4px 10px;cursor:pointer}
+button.on{border-color:var(--acc);color:var(--acc);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:4px}.chip{padding:2px 8px;border-radius:12px;border:1px solid var(--line);cursor:pointer;font-size:12px}
+.chip.ok{border-color:var(--ok);color:var(--ok)}.chip.f{border-color:var(--bad);color:var(--bad)}.chip.sel{background:var(--acc);color:#fff;border-color:var(--acc)}
+svg{width:100%;height:auto;background:var(--card);border:1px solid var(--line);border-radius:8px}
+.leg span{display:inline-flex;align-items:center;gap:4px;margin-right:12px;font-size:12px}.leg i{display:inline-block;width:14px;height:0;border-top:3px solid}
+</style></head><body><div class="wrap">
+<h1>What cuRobo sees, and why plans fail</h1>
+<div class="mut">Experiment 07 (cuRobo planning on the SAM 3 depth cloud). Two replays of real programs: a failed one and a successful one. Robot base frame, metres; the spheres are cuRobo's 61 collision spheres.</div>
+<div class="card why" style="margin-top:12px"><h2>What happens</h2><ol>
+<li><span class="k">cuRobo only sees a depth cloud.</span> Each <code>move_to_pose</code> becomes a plan: the service gets the points of the current depth image (robot pixels removed with SAM 3 masks), carves out points within 2 cm of the robot at its start pose, and asks for a path that keeps the robot's spheres clear of every remaining point.</li>
+<li><span class="k">The bowl in the gripper is an obstacle.</span> The bowl is not attached to the robot, and none of the 43 programs of experiments 06 to 08 passes it as <code>target_point_cloud</code>, so its depth points stay in the cloud. The red points in the failed run sit 10 to 18 cm under the hand flange (median 14 cm), where the held bowl hangs. Any goal that lowers the hand moves its spheres into those points, so cuRobo answers <i>goal state infeasible (scene_collision)</i> before it tries any path. The program retries the same goal and fails again.</li>
+<li><span class="k">A path without collision checks would also collide.</span> The orange line is the straight joint interpolation to the goal; it touches the same points. In the successful run the first 11 plans have goals clear of the cloud (one has a single point inside a sphere), so the green planned path exists with 0 colliding spheres. The same run also has 9 failed plans at the end (11 and 6 cloud points inside the goal spheres); its program finished the task anyway, and I did not check which part of the program those moves belonged to.</li>
+<li><span class="k">Across experiments 06 to 08</span> (43 rollouts): 142 of the 182 failed <code>move_to_pose</code> calls were "goal state infeasible (scene_collision)", 22 other cuRobo refusals, 10 timeouts (final waypoint did not converge within 120 steps; error 0.14 to 0.3 rad) and 8 "episode ended". Source: <code>trace/calls/*move-to-pose/output.json</code> of the 9 runs.</li></ol>
+<div class="mut">Caveat: my collision test is a replay (sphere against cloud point, 1.5 cm clearance, same 2 cm carve); cuRobo's own check is voxelised and can differ by a few millimetres. The cause of the 10 timeouts is not investigated here.</div></div>
+<div class="card"><div class="row" id="runs"></div><div class="chips" id="plans" style="margin-top:8px"></div></div>
+<div class="card"><div id="info"></div>
+<div class="leg" style="margin:8px 0"><span><i style="border-color:var(--cloud)"></i>depth cloud</span><span><i style="border-color:var(--bad)"></i>points inside goal spheres</span><span><i style="border-color:var(--acc)"></i>start robot</span><span><i style="border-color:var(--warn);border-top-style:dashed"></i>straight path</span><span><i style="border-color:var(--ok)"></i>cuRobo path</span></div>
+<div class="row"><div style="flex:1 1 480px"><div class="mut">Side view (x forward, z up)</div><svg id="sv" viewBox="0 0 560 520"></svg></div>
+<div style="flex:1 1 480px"><div class="mut">Top view (x forward, y left)</div><svg id="tv" viewBox="0 0 560 520"></svg></div></div>
+<div style="margin-top:8px">layers: <button data-l="cloud" class="on">cloud</button> <button data-l="start" class="on">start spheres</button> <button data-l="goal" class="on">goal spheres</button> <button data-l="straight" class="on">straight path</button> <button data-l="planned" class="on">cuRobo path</button></div></div>
+<div class="card"><h2>Hand collisions along the path</h2><svg id="plot" viewBox="0 0 900 130" style="height:auto"></svg><div class="mut">Number of colliding spheres at each of 40 steps (straight) or at each trajectory waypoint (cuRobo).</div></div>
+</div>
+<script>
+const DATA=__DATA__;let R=0,P=0,L={cloud:1,start:1,goal:1,straight:1,planned:1};
+const S=620,X0=0.1,Z1=0.62,Y1=0.36;
+const esc=s=>String(s??"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function proj(view,x,a){return view==="s"?[(x-X0)*S*0.85+20,(Z1-a)*S*0.85+20]:[(x-X0)*S*0.85+20,(Y1-a)*S*0.85+20]}
+function draw(){
+ const run=DATA[R],p=run.plans[P];
+ document.getElementById("runs").innerHTML=DATA.map((d,i)=>`<button class="${i===R?"on":""}" onclick="R=${i};P=firstFail(${i});draw()">${esc(d.title)} · ${d.plans.filter(q=>!q.ok).length} of ${d.plans.length} plans failed</button>`).join("");
+ document.getElementById("plans").innerHTML=run.plans.map((q,i)=>`<span class="chip ${q.ok?"ok":"f"} ${i===P?"sel":""}" onclick="P=${i};draw()">#${i} ${q.ok?"ok":"fail"}</span>`).join("");
+ const hits=p.goal_hits.reduce((a,h)=>a+h.n,0),links=[...new Set(p.goal_hits.map(h=>h.link))];
+ const sp=p.straight,pl=p.planned;
+ document.getElementById("info").innerHTML=`<b>Plan #${P}: ${p.ok?"cuRobo found a path":"cuRobo refused"}</b> <span class="mut">${esc(p.message||"")}</span><br>
+  cloud ${p.n_points.toLocaleString()} points (${p.n_carved} carved around the start pose) · goal: ${p.goal_hits.length?`<span style="color:var(--bad)"><b>${hits} cloud points inside ${p.goal_hits.length} spheres</b> (${esc(links.join(", "))})</span>`:"no sphere touches a point at 1.5 cm clearance"} ·
+  straight path: ${sp.first_hit==null?"no collision":`<span style="color:var(--bad)">first collision at step ${sp.first_hit} of 40, ${Math.max(...sp.hits)} spheres at worst</span>`}${pl?` · cuRobo path: ${Math.max(...pl.hits)===0?"0 colliding spheres":`${Math.max(...pl.hits)} at worst`} (${pl.tcp.length} waypoints)`:""}`;
+ for(const v of ["s","t"]){
+  const svg=document.getElementById(v+"v");let o="";const a=v==="s"?2:1;
+  const ax=(pt)=>v==="s"?pt[2]:pt[1];
+  // grid
+  for(let x=0.2;x<=0.9;x+=0.1){const[px]=proj(v,x,0);o+=`<line x1="${px}" x2="${px}" y1="10" y2="510" stroke="${css("--line")}"/><text x="${px+2}" y="508" font-size="10" fill="${css("--mut")}">${x.toFixed(1)}</text>`}
+  if(L.cloud)for(const c of p.cloud){const[px,py]=proj(v,c[0]/100,v==="s"?c[2]/100:c[1]/100);o+=`<rect x="${px-2}" y="${py-2}" width="4" height="4" fill="${css("--cloud")}" opacity=".55"/>`}
+  const sph=(arr,col,fill,hit)=>arr.map(s=>{const[px,py]=proj(v,s[0],v==="s"?s[2]:s[1]);return `<circle cx="${px}" cy="${py}" r="${s[3]*S*0.85}" fill="${fill}" fill-opacity="${fill==="none"?0:.18}" stroke="${col}" stroke-width="1.2"/>`}).join("");
+  if(L.start)o+=sph(p.start,css("--acc"),"none");
+  if(L.goal)o+=sph(p.goal,css("--mut"),"none");
+  if(L.goal){const bad=new Set(p.goal_hits.map(h=>h.link));
+   o+=p.goal.filter(s=>0).join("")}
+  const path=(pp,col,dash)=>{if(!pp)return "";const pts=pp.tcp.map(t=>proj(v,t[0],v==="s"?t[2]:t[1]));
+   let s=`<polyline points="${pts.map(q=>q.join(",")).join(" ")}" fill="none" stroke="${col}" stroke-width="2.5" ${dash?'stroke-dasharray="6 4"':""}/>`;
+   pp.hits.forEach((h,i)=>{if(h)s+=`<circle cx="${pts[i][0]}" cy="${pts[i][1]}" r="3.2" fill="${css("--bad")}"/>`});
+   s+=`<circle cx="${pts[0][0]}" cy="${pts[0][1]}" r="4" fill="${col}"/><rect x="${pts[pts.length-1][0]-4}" y="${pts[pts.length-1][1]-4}" width="8" height="8" fill="${col}"/>`;return s};
+  if(L.straight)o+=path(sp,css("--warn"),true);
+  if(L.planned)o+=path(pl,css("--ok"),false);
+  for(const h of p.goal_hits)for(const q of h.pts){const[px,py]=proj(v,q[0],v==="s"?q[2]:q[1]);o+=`<circle cx="${px}" cy="${py}" r="2.8" fill="${css("--bad")}"/>`}
+  if(v==="s"){const[,ty]=proj(v,0,-0.011);o+=`<line x1="10" x2="550" y1="${ty}" y2="${ty}" stroke="${css("--mut")}" stroke-dasharray="3 3"/><text x="14" y="${ty-4}" font-size="10" fill="${css("--mut")}">table</text>`}
+  svg.innerHTML=o}
+ // hits plot
+ let o="",W=860;const series=[[sp.hits,css("--warn"),"straight"],...(pl?[[pl.hits,css("--ok"),"cuRobo"]]:[])];
+ const mx=Math.max(1,...series.flatMap(s=>s[0]));
+ series.forEach(([h,col,n],k)=>{o+=`<polyline fill="none" stroke="${col}" stroke-width="2" points="${h.map((v,i)=>`${30+i*W/(h.length-1)},${110-v*90/mx}`).join(" ")}"/><text x="${40+k*90}" y="14" font-size="11" fill="${col}">${n}</text>`});
+ o+=`<line x1="30" x2="890" y1="110" y2="110" stroke="${css("--line")}"/><text x="2" y="114" font-size="10" fill="${css("--mut")}">0</text><text x="2" y="26" font-size="10" fill="${css("--mut")}">${mx}</text>`;
+ document.getElementById("plot").innerHTML=o}
+function firstFail(i){const k=DATA[i].plans.findIndex(p=>!p.ok&&p.goal_hits.length>3);return k<0?DATA[i].plans.findIndex(p=>!p.ok):k}
+document.querySelectorAll("button[data-l]").forEach(b=>b.onclick=()=>{L[b.dataset.l]^=1;b.classList.toggle("on");draw()});
+P=firstFail(0);draw();
+</script></body></html>

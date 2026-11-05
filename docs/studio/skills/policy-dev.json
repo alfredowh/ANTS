@@ -1,0 +1,153 @@
+{
+  "name": "policy-dev",
+  "version": 6,
+  "description": "/policy-dev: attach a human video, type the task, send; a settings dialog opens; Run starts the pipeline. Stages: video, extract (hurobo, markers required), demospec, prompt, generate, nominal, attack, diagnose, rewrite, gate, deploy. Plain data: any agent can read these defaults and limits; the Studio server and dialog read them from this file. Bowl-on-plate only. Muse tokens cost about $13.5 per million.",
+  "command": "/policy-dev <task>",
+  "scene": {
+    "suite": "libero_goal_swap",
+    "task_id": 8,
+    "task_must_mention": [
+      "bowl",
+      "plate"
+    ],
+    "debug_seed": 51,
+    "backend": "cap_harness",
+    "scene": "stock"
+  },
+  "scene_context": {
+    "dump": "data/scenes/stock/contacts_scene.json",
+    "text": "data/scene_text/stock_seed51_S4.txt",
+    "level": "combo",
+    "evidence": "e3",
+    "note": "Same S4 description and e3 repair evidence as the experiments, but measured in the stock scene these runs simulate, on the debug seed. The S4_L* files describe the scaled scene. Made by ants.studio.stock_scene on first use: one no-op rollout, no tokens."
+  },
+  "video": {
+    "folder": "hurobo/data/raw/e1/clips",
+    "extensions": [
+      ".mp4",
+      ".mov",
+      ".webm",
+      ".mkv",
+      ".avi",
+      ".m4v"
+    ],
+    "upload_max_mb": 200
+  },
+  "extraction": {
+    "python": "hurobo/.venv/bin/python",
+    "cwd": "hurobo",
+    "setup": "data/raw/setup_01/measurements.yaml",
+    "intrinsics": "data/camera_intrinsics_s10e.npz",
+    "cuts": "data/raw/e1/cuts.json",
+    "marker_size_m": 0.0575,
+    "note": "Only clips of the ArUco/ChArUco marker setup can be extracted. Marker size is the measured 5.75 cm; the stored demospecs used 6.0 cm."
+  },
+  "budget": {
+    "usd_per_million_tokens": 13.5,
+    "tokens_per_call_estimate": 46000,
+    "one_call_headroom_tokens": 50000,
+    "note": "Budgets are checked before each model call, so one call can overshoot; each stage keeps one call of headroom below the cap. Retries plus rewrites can need more than the cap; the run then ends as a budget stop."
+  },
+  "generation": {
+    "arm_with_video": "demo",
+    "arm_without_video": "nodemo",
+    "temperature": 0.2
+  },
+  "loop": {
+    "proposer_model": "mock",
+    "stall_window": 2,
+    "acceptance_seed_first": 51,
+    "acceptance_seed_last": 65
+  },
+  "settings": {
+    "synthesizer": {
+      "type": "bool",
+      "default": true,
+      "label": "Synthesizer module",
+      "help": "Off: no generation and no rewrites; give the main robot script, which is attacked and reported on."
+    },
+    "main_script": {
+      "type": "path",
+      "default": "",
+      "extensions": [
+        ".py"
+      ],
+      "label": "Main robot script",
+      "when": {
+        "synthesizer": false
+      }
+    },
+    "max_retries": {
+      "type": "int",
+      "default": 5,
+      "min": 0,
+      "max": 10,
+      "label": "Max Synthesizer retries"
+    },
+    "adversary": {
+      "type": "bool",
+      "default": true,
+      "label": "Adversary module",
+      "help": "Off: after generation, save the main program to data/deploy/; no attacks."
+    },
+    "pause_after_v0": {
+      "type": "bool",
+      "default": true,
+      "label": "Stop after candidate v0",
+      "help": "Hold before the Adversary with the rollout of v0 on screen until you continue. Spends nothing while waiting."
+    },
+    "strategy": {
+      "type": "choice",
+      "default": "thompson",
+      "label": "Selector strategy",
+      "choices": [
+        {
+          "value": "thompson",
+          "label": "Thompson (eta 0.2)",
+          "eta": 0.2
+        },
+        {
+          "value": "uniform",
+          "label": "Random / uniform (eta 1.0)",
+          "eta": 1.0
+        }
+      ]
+    },
+    "attacks": {
+      "type": "int",
+      "default": 2,
+      "min": 1,
+      "max": 30,
+      "label": "Attacks"
+    },
+    "seeds": {
+      "type": "int",
+      "default": 1,
+      "min": 1,
+      "max": 15,
+      "label": "Acceptance seeds",
+      "help": "Seeds 51 upward."
+    },
+    "spark": {
+      "type": "bool",
+      "default": false,
+      "label": "Muse Spark (Adversary)",
+      "help": "On: Muse Spark proposes attacks, diagnoses failures and explains them; adds cost. Off: uniform proposals and rule diagnosis, free."
+    },
+    "spark_token_cap": {
+      "type": "int",
+      "default": 100000,
+      "min": 10000,
+      "max": 1000000,
+      "label": "Muse Spark token cap",
+      "help": "Separate from the Synthesizer cap. When it is spent, the Adversary falls back to the free behaviour."
+    },
+    "token_cap": {
+      "type": "int",
+      "default": 300000,
+      "min": 10000,
+      "max": 1000000,
+      "label": "Muse token cap"
+    }
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "rates": {
+    "scaled/demo": {
+      "k": 7,
+      "n": 10,
+      "rate": 0.7,
+      "clopper_pearson": [
+        0.3475471499400026,
+        0.9332604888222655
+      ],
+      "wilson": [
+        0.3967781453459709,
+        0.892208733443606
+      ]
+    },
+    "scaled/nodemo": {
+      "k": 8,
+      "n": 10,
+      "rate": 0.8,
+      "clopper_pearson": [
+        0.4439045376923586,
+        0.9747892736731667
+      ],
+      "wilson": [
+        0.4901624691221323,
+        0.9433178490622331
+      ]
+    },
+    "stock/demo": {
+      "k": 7,
+      "n": 10,
+      "rate": 0.7,
+      "clopper_pearson": [
+        0.3475471499400026,
+        0.9332604888222655
+      ],
+      "wilson": [
+        0.3967781453459709,
+        0.892208733443606
+      ]
+    },
+    "stock/nodemo": {
+      "k": 0,
+      "n": 10,
+      "rate": 0.0,
+      "clopper_pearson": [
+        0.0,
+        0.3084971078187607
+      ],
+      "wilson": [
+        0.0,
+        0.2775328030260577
+      ]
+    }
+  },
+  "paired": {
+    "scaled": {
+      "mean_diff": -0.1,
+      "bootstrap_ci": [
+        -0.4,
+        0.2
+      ],
+      "p_exact": 1.0
+    },
+    "stock": {
+      "mean_diff": 0.7,
+      "bootstrap_ci": [
+        0.3,
+        1.0
+      ],
+      "p_exact": 0.125
+    }
+  },
+  "debug": {
+    "demo/0": {
+      "attempts": 2,
+      "solved": true
+    },
+    "demo/1": {
+      "attempts": 2,
+      "solved": true
+    },
+    "nodemo/0": {
+      "attempts": 5,
+      "solved": false
+    },
+    "nodemo/1": {
+      "attempts": 3,
+      "solved": true
+    }
+  },
+  "cost": {
+    "demo": {
+      "programs": 4,
+      "tokens": 204933,
+      "reasoning": 142617,
+      "new_tokens": 204933,
+      "usd": 2.77
+    },
+    "nodemo": {
+      "programs": 8,
+      "tokens": 247243,
+      "reasoning": 96795,
+      "new_tokens": 247243,
+      "usd": 3.34
+    }
+  }
+}

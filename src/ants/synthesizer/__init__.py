@@ -1,1 +1,1 @@
-"""System 1: SAM 3.1 tracking, Muse Wonder policy synthesis, experience memory."""
+"""System 1: Muse Wonder policy synthesis, model client and prompts."""
