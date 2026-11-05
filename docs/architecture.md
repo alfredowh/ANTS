@@ -28,14 +28,71 @@ when work starts, imported from the root `CLAUDE.md`.
 
 ## The loop
 
-![ANTS architecture](images/architecture.svg)
+[![ANTS high-level architecture](images/architecture-proposal.svg)](images/architecture-proposal.svg)
 
-Solid boxes are built and running; dashed boxes are future work. Observability (ANTS Studio) reads the traces of every cycle and never influences a decision.
+Solid boxes are implemented; dashed boxes are planned. Studio provides the interface for configuration, start/stop, optional candidate review and human guidance. Its observation views read traces; the orchestrator's code, not a model or the visualization, enforces gate decisions. Muse Wonder generates candidate programs through an API adapter or Muse Code.
+
+The cache symbol marks an **API reply cache**, not experience memory. Both System 1's
+[`ChatClient`](../src/ants/synthesizer/llm.py) and System 2's
+[`MetaModel`](../src/ants/adversary/models/meta.py) persist responses and reuse matching requests.
+Cache hits avoid a new API request and are logged without new token spend. The symbol does not
+assert that every Muse Code CLI rewrite uses these clients or shares their cache. Meta symbols
+identify Meta models, including SAM 3; PyRoki is not a Meta model.
 
 Per cycle (paper Algorithm 1): select category → propose and clamp perturbation → roll out the
 current best program → update that category's Beta posterior → on failure diagnose, add the case to
 Fn, ask System 1 for a rewrite with the new constraint → gate → if accepted, adopt it, add the
 constraint for good, reset posteriors → check stop rule → check escalation.
+
+## Module interfaces
+
+![Development subblocks, assumptions, and directed module inputs and outputs](images/architecture-subblocks.svg)
+
+This is a module/interface view, not a live event-timing diagram. The README intentionally groups
+these subblocks; Studio's [process flow](studio/process-flow-blocks.json) exposes finer stages.
+
+| Module | Inputs and source | Outputs and destination | Assumption or boundary |
+|---|---|---|---|
+| System 1: extraction and abstraction | Human marker video, calibration and object measurements | Object-relative DemoSpec to the prompt builder | Controlled marker setup; current video pipeline is bowl-on-plate, not arbitrary video understanding |
+| System 1: generation and repair | Task, DemoSpec, robot API and scene context; incumbent, feedback and constraints from the orchestrator for repairs | Runnable program or candidate to the simulation/orchestrator path | Frozen generator; context changes, not weights; repairs do not repeat demo extraction |
+| System 2: selection and proposal | Current best policy from the orchestrator, version-specific outcome history, severity and test budgets | Bounded perturbation to the simulation backend | All proposals are clamped in code; rule/sampling paths remain available |
+| Simulation substrate | Policy plus nominal scene or perturbation; replay seed and split | Outcome, trace, measurements and video to System 2 or the gate replay caller | ASPIRE/LIBERO with perception and robot primitives; privileged debug evidence is not a substitute for runtime perception |
+| System 2: history and diagnosis | All attack outcomes for history; task failures and nominal reference for diagnosis | AttackReport to the orchestrator; failure constraint to System 1 through Feedback; explanation to Studio | Passes and errors are recorded but are not diagnosed as task failures |
+| Orchestrator and gate | Candidate, nominal acceptance cases, discovered failure cases and incumbent outcomes | Adopt or reject; current best version to the next attack; stalled signature to human guidance | Candidate replays the retained cases; incumbent outcomes are reused under seeded deterministic replay |
+| Held-out evaluation | v0/final policy and separate held-out cases | Metrics and report to the user | No held-out feedback to System 1 or acceptance decisions |
+| Studio | User settings/answers and logged pipeline events | Run controls to pipeline code; views/replays to the user | UI control is distinct from model generation and code-enforced acceptance |
+
+The implemented regression guarantee covers **nominal acceptance cases plus discovered task
+failures**, not every successful attack previously sampled and not unseen scenes. Candidate
+acceptance is also distinct from certification: an accepted version can continue testing until a
+stop criterion or budget/cycle limit. Held-out evaluation is reporting, not a deployment approval.
+
+## Deployment and recovery concept
+
+![Future deployment and recovery workflow, including optional adversarial hardening](images/deployment-concept.svg)
+
+**Concept only; not an implemented deployment runtime.** The product scenario is described in
+[Concept: deployment and recovery](concept.md#deployment-and-recovery-concept). Existing synthesis,
+simulation, attack and gate modules are potential building blocks, but the connections shown here
+are planned. Saving a script under `data/deploy/` today is an artifact export, not robot deployment.
+
+The selected main policy could run directly or, later, inside a behavior tree with recovery and
+fallback skills. A deployment failure supplies observations, task context and logs for human
+review. If reopening development is approved, System 1 would coordinate reproduction of that
+scenario in simulation and verify that the observed failure is actually reproduced before using
+it as repair evidence. This reproduction capability is not implemented.
+
+Candidate outputs could be an updated main policy, a recovery skill, a separate recovery policy,
+or a revised behavior tree. Adversarial hardening is optional: System 2 could search around the
+reproduced failure using new constraints, within explicitly approved bounds and budgets. Skipping
+adversarial search would not skip replay/regression validation or human release review.
+
+An approved reproduced failure becomes a development/acceptance case, never a held-out test case
+reused for tuning. Candidates would be checked against previous acceptance cases and new failures,
+with human-reviewed release and controlled robot validation before replacement. Simulation replay
+does not establish real-world safety. Fidelity criteria, behavior-tree interfaces, validation of
+recovery interactions, release criteria and production failure handling remain design decisions.
+There is no claim of automatic deployment, guaranteed reproduction or non-disruptive recovery.
 
 ## Components
 
