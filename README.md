@@ -219,3 +219,17 @@ Every run is saved in `data/console_sessions/`, with all its settings in `execut
 ## License
 
 [Apache-2.0](LICENSE). Third-party models (SAM 3, Muse) and datasets keep their own licenses.
+
+## Citation
+
+ANTS builds on the following frameworks, models and methods:
+
+- Lu et al. (2026). [ASPIRE: Agentic /Skills Discovery for Robotics](https://arxiv.org/abs/2607.00272). arXiv:2607.00272. Robot-program execution harness.
+- Liu et al. (2023). [LIBERO: Benchmarking Knowledge Transfer for Lifelong Robot Learning](https://arxiv.org/abs/2306.03310). NeurIPS Datasets and Benchmarks. Original simulation benchmark.
+- Zhou et al. (2025). [LIBERO-PRO: Towards Robust and Fair Evaluation of Vision-Language-Action Models Beyond Memorization](https://arxiv.org/abs/2510.03827). arXiv:2510.03827. Benchmark variant used through ASPIRE.
+- Carion et al. (2025). [SAM 3: Segment Anything with Concepts](https://arxiv.org/abs/2511.16719). arXiv:2511.16719. Runtime object segmentation.
+- Kim, Yi, et al. (2025). [PyRoki: A Modular Toolkit for Robot Kinematic Optimization](https://arxiv.org/abs/2505.03728). IROS. Robot kinematics and motion planning support.
+- Zhang et al. (2020). [MediaPipe Hands: On-device Real-time Hand Tracking](https://arxiv.org/abs/2006.10214). arXiv:2006.10214. Hand tracking in demonstration extraction.
+- Russo et al. (2018). [A Tutorial on Thompson Sampling](https://arxiv.org/abs/1707.02038). Foundations and Trends in Machine Learning, 11(1), 1-96. Adaptive attack-category selection.
+
+Demonstration extraction reuses [hurobo](https://github.com/alfredowh/hurobo) and [OpenCV ArUco](https://docs.opencv.org/4.x/d5/dae/tutorial_aruco_detection.html) for marker-based measurements. ANTS does not use hurobo's policy-training pipeline.
