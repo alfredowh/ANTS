@@ -9,9 +9,9 @@
 <rect x="14" y="76" width="134" height="64" class="h"/><text x="81" y="103" text-anchor="middle" class="t">Human demo</text><text x="81" y="122" text-anchor="middle" class="s">one phone video</text>
 <rect x="200" y="76" width="166" height="64" class="n"/><text x="283" y="103" text-anchor="middle" class="t">Demo extraction</text><text x="283" y="122" text-anchor="middle" class="s">hurobo: hand + ArUco</text>
 <rect x="390" y="76" width="166" height="64" class="n"/><text x="473" y="103" text-anchor="middle" class="t">Abstraction z</text><text x="473" y="122" text-anchor="middle" class="s">DemoSpec, object-relative</text>
-<rect x="390" y="166" width="166" height="64" class="n"/><text x="473" y="192" text-anchor="middle" class="t">Muse Wonder</text><text x="473" y="212" text-anchor="middle" class="s">writes program π</text>
+<rect x="390" y="166" width="166" height="156" class="n"/><text x="473" y="232" text-anchor="middle" class="t">Muse Wonder</text><text x="473" y="252" text-anchor="middle" class="s">writes program π,</text><text x="473" y="268" text-anchor="middle" class="s">rewrites it from constraints</text>
 <rect x="200" y="166" width="166" height="64" class="f"/><text x="283" y="192" text-anchor="middle" class="t">Experience memory</text><text x="283" y="212" text-anchor="middle" class="s">future work</text>
-<rect x="390" y="258" width="166" height="64" class="n"/><text x="473" y="284" text-anchor="middle" class="t">Muse Wonder</text><text x="473" y="304" text-anchor="middle" class="s">rewrites π from constraint</text>
+
 <rect x="610" y="158" width="170" height="80" class="n"/><text x="695" y="181" text-anchor="middle" class="t">LIBERO rollout</text><text x="695" y="199" text-anchor="middle" class="s">nominal, then under attack</text><text x="695" y="214" text-anchor="middle" class="s">robot sees with SAM 3</text><text x="695" y="229" text-anchor="middle" class="s">plans with PyRoki</text>
 <rect x="610" y="76" width="170" height="64" class="h"/><text x="695" y="103" text-anchor="middle" class="t">Human check</text><text x="695" y="122" text-anchor="middle" class="s">continue or stop</text>
 <rect x="844" y="76" width="150" height="64" class="n"/><text x="919" y="103" text-anchor="middle" class="t">Failure history H</text><text x="919" y="122" text-anchor="middle" class="s">per-category counts</text>
