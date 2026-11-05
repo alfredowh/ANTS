@@ -292,3 +292,70 @@ uv run python -m ants.orchestrator.demo_vs_nodemo \
     --eval-seeds 1,2,3,4,5 \
     --token-budget 300000
 ```
+
+## System 2 v0: harden with the never-regress gate
+
+Does the adversary + diagnoser + gate loop improve a working program without regressions? Details: `src/ants/orchestrator/system2.py`.
+
+**Write a synthetic System 2 run (no sim, no model)**
+
+```bash
+uv run python tools/system2_mock.py data/runs/system2_mock_synthetic
+```
+
+**View all runs (incl. synthetic System 2 mock)**
+
+```bash
+uv run python -m ants.evalkit.report data/runs --open
+```
+
+## Research radar maintenance
+
+Keep the Robot Research Radar artifact in sync. Details: `.claude/skills/robot-research-radar/SKILL.md`.
+
+**Radar: merge JSON sources into documents**
+
+```bash
+uv run python .claude/skills/robot-research-radar/scripts/radar.py build \
+    --in scratch/orgs.json scratch/works.json \
+    --out scratch/radar_docs.json
+```
+
+**Radar: dump works still pending**
+
+```bash
+uv run python .claude/skills/robot-research-radar/scripts/radar.py pending \
+    --dump scratch/pending.json
+```
+
+## Agent skills (slash commands)
+
+Prompts that write into the ANTS To-do artifact. Details: `docs/runbook/agent-access.md`.
+
+**/idea-judge <idea>**
+
+```bash
+/idea-judge  # then your raw idea text
+```
+
+**/storyline-judge <storyline>**
+
+```bash
+/storyline-judge  # then the storyline text or a storyline_id
+```
+
+## Scene reconstruction probe: cuRobo Mapper TSDF/ESDF on the LIBERO scene
+
+Can ANTS fuse a multi-view camera scan of the LIBERO scene into a persistent 3D reconstruction (cuRobo's Mapper: TSDF to ESDF to mesh), as a step toward a policy planning against a reconstructed scene instead of a single-frame point cloud? Details: `docs/perception/scene-reconstruction-probe.md`.
+
+**Orbit-scan a LIBERO scene (RGB-D + camera pose per frame)**
+
+```bash
+LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py
+```
+
+**Real arm-driven scan: sweep the Franka's wrist camera (not a teleport)**
+
+```bash
+LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
+```
