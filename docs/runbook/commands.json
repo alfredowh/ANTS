@@ -584,7 +584,7 @@
     {
       "id": "exp04",
       "title": "Exp 04: which scene description helps?",
-      "status": "done (see experiment-04-scene-context.md)",
+      "status": "done (see experiment-04-scene-context.md, dev note not in repo)",
       "kind": "experiment",
       "question": "G: which scene section (S0-S4, SP placebo) in the first prompt helps, in levels L1-L3. E: which contact evidence (E0-E3, EP placebo) helps one repair.",
       "doc": "docs/results.md",
@@ -620,7 +620,7 @@
         "scenes/"
       ],
       "cost": "default cap 900,000 new tokens",
-      "result": "Results coming (docs/synthesizer/experiment-04-scene-context.md)."
+      "result": "Results coming (experiment-04-scene-context.md, dev note not in repo)."
     },
     {
       "id": "perturb",
@@ -688,7 +688,7 @@
     {
       "id": "exp05",
       "title": "Exp 05: perceived scene vs oracle",
-      "status": "done (see experiment-05-perceived-scene.md)",
+      "status": "done (see experiment-05-perceived-scene.md, dev note not in repo)",
       "kind": "experiment",
       "question": "Can SAM 3 and depth build the exp04 collision world and S4 text without simulator state, and what is missing?",
       "doc": "docs/results.md",
@@ -720,12 +720,12 @@
         "report.html"
       ],
       "cost": "free (no model call)",
-      "result": "See docs/synthesizer/experiment-05-perceived-scene.md and data/runs/exp05_perceived_scene/report.html."
+      "result": "See experiment-05-perceived-scene.md (dev note, not in repo) and data/runs/exp05_perceived_scene/report.html."
     },
     {
       "id": "exp06",
       "title": "Exp 06 to 08: cuRobo on perception, scene understanding off, perceived, privileged",
-      "status": "done (see experiment-06-08-curobo.md)",
+      "status": "done (see experiment-06-08-curobo.md, dev note not in repo)",
       "kind": "experiment",
       "question": "With cuRobo planning on the depth cloud (SAM 3 robot mask), does a scene description in the first prompt and contact evidence in repairs help, and how much does perception cost against a digital twin?",
       "doc": "docs/results.md",
@@ -890,7 +890,7 @@
       "status": "reference",
       "kind": "tool",
       "question": "Prompts that write into the ANTS To-do artifact.",
-      "doc": "docs/runbook/agent-access.md",
+      "doc": null,
       "run_dir": null,
       "modules": [
         "radar"
@@ -1396,7 +1396,7 @@
           "desc": "Gripper open above this aperture."
         }
       ],
-      "description": "hurobo is read-only for ANTS: outputs go to ANTS/data/. The exact invocation of the first extraction is reconstructed from smoke-2026-10-31.md §3; check hurobo's own README if a path differs.",
+      "description": "hurobo is read-only for ANTS: outputs go to ANTS/data/. The exact invocation of the first extraction is reconstructed from smoke-2026-10-31.md (dev note, not in repo) §3; check hurobo's own README if a path differs.",
       "examples": [],
       "modules": [
         "hurobo"
@@ -4146,7 +4146,7 @@
           "desc": "Per-run wall clock."
         }
       ],
-      "description": "Costs no model tokens (GPU and simulator only). Needs the SAM 3 and PyRoki services and the dev cuRobo service on 8118 (services.start, curobo.service). Runs one program at a time and resets the global attach file before each run; never start two at once. Written 2026-11-04 for the cuRobo false-negative debugging (docs/synthesizer/handoff-curobo-debug.md). Every plan's goal is labelled against the simulator (planner.label_goals); score with curobo.goal-confusion. Do not run while another simulator is running.",
+      "description": "Costs no model tokens (GPU and simulator only). Needs the SAM 3 and PyRoki services and the dev cuRobo service on 8118 (services.start, curobo.service). Runs one program at a time and resets the global attach file before each run; never start two at once. Written 2026-11-04 for the cuRobo false-negative debugging (handoff-curobo-debug.md, dev note not in repo). Every plan's goal is labelled against the simulator (planner.label_goals); score with curobo.goal-confusion. Do not run while another simulator is running.",
       "examples": [
         {
           "title": "Two programs, attach on",

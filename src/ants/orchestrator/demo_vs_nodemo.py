@@ -35,7 +35,7 @@ from ants.synthesizer.sam_api import add_sam_model_arg, normalize_sam_model
 
 EXAMPLE = "examples/libero/object_swap_seed1.py"
 EXAMPLE_TASK = "pick up the alphabet soup and place it in the basket"
-# hurobo E1 real size vs stock LIBERO bowl and plate (smoke-2026-10-31.md)
+# hurobo E1 real size vs stock LIBERO bowl and plate (smoke-2026-10-31.md (dev note, not in repo))
 REAL_SIZE = {"akita_black_bowl_1_main": 1.227, "plate_1_main": 1.855}
 
 

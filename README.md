@@ -4,7 +4,7 @@
 
 **Show a robot a task once. An adversary breaks it in simulation. Every failure becomes a readable fix, kept only if nominal acceptance cases and discovered failures do not regress.** No model weights are trained.
 
-Our entry for the [Meta Global AI Developer Hackathon 2026](https://dev.meta.ai/events/global-hackathon).
+Our entry for the <img src="docs/images/meta-logo.svg" alt="Meta" height="14"> [Meta Global AI Developer Hackathon 2026](https://dev.meta.ai/events/global-hackathon).
 
 ## Problem
 
@@ -36,6 +36,27 @@ Robots learn one task at a time from lots of data, and nobody can say when they 
 - **Tracking:** markers on the bowl, the plate and a ChArUco board give the hand and object paths in metres.
 - **Summary (DemoSpec):** grasp the rim, approach from above, carry height, release over the plate, all as fractions of the object sizes, so they carry over to the simulated objects.
 - **Program:** Muse Wonder writes a plain Python script over the robot API (`localize_object`, `move_to_pose`, `close_gripper`, …), checked on a nominal seed; one text repair made v0 pass.
+
+### Human video prompt vs text-only prompt
+
+Same task, same model, same repair budget; the only difference is whether the prompt carries the tracked demo (DemoSpec numbers relative to object size) or just "put the bowl on the plate". Both arms were repaired on the scaled-object scene only, then run on held-out seeds.
+
+| Held-out pass rate (2 programs × held-out seeds 1 to 5) | Human video prompt | Text-only prompt |
+|---|---|---|
+| Scaled objects (the scene used for repair) | 7/10 (95% CI 35 to 93%) | 8/10 (95% CI 44 to 97%) |
+| Stock objects (other sizes, never repaired on) | **7/10** (95% CI 35 to 93%) | **0/10** (95% CI 0 to 31%) |
+
+<table align="center">
+<tr>
+<td align="center"><img src="docs/images/fig1_success_rates.svg" alt="Held-out pass rates, demo vs text only, with 95% intervals" height="179"><br><sub>Held-out pass rate with 95% intervals</sub></td>
+<td align="center"><img src="docs/images/fig4_repair_journey.svg" alt="Tries each program needed on the debug seed" height="179"><br><sub>Tries needed on the debug seed (scaled objects)</sub></td>
+</tr>
+</table>
+
+- **Where the video helps:** on the repaired scene, text only catches up (8/10 vs 7/10, difference not significant). On other object sizes the text-only program fails 0/10 while the demo program holds 7/10: relative numbers from the video transfer across sizes, absolute guesses do not. The paired stock-scene difference is +0.7 (bootstrap CI 0.3 to 1.0, exact p = 0.125), so it is a strong hint, not a proven effect.
+- **Repair effort (debug seed):** the demo programs solved it in 2 tries each; the text-only programs needed 3 and 5 tries, and the 5-try one never solved it.
+- **Cost:** demo arm 4 programs, 205k tokens, about $2.77; text-only arm 8 programs, 247k tokens, about $3.34.
+- **Limits:** one task, one clip, two samples per arm, five seeds. Per the notebook, the arms differ in more than the demo (scene text and contact evidence too), and both ran before the attach frame fix. Source: [results_summary.json](docs/synthesizer/show-once-vs-task-only/results_summary.json), analysis in [the notebook](docs/synthesizer/show-once-vs-task-only/demo_vs_no_demo_analysis.ipynb).
 
 ## The task in LIBERO-Pro
 

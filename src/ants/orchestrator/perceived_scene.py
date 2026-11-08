@@ -13,7 +13,7 @@ Offline study on the L1 start state (libero_goal_swap task 8, seed 51; rack behi
 The oracle is the simulator dump of exp04 (`contacts_scene.json` of the same level). Perceived points are
 in the robot base frame, like the oracle world, so no registration is needed. Points of one mask are
 down-sampled to at most about 1000 by the probe (`data/scenes/perception_probe2.py`), which is enough
-for boxes but not for fine shapes (see the caveats in docs/synthesizer/experiment-05-perceived-scene.md).
+for boxes but not for fine shapes (see the caveats in experiment-05-perceived-scene.md (dev note, not in repo)).
 """
 
 # ruff: noqa: E501

@@ -4,7 +4,7 @@ Generated from `docs/runbook/commands.json` on 2026-11-01 by `uv run python -m a
 
 Run from the ANTS repo root unless the command starts with `cd`. Services must be up (`setup` section) before any simulation. Commands marked **paid** spend Muse tokens: check `--token-budget` first. GitHub and VS Code show a copy button on every code block.
 
-Interactive version: `docs/runbook.html`. Essential commands only: [experiment-commands.md](../synthesizer/experiment-commands.md).
+Interactive version: `docs/dev/runbook.html`. Essential commands only: [experiment-commands.md](../synthesizer/experiment-commands.md).
 
 ## Setup and health checks
 
@@ -109,7 +109,7 @@ nvidia-smi --query-gpu=memory.used,memory.total --format=csv && (ss -ltnp 2>/dev
 
 ### `demo.hurobo-extract`: hurobo: extract demos from clips
 
-hurobo is read-only for ANTS: outputs go to ANTS/data/. The exact invocation of the first extraction is reconstructed from smoke-2026-10-31.md §3; check hurobo's own README if a path differs.
+hurobo is read-only for ANTS: outputs go to ANTS/data/. The exact invocation of the first extraction is reconstructed from smoke-2026-10-31.md (dev note, not in repo) §3; check hurobo's own README if a path differs.
 
 ```bash
 cd hurobo && .venv/bin/python scripts/02_extract_demos.py data/raw/e1/clips/*.mp4 \
@@ -507,13 +507,13 @@ uv run python -m ants.evalkit.report data/runs/exp02_scaled --serve --open
 
 ## Exp 04: which scene description helps?
 
-*done (see experiment-04-scene-context.md).* G: which scene section (S0-S4, SP placebo) in the first prompt helps, in levels L1-L3. E: which contact evidence (E0-E3, EP placebo) helps one repair.
+*done (see experiment-04-scene-context.md, dev note not in repo).* G: which scene section (S0-S4, SP placebo) in the first prompt helps, in levels L1-L3. E: which contact evidence (E0-E3, EP placebo) helps one repair.
 
 - Docs: `docs/results.md` · run dir: `data/runs/exp04_scene`
 - Inputs: data/demospecs/hurobo_233859.json; data/scenes/levels.json; exp03 program_attempt2.py (for E)
 - Outputs: data/runs/exp04_scene/{G,E}-<variant>/; contacts.jsonl; overlay.json; scenes/
 - Cost: default cap 900,000 new tokens
-- Result so far: Results coming (docs/synthesizer/experiment-04-scene-context.md).
+- Result so far: Results coming (experiment-04-scene-context.md, dev note not in repo).
 
 ### `exp04.prep`: Exp 04 step 1: settle and dump every scene level
 
@@ -836,13 +836,13 @@ echo 'run curobo.contact with ANTS_ONTOP_TEST=out.json (ontop_test.py is called 
 
 ## Exp 05: perceived scene vs oracle
 
-*done (see experiment-05-perceived-scene.md).* Can SAM 3 and depth build the exp04 collision world and S4 text without simulator state, and what is missing?
+*done (see experiment-05-perceived-scene.md, dev note not in repo).* Can SAM 3 and depth build the exp04 collision world and S4 text without simulator state, and what is missing?
 
 - Docs: `docs/results.md` · run dir: `data/runs/exp05_perceived_scene`
 - Inputs: data/scenes/L1/contacts_scene.json; data/scenes/perception_probe2.py; data/scenes/perception_probe3.py
 - Outputs: perception_start.json; perception_arm.json; analysis.json; s4_perceived.txt; s4_oracle.txt; report.html
 - Cost: free (no model call)
-- Result so far: See docs/synthesizer/experiment-05-perceived-scene.md and data/runs/exp05_perceived_scene/report.html.
+- Result so far: See experiment-05-perceived-scene.md (dev note, not in repo) and data/runs/exp05_perceived_scene/report.html.
 
 ### `exp05.probe`: Exp 05 step 1: perceive the L1 start state (SAM 3, two arm poses)
 
@@ -905,7 +905,7 @@ uv run python -m ants.evalkit.perceived_report --out data/runs/exp05_perceived_s
 
 ## Exp 06 to 08: cuRobo on perception, scene understanding off, perceived, privileged
 
-*done (see experiment-06-08-curobo.md).* With cuRobo planning on the depth cloud (SAM 3 robot mask), does a scene description in the first prompt and contact evidence in repairs help, and how much does perception cost against a digital twin?
+*done (see experiment-06-08-curobo.md, dev note not in repo).* With cuRobo planning on the depth cloud (SAM 3 robot mask), does a scene description in the first prompt and contact evidence in repairs help, and how much does perception cost against a digital twin?
 
 - Docs: `docs/results.md` · run dir: `data/runs/curobo/<exp>/<arm>`
 - Inputs: data/demospecs/hurobo_233859.json; data/demospecs/hurobo_233832.json; data/runs/exp05_perceived_scene/s4_perceived.txt
@@ -1090,7 +1090,7 @@ uv run python -m ants.evalkit.report data/runs/exp02_scaled --serve --open
 
 ### `curobo.replay`: Replay logged programs with the held-bowl attach or an oracle cloud (no tokens)
 
-Costs no model tokens (GPU and simulator only). Needs the SAM 3 and PyRoki services and the dev cuRobo service on 8118 (services.start, curobo.service). Runs one program at a time and resets the global attach file before each run; never start two at once. Written 2026-11-04 for the cuRobo false-negative debugging (docs/synthesizer/handoff-curobo-debug.md). Every plan's goal is labelled against the simulator (planner.label_goals); score with curobo.goal-confusion. Do not run while another simulator is running.
+Costs no model tokens (GPU and simulator only). Needs the SAM 3 and PyRoki services and the dev cuRobo service on 8118 (services.start, curobo.service). Runs one program at a time and resets the global attach file before each run; never start two at once. Written 2026-11-04 for the cuRobo false-negative debugging (handoff-curobo-debug.md, dev note not in repo). Every plan's goal is labelled against the simulator (planner.label_goals); score with curobo.goal-confusion. Do not run while another simulator is running.
 
 ```bash
 ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py \
@@ -1360,7 +1360,7 @@ uv run python .claude/skills/robot-research-radar/scripts/metrics.py \
 
 *reference.* Prompts that write into the ANTS To-do artifact.
 
-- Docs: `docs/runbook/agent-access.md`
+- Docs: `None`
 - Inputs: free text
 - Outputs: artifact db documents
 - Result so far: Claude Code slash commands. Another agent can follow the SKILL.md files as plain instructions.

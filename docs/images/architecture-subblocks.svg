@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="1000" viewBox="0 0 1400 1000" role="img" aria-labelledby="title description">
   <title id="title">ANTS development modules and interfaces</title>
-  <desc id="description">Three detailed views of the implemented development architecture. System 1 extracts marker demonstrations, builds context and generates candidates. System 2 selects bounded tests, runs the incumbent in simulation and diagnoses task failures; all outcomes update history. The code-controlled orchestrator replays candidates on nominal acceptance cases and discovered failures, then adopts or rejects them. Held-out reporting is separate and never feeds synthesis. Input assumptions and module destinations are labeled.</desc>
+  <desc id="description">Three detailed views of the implemented development architecture. System 1 extracts marker demonstrations, builds context, generates a program and repairs it from nominal simulation results (up to K attempts) before handing it on. System 2 selects bounded tests, runs the incumbent in simulation and diagnoses task failures; all outcomes update history. The code-controlled orchestrator replays candidates on nominal acceptance cases and discovered failures, then adopts or rejects them. Held-out reporting is separate and never feeds synthesis. Input assumptions and module destinations are labeled.</desc>
   <defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1L9 5L1 9Z" fill="#526272"/></marker></defs>
   <style>
     text{font-family:Helvetica,Arial,sans-serif;letter-spacing:0;fill:#162b3b}
@@ -24,11 +24,12 @@
   <rect x="846" y="168" width="210" height="85" rx="6" class="synth"/>
   <text x="951" y="201" text-anchor="middle" class="node">Generate / repair</text><text x="951" y="228" text-anchor="middle" class="small">Muse Wonder</text>
   <rect x="1114" y="168" width="244" height="85" rx="6" class="box"/>
-  <text x="1236" y="201" text-anchor="middle" class="node">Program / candidate</text><text x="1236" y="228" text-anchor="middle" class="small">To orchestrator → simulation</text>
+  <text x="1236" y="201" text-anchor="middle" class="node">Program / candidate</text><text x="1236" y="228" text-anchor="middle" class="small">Nominal sim pass → orchestrator</text>
   <path d="M252 211H310M520 211H578M788 211H846M1056 211H1114" class="edge"/>
   <path d="M683 296V253" class="edge"/>
   <text x="42" y="302" class="small">Repairs bypass extraction.</text>
-  <text x="705" y="301" class="small">From orchestrator: incumbent + failure feedback + accumulated constraints</text>
+  <text x="705" y="301" class="small">From orchestrator: incumbent + feedback + constraints</text>
+  <g><title>Nominal develop-and-repair loop: the program runs on the nominal seed; on failure the rollout feedback goes back to Generate / repair, up to K attempts, before any attack</title><path d="M1180 253V274H990V253" class="edge"/><text x="1358" y="301" text-anchor="end" class="small">nominal fail → repair ≤ K</text></g>
 
   <rect x="22" y="364" width="1356" height="255" rx="8" fill="#fffbf5" stroke="#e1c49b"/>
   <text x="42" y="398" class="title">System 2 · Adversary</text>
