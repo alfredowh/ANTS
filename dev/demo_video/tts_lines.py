@@ -44,9 +44,20 @@ def main() -> None:
     model = None
     rows = []
     for ln in lines:
-        sentences = [s for s in re.split(r"(?<=[.!?])\s+", ln["text"]) if s.strip()]
-        parts = []
-        for s in sentences:
+        # "[pause 1s]" in the text adds that much silence (on top of the normal gap)
+        chunks = re.split(r"\[pause\s*([\d.]+)\s*s?\]", ln["text"])
+        items: list[str | float] = []
+        for i, chunk in enumerate(chunks):
+            if i % 2:
+                items.append(float(chunk))
+            else:
+                items += [s for s in re.split(r"(?<=[.!?])\s+", chunk.strip()) if s.strip()]
+        sentences = [x for x in items if isinstance(x, str)]
+        parts: list[Path | float] = []
+        for s in items:
+            if isinstance(s, float):
+                parts.append(s)
+                continue
             key = f"{s}|{ref_hash}|{ln['exaggeration']}|{ln['cfg_weight']}|{a.seed}"
             f = cache / (hashlib.sha256(key.encode()).hexdigest()[:16] + ".wav")
             if not f.is_file():
@@ -61,10 +72,15 @@ def main() -> None:
                 )
                 ta.save(str(f), w.cpu(), model.sr)
             parts.append(f)
-        wavs = [ta.load(str(p)) for p in parts]
-        sr = wavs[0][1]
+        sr = ta.load(str(next(p for p in parts if not isinstance(p, float))))[1]
         gap = torch.zeros(1, int(GAP * sr))
-        joined = torch.cat([x for w, _ in wavs for x in (w[:1], gap)][:-1], dim=1)
+        pieces = []
+        for p in parts:
+            if isinstance(p, float):
+                pieces.append(torch.zeros(1, int(p * sr)))
+            else:
+                pieces += [ta.load(str(p))[0][:1], gap]
+        joined = torch.cat(pieces[:-1] if not isinstance(parts[-1], float) else pieces, dim=1)
         dst = OUT / f"{ln['id']}.wav"
         ta.save(str(dst), joined, sr)
         sec = joined.shape[-1] / sr

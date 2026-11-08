@@ -6,13 +6,15 @@ import {
 import {BLUE, FONT, INK, Logo, MUTED, RED} from "../scenes/common";
 import {Problem} from "../scenes/Problem";
 import {TitleCard} from "../scenes/TitleCard";
+import {FLOWS, FlowScene, LoopScene, ResultScene} from "./Motion";
 
 type Box = {x: number; y: number; width: number; height: number};
 type Ev = {name: string; kind: string; t: number; box?: Box};
 export type Scene = {
   id: string; kind: string; start: number; duration: number; caption?: string; voice?: string | null;
-  card?: string; chips?: string[]; title?: string; image?: string; badge?: string; banner?: string;
-  clip?: string; segs?: number[][]; rate?: number; cam?: [string, number][]; pip?: Box; clicks?: string[];
+  card?: string; flow?: string; chips?: string[]; title?: string; image?: string; badge?: string; banner?: string;
+  clip?: string; segs?: number[][]; rate?: number;
+  insert?: {at: number; dur: number; per: number; clips: [string, string][]}; claim?: {text: string; from_end: number}; cam?: [string, number][]; pip?: Box; clicks?: string[];
   timeline?: {width: number; height: number; events: Ev[]};
 };
 export type FilmData = {fps: number; width: number; height: number; duration: number; scenes: Scene[]; music?: string};
@@ -47,11 +49,12 @@ const ScreenScene: React.FC<{s: Scene}> = ({s}) => {
     const e = byName(name);
     const at = e ? outOf(segs, e.t, rate) : null;
     if (at === null || !e?.box) continue;
-    const p = interpolate(t, [at - 0.8, at], [0, 1], {...clamp, easing: ease});
+    const p = interpolate(t, [at - 0.55, at], [0, 1], {...clamp, easing: ease});
     if (p === 0) break;
     const [tx, ty] = center(e.box);
     z += (zoom - z) * p; cx += (tx - cx) * p; cy += (ty - cy) * p;
   }
+  z *= 1 + Math.min(0.06, 0.012 * t); // slow continuous push-in
   const x = Math.min(0, Math.max(W - W * z, W / 2 - cx * z));
   const y = Math.min(0, Math.max(H - H * z, H / 2 - cy * z));
 
@@ -80,8 +83,20 @@ const ScreenScene: React.FC<{s: Scene}> = ({s}) => {
   const footage = acc / rate, lb = segs[segs.length - 1][1];
   const holdFrom = Math.round(footage * fps), holdLen = Math.round(s.duration * fps) - holdFrom;
 
+  // floating 3D window: tilted and inset when wide, flat and full when zoomed in (readable)
+  const flat = interpolate(z, [1, 1.55], [0, 1], clamp);
+  const win = 0.86 + 0.14 * flat;
+  const ry = interpolate(t, [0, s.duration], [-7, 5]) * (1 - flat);
+  const rx = 5 * (1 - flat);
+  const clicks = events.filter((e) => (e.kind === "click" || (s.clicks ?? []).includes(e.name)) && outOf(segs, e.t, rate) !== null);
   return (
-    <AbsoluteFill style={{backgroundColor: "#fff", overflow: "hidden"}}>
+    <AbsoluteFill style={{background: "radial-gradient(ellipse at 30% 20%, #ffffff 0%, #e9f0fb 55%, #d9e4f5 100%)", overflow: "hidden", perspective: 2600}}>
+      {clicks.map((e) => (
+        <Sequence key={e.name} from={Math.round((outOf(segs, e.t, rate) ?? 0) * fps)} layout="none"><Audio src={staticFile("film/sfx/click.wav")} volume={0.6} /></Sequence>
+      ))}
+      <div style={{position: "absolute", left: 0, top: 0, width: W, height: H, overflow: "hidden", borderRadius: 22 * (1 - flat),
+        transform: `scale(${win}) rotateY(${ry}deg) rotateX(${rx}deg)`, transformOrigin: "50% 50%",
+        boxShadow: `0 ${40 * (1 - flat)}px ${90 * (1 - flat)}px rgba(20,40,80,${0.28 * (1 - flat)})`, background: "#fff"}}>
       <div style={{position: "absolute", width: W, height: H, transformOrigin: "0 0", transform: `translate(${x}px, ${y}px) scale(${z})`}}>
         {parts}
         {holdLen > 0 && (
@@ -107,7 +122,55 @@ const ScreenScene: React.FC<{s: Scene}> = ({s}) => {
           <path d="M3 2 L3 27 L9.5 21 L14 31 L18 29.2 L13.6 19.5 L22 19.5 Z" fill="#111" stroke="#fff" strokeWidth={2} strokeLinejoin="round" />
         </svg>
       </div>
+      </div>
+      {s.insert && <Insert ins={s.insert} total={s.duration} />}
+      {s.claim && <Claim text={s.claim.text} at={s.duration - s.claim.from_end} />}
       {s.banner && <Banner text={s.banner} />}
+    </AbsoluteFill>
+  );
+};
+
+/** Real footage inside a tilted frame over the blurred screen: one clip, or a beat montage. */
+const Insert: React.FC<{ins: NonNullable<Scene["insert"]>; total: number}> = ({ins, total}) => {
+  const frame = useCurrentFrame();
+  const {fps} = useVideoConfig();
+  const t = frame / fps;
+  const end = Math.min(total, ins.at + ins.dur);
+  if (t < ins.at - 0.4 || t > end + 0.4) return null;
+  const o = Math.min(interpolate(t, [ins.at - 0.3, ins.at], [0, 1], clamp), interpolate(t, [end - 0.25, end], [1, 0], clamp));
+  const k = Math.min(ins.clips.length - 1, Math.max(0, Math.floor((t - ins.at) / ins.per)));
+  const [src, label] = ins.clips[k];
+  const local = Math.max(0, t - ins.at - k * ins.per);
+  const pop = interpolate(local, [0, 0.18], [1.04, 1], clamp);
+  const ry = interpolate(t, [ins.at, end], [6, -6]);
+  return (
+    <AbsoluteFill style={{opacity: o, backdropFilter: "blur(18px)", background: "rgba(232,239,250,0.55)", alignItems: "center", justifyContent: "center", perspective: 2400}}>
+      {ins.clips.length > 1 && ins.clips.map((_, i) => (
+        <Sequence key={i} from={Math.round((ins.at + i * ins.per) * fps)} layout="none"><Audio src={staticFile("film/sfx/tick.wav")} volume={0.5} /></Sequence>
+      ))}
+      <div style={{width: 1240, height: 794, borderRadius: 20, overflow: "hidden", transform: `rotateY(${ry}deg) rotateX(4deg) scale(${pop})`,
+        boxShadow: "0 40px 90px rgba(20,40,80,0.35)", background: "#000"}}>
+        <Sequence from={Math.round((ins.at + k * ins.per) * fps)} layout="none">
+          <OffthreadVideo src={staticFile(src)} startFrom={Math.round(4 * fps)} muted style={{width: "100%", height: "100%", objectFit: "cover"}} />
+        </Sequence>
+      </div>
+      {label && (
+        <div style={{marginTop: 34, background: INK, color: "#fff", font: `700 44px ${FONT}`, padding: "12px 34px", borderRadius: 999}}>{label}</div>
+      )}
+    </AbsoluteFill>
+  );
+};
+
+/** One big claim line over the shot, with a chime. */
+const Claim: React.FC<{text: string; at: number}> = ({text, at}) => {
+  const frame = useCurrentFrame();
+  const {fps} = useVideoConfig();
+  const p = spring({frame: frame - Math.round(at * fps), fps, config: {damping: 14, mass: 0.6}});
+  if (frame < at * fps) return null;
+  return (
+    <AbsoluteFill style={{alignItems: "center", justifyContent: "center", background: `rgba(255,255,255,${0.72 * Math.min(1, p)})`, backdropFilter: `blur(${10 * Math.min(1, p)}px)`}}>
+      <Sequence from={Math.round(at * fps)} layout="none"><Audio src={staticFile("film/sfx/chime.wav")} volume={0.55} /></Sequence>
+      <div style={{font: `800 118px ${FONT}`, color: INK, letterSpacing: "-0.02em", transform: `scale(${0.8 + 0.2 * p})`, opacity: Math.min(1, p)}}>{text}</div>
     </AbsoluteFill>
   );
 };
@@ -182,49 +245,6 @@ const ImageScene: React.FC<{s: Scene}> = ({s}) => {
   );
 };
 
-const LoopScene: React.FC<{s: Scene}> = ({s}) => {
-  const frame = useCurrentFrame();
-  const {fps} = useVideoConfig();
-  const steps = ["Attack breaks the policy", "Adversary explains why", "Rule for the generator", "Policy rewritten", "Gate: keep only if nothing got worse"];
-  const R = 330, cx0 = W / 2 - 180, cy0 = H / 2 + 10;
-  const per = Math.max(1.6, (s.duration - 4) / steps.length);
-  const human = interpolate(frame, [(steps.length * per) * fps, (steps.length * per + 0.6) * fps], [0, 1], clamp);
-  return (
-    <AbsoluteFill style={{background: "#fff", fontFamily: FONT}}>
-      <svg width={W} height={H} style={{position: "absolute"}}>
-        <circle cx={cx0} cy={cy0} r={R} fill="none" stroke="#d5dde6" strokeWidth={4} strokeDasharray="12 10" />
-      </svg>
-      {steps.map((txt, i) => {
-        const a = -Math.PI / 2 + (i * 2 * Math.PI) / steps.length;
-        const p = spring({frame: frame - i * per * fps, fps, config: {damping: 200}});
-        const gate = i === steps.length - 1;
-        return (
-          <div key={txt} style={{position: "absolute", left: cx0 + R * Math.cos(a) - 170, top: cy0 + R * Math.sin(a) - 48, width: 340,
-            minHeight: 96, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "10px 16px",
-            background: "#fff", border: `3px solid ${gate ? INK : i === 0 ? RED : BLUE}`, borderRadius: 16,
-            color: gate ? INK : i === 0 ? RED : BLUE, font: `600 30px ${FONT}`, opacity: p, transform: `scale(${0.85 + 0.15 * p})`}}>{txt}</div>
-        );
-      })}
-      <div style={{position: "absolute", left: cx0 + R + 260, top: cy0 - 90, width: 420, opacity: human, border: `3px dashed ${MUTED}`,
-        borderRadius: 16, padding: "20px 24px", color: INK, font: `500 30px/1.35 ${FONT}`}}>
-        Same failure comes back 3 times?<br /><b>ants asks a person.</b> The answer becomes a new rule.
-      </div>
-    </AbsoluteFill>
-  );
-};
-
-const Caption: React.FC<{text: string; duration: number}> = ({text, duration}) => {
-  const frame = useCurrentFrame();
-  const {fps} = useVideoConfig();
-  const o = Math.min(interpolate(frame, [8, 20], [0, 1], clamp), interpolate(frame, [duration * fps - 12, duration * fps], [1, 0], clamp));
-  return (
-    <div style={{position: "absolute", left: 0, right: 0, bottom: 56, display: "flex", justifyContent: "center", opacity: o}}>
-      <div style={{maxWidth: 1400, padding: "16px 32px", borderRadius: 14, background: "rgba(12,16,26,0.86)", color: "#fff",
-        font: `500 36px/1.3 ${FONT}`, textAlign: "center"}}>{text}</div>
-    </div>
-  );
-};
-
 const SceneView: React.FC<{s: Scene}> = ({s}) => {
   switch (s.kind) {
     case "card": return <TitleCard line={s.card === "close" ? "Show once. Break smart." : ""} />;
@@ -232,28 +252,42 @@ const SceneView: React.FC<{s: Scene}> = ({s}) => {
     case "chips": return <ChipsScene s={s} />;
     case "demo": return <DemoScene s={s} />;
     case "image": return <ImageScene s={s} />;
-    case "loop": return <LoopScene s={s} />;
+    case "loop": return <LoopScene duration={s.duration} />;
+    case "result": return <ResultScene duration={s.duration} />;
+    case "flow": return <FlowScene flow={FLOWS[s.flow!]} duration={s.duration} />;
     default: return <ScreenScene s={s} />;
   }
 };
 
-const NO_CAPTION = new Set(["card", "problem", "chips"]);
 
-export const Film: React.FC<{film: FilmData}> = ({film}) => {
+/** Whip transition: each scene slides and blurs in, and out, so no cut is static. */
+const Whip: React.FC<{len: number; dir: number; children: React.ReactNode}> = ({len, dir, children}) => {
+  const frame = useCurrentFrame();
+  const inP = interpolate(frame, [0, 9], [1, 0], {...clamp, easing: Easing.out(Easing.cubic)});
+  const outP = interpolate(frame, [len - 8, len], [0, 1], {...clamp, easing: Easing.in(Easing.cubic)});
+  const dx = (inP * 0.35 - outP * 0.35) * W * dir;
+  const blur = 26 * Math.max(inP, outP);
+  return <AbsoluteFill style={{transform: `translateX(${dx}px)`, filter: blur > 0.5 ? `blur(${blur}px)` : undefined}}>{children}</AbsoluteFill>;
+};
+
+export const Film: React.FC<{film: FilmData; withMusic?: boolean}> = ({film, withMusic = true}) => {
   const {fps} = useVideoConfig();
   return (
     <AbsoluteFill style={{background: "#fff"}}>
-      {film.scenes.map((s) => {
+      {film.scenes.map((s, i) => {
         const from = Math.round(s.start * fps), len = Math.round(s.duration * fps);
+        const prev = film.scenes[i - 1];
+        const whoosh = i > 0 && prev.kind !== s.kind;
         return (
           <Sequence key={s.id} from={from} durationInFrames={len}>
-            <SceneView s={s} />
-            {s.caption && !NO_CAPTION.has(s.kind) && <Caption text={s.caption} duration={s.duration} />}
+            <Whip len={len} dir={i % 2 ? -1 : 1}><SceneView s={s} /></Whip>
             {s.voice && <Sequence from={Math.round(0.3 * fps)} layout="none"><Audio src={staticFile(s.voice)} /></Sequence>}
+            {whoosh && <Audio src={staticFile("film/sfx/whoosh.wav")} volume={0.45} />}
+            {s.kind === "card" && <Audio src={staticFile("film/sfx/sting.wav")} volume={0.5} />}
           </Sequence>
         );
       })}
-      {film.music && <Audio src={staticFile(film.music)} volume={0.08} />}
+      {withMusic && film.music && <Audio src={staticFile(film.music)} volume={0.14} />}
     </AbsoluteFill>
   );
 };

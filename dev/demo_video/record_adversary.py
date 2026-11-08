@@ -19,7 +19,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(Path(__file__).parent))
-from record_repair import H, Recorder, W  # noqa: E402
+from record_repair import DSF, H, Recorder, W  # noqa: E402
 from studio_replay import REPO  # noqa: E402
 
 from ants.studio import console_server  # noqa: E402
@@ -117,7 +117,9 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path="/usr/bin/google-chrome")
-        page = browser.new_page(viewport={"width": W, "height": H}, color_scheme="light")
+        page = browser.new_page(
+            viewport={"width": W, "height": H}, color_scheme="light", device_scale_factor=DSF
+        )
         page.goto(f"http://127.0.0.1:{PORT}")
         page.click("[data-view=adversary]")
         page.wait_for_timeout(3000)

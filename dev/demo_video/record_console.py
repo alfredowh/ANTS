@@ -21,7 +21,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 sys.path.insert(0, str(Path(__file__).parent))
-from record_repair import H, Recorder, W  # noqa: E402
+from record_repair import DSF, H, Recorder, W  # noqa: E402
 from studio_replay import REPO  # noqa: E402
 
 from ants.studio import console_server  # noqa: E402
@@ -101,6 +101,11 @@ def take_deploy(rec: Recorder) -> None:
 TAKES = {"prompt": take_prompt, "deploy": take_deploy}
 
 
+def answer_pick(route) -> None:
+    """Answer /pick-video as the native file dialog would, so no dialog opens on the desktop."""
+    route.fulfill(json={"ok": True, "path": str(CLIP), "name": CLIP.name})
+
+
 def main(names: list[str]) -> None:
     threading.Thread(
         target=console_server.serve, kwargs={"port": PORT, "sessions_dir": None}, daemon=True
@@ -109,10 +114,10 @@ def main(names: list[str]) -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path="/usr/bin/google-chrome")
         for name in names:
-            page = browser.new_page(viewport={"width": W, "height": H}, color_scheme="light")
-            # answer as the native file dialog would (the clip path): no dialog opens on the desktop
-            picked = {"ok": True, "path": str(CLIP), "name": CLIP.name}
-            page.route("**/pick-video", lambda r, picked=picked: r.fulfill(json=picked))
+            page = browser.new_page(
+                viewport={"width": W, "height": H}, color_scheme="light", device_scale_factor=DSF
+            )
+            page.route("**/pick-video", answer_pick)
             page.goto(f"http://127.0.0.1:{PORT}")
             page.click("[data-view=synthesizer]")
             page.wait_for_timeout(1500)

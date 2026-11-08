@@ -1492,11 +1492,11 @@ cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/ma
 - Docs: `dev/demo_video/record_repair.py` · run dir: `data/demo_video/clips`
 - Inputs: a logged run
 - Outputs: raw.mp4 + timeline.json; rendered MP4; captions.srt, narration.md
-- Result so far: Rough cut 1: 3:12, 17 scenes, cloned voice, generated music (out/film_rough.mp4).
+- Result so far: v1 rough cut 3:12 (film_rough.mp4); v2 4K with animated result, gate loop, flows, no captions (film_v2_4k.mp4); v3 4K dynamic: beat-synced cuts, 3D windows, whips, inserts, music with drop, sparse sfx (film_v3_4k.mp4). Music and voice-only stems for v2 and v3.
 
 ### `demo_video.record_repair`: Demo video: record the repair clip
 
-Replays the logged run data/runs/exp03_explain/clip_233859 (5 attempts, 4 failures then a pass) in ANTS Studio, clicks through the attempts panel with Playwright (headless /usr/bin/google-chrome) and writes data/demo_video/clips/repair/raw.mp4 (1920x1080, 30 fps, no cursor) plus timeline.json (time and element box per action). No model calls; nothing is generated. Env HOLD stretches every pause (HOLD=2 for long raw takes) and CLIP names the output folder (default repair).
+Replays the logged run data/runs/exp03_explain/clip_233859 (5 attempts, 4 failures then a pass) in ANTS Studio, clicks through the attempts panel with Playwright (headless /usr/bin/google-chrome) and writes data/demo_video/clips/repair/raw.mp4 (1920x1080, 30 fps, no cursor) plus timeline.json (time and element box per action). No model calls; nothing is generated. Env HOLD stretches every pause (HOLD=2 for long raw takes) and CLIP names the output folder (default repair). Env DSF sets the device pixel ratio (default 2: 3840x2160 video, element boxes stay in 1920x1080 CSS pixels); the console and Adversary recorders use the same setting.
 
 ```bash
 ANTS repo root && uv run python dev/demo_video/record_repair.py
@@ -1635,7 +1635,7 @@ uv run python dev/demo_video/export_text.py repair
 
 ### `demo_video.film`: Demo video: assemble the film (lines, spec)
 
-Builds the 17-scene demo film. 'lines' reads the scene planner export (data/demo_video/film/planner/, from the ANTS Demo Scene Planner artifact) and writes the voice lines with a tone per scene (calm, neutral, warm; no excited). 'build' reads voice.json and writes remotion/public/film/film.json: each scene lasts max(footage, line + 0.8 s); screen footage plays up to 2x faster to fit its line. Then render the 'film' composition.
+Builds the 17-scene demo film. 'lines' reads the scene planner export (data/demo_video/film/planner/, from the ANTS Demo Scene Planner artifact) and writes the voice lines with a tone per scene (calm, neutral, warm; no excited). 'build' reads voice.json and writes remotion/public/film/film.json: each scene lasts max(footage, line + 0.8 s); screen footage plays up to 2x faster to fit its line. Then render the 'film' composition. v3: scene lengths snap to 2-beat steps at 116 bpm so cuts land on the beat; screen scenes float in a tilted 3D window that flattens when zoomed, whip transitions between scenes, real simulator inserts (live rollout, 4-clip attack montage) and one big claim line in the repair scene.
 
 ```bash
 ANTS repo root && uv run python dev/demo_video/film.py \
@@ -1664,9 +1664,21 @@ Render the film:
 cd dev/demo_video/remotion && uvx --from nodejs-wheel npx remotion render film out/film_rough.mp4
 ```
 
+Render 4K with music, voice only, and the music stem:
+
+```bash
+cd dev/demo_video/remotion && uvx --from nodejs-wheel npx remotion render film out/film_v2_4k.mp4 --scale=2 && uvx --from nodejs-wheel npx remotion render film-voice out/film_v2_4k_voice_only.mp4 --scale=2 && cp public/film/music.wav out/film_music.wav
+```
+
+Render v3 in 4K:
+
+```bash
+cd dev/demo_video/remotion && uvx --from nodejs-wheel npx remotion render film out/film_v3_4k.mp4 --scale=2
+```
+
 ### `demo_video.tts_lines`: Demo video: narrate the film lines (Chatterbox)
 
-Speaks every scene line of data/demo_video/film/lines.json in the cloned voice, sentence by sentence (cached), joined with short pauses. Writes remotion/public/film/voice/<scene>.wav and data/demo_video/film/voice.json.
+Speaks every scene line of data/demo_video/film/lines.json in the cloned voice, sentence by sentence (cached), joined with short pauses. Writes remotion/public/film/voice/<scene>.wav and data/demo_video/film/voice.json. A '[pause 1s]' marker in a planner transcript adds that much silence at that point.
 
 ```bash
 ANTS repo root && env -u VIRTUAL_ENV uv run --project ../workbench/modules/tts-chatterbox python dev/demo_video/tts_lines.py \
@@ -1686,7 +1698,7 @@ env -u VIRTUAL_ENV uv run --project ../workbench/modules/tts-chatterbox python d
 
 ### `demo_video.music`: Demo video: generate the background music
 
-Synthesizes a quiet royalty-free bed (pads plus a sparse piano-like arpeggio, 72 bpm, C-G-Am-F, fade in and out), low-passed by ffmpeg. numpy is used one-off via --with, not a project dependency.
+Synthesizes an uplifting, royalty-free track (C-G-Am-F, eighth-note piano arpeggio, pad, bass, four-on-the-floor kick, claps, hats). With --film the sections follow film.json: calm intro under the problem, riser into a drop at the Studio (scene 4), breakdown at the gate (scene 13), build into the ending, one beat of silence before the closing card, held final chord. numpy via --with only. The film mixes it at volume 0.14; 'film-voice' renders without it; the wav is the separate music stem.
 
 ```bash
 ANTS repo root && uv run python --with numpy dev/demo_video/music.py \
@@ -1697,8 +1709,28 @@ ANTS repo root && uv run python --with numpy dev/demo_video/music.py \
 |---|---|---|---|
 | `<seconds>` | `194` | yes | Length in seconds (match film.json duration). |
 
-Music for a 3:14 film:
+Music synced to the film:
 
 ```bash
-uv run --with numpy python dev/demo_video/music.py 194
+uv run --with numpy python dev/demo_video/music.py --film
+```
+
+Plain track (104 bpm):
+
+```bash
+uv run --with numpy python dev/demo_video/music.py 200
+```
+
+### `demo_video.sfx`: Demo video: generate the sound effects
+
+Synthesizes the film's few sound effects (royalty-free): whoosh (scene-type changes), click (cursor clicks), tick (montage cuts, result dots), thud (gate rejects), chime (gate keeps, claim lines), sting (logo cards).
+
+```bash
+ANTS repo root && uv run python --with numpy dev/demo_video/sfx.py
+```
+
+Generate:
+
+```bash
+uv run --with numpy python dev/demo_video/sfx.py
 ```

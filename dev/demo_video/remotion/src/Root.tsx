@@ -1,3 +1,4 @@
+import {HackathonIntro} from "./scenes/HackathonIntro";
 import {Film, filmFrames, FilmData} from "./film/Film";
 import filmData from "../public/film/film.json";
 import {Composition} from "remotion";
@@ -27,7 +28,9 @@ export const Root = () => (
     ))}
     <Composition id="logo" component={TitleCard} defaultProps={{line: ""}} fps={30} width={1920} height={1080} durationInFrames={150} />
     <Composition id="problem" component={Problem} fps={30} width={1920} height={1080} durationInFrames={PROBLEM_SECONDS * 30} />
-    <Composition id="film" component={Film} defaultProps={{film: filmData as unknown as FilmData}} fps={30} width={1920} height={1080} durationInFrames={filmFrames(filmData as unknown as FilmData)} />
+    <Composition id="hackathon" component={HackathonIntro} fps={30} width={1920} height={1080} durationInFrames={180} />
+    <Composition id="film-voice" component={Film} defaultProps={{film: filmData as unknown as FilmData, withMusic: false}} fps={30} width={1920} height={1080} durationInFrames={filmFrames(filmData as unknown as FilmData)} />
+    <Composition id="film" component={Film} defaultProps={{film: filmData as unknown as FilmData, withMusic: true}} fps={30} width={1920} height={1080} durationInFrames={filmFrames(filmData as unknown as FilmData)} />
     <Composition id="close" component={TitleCard} defaultProps={{line: "Show once. Break smart."}} fps={30} width={1920} height={1080} durationInFrames={150} />
   </>
 );

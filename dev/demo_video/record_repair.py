@@ -28,6 +28,8 @@ from studio_replay import REPO, Replay, start  # noqa: E402
 SOURCE = REPO / "data" / "runs" / "exp03_explain" / "clip_233859" / ""
 # HOLD stretches every pause (long raw takes); CLIP names the output folder
 HOLD = float(os.environ.get("HOLD", "1"))
+# DSF records at that device pixel ratio (2 = 3840x2160 video); boxes stay in CSS pixels
+DSF = int(os.environ.get("DSF", "2"))
 OUT = REPO / "data" / "demo_video" / "clips" / os.environ.get("CLIP", "repair")
 PORT = 58932
 W, H, FPS = 1920, 1080, 30
@@ -57,7 +59,13 @@ class Recorder:
     def begin(self) -> None:
         self.cdp.send(
             "Page.startScreencast",
-            {"format": "jpeg", "quality": 92, "maxWidth": W, "maxHeight": H, "everyNthFrame": 1},
+            {
+                "format": "jpeg",
+                "quality": 92,
+                "maxWidth": W * DSF,
+                "maxHeight": H * DSF,
+                "everyNthFrame": 1,
+            },
         )
         self.wall0 = time.monotonic()
         self.wait(0.3)
@@ -104,12 +112,13 @@ class Recorder:
         (self.frames_dir / "list.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
         subprocess.run(
             ["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0",
-             "-i", "list.txt", "-vf", f"fps={FPS},scale={W}:{H}", "-c:v", "libx264",
+             "-i", "list.txt", "-vf", f"fps={FPS},scale={W * DSF}:{H * DSF}", "-c:v", "libx264",
              "-crf", "16", "-pix_fmt", "yuv420p", str(out / "raw.mp4")],
             cwd=self.frames_dir, check=True,
         )  # fmt: skip
-        timeline = {"width": W, "height": H, "fps": FPS, "duration": round(total, 3),
-                    "source_run": str(SOURCE.relative_to(REPO)), "events": self.events}  # fmt: skip
+        timeline = {"width": W, "height": H, "fps": FPS, "pixel_ratio": DSF,
+                    "duration": round(total, 3), "source_run": str(SOURCE.relative_to(REPO)),
+                    "events": self.events}  # fmt: skip
         (out / "timeline.json").write_text(json.dumps(timeline, indent=1), encoding="utf-8")
         print(f"{out / 'raw.mp4'}  {total:.1f} s, {len(self.frames)} frames, "
               f"{len(self.events)} events")  # fmt: skip
@@ -193,7 +202,7 @@ def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         browser = p.chromium.launch(executable_path="/usr/bin/google-chrome")
-        page = browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=1)
+        page = browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=DSF)
         page.goto(f"http://127.0.0.1:{PORT}")
         page.click("[data-view=synthesizer]")
         page.wait_for_timeout(2000)

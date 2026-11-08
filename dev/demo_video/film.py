@@ -12,6 +12,7 @@ a few key lines; no excited tone.
 from __future__ import annotations
 
 import json
+import math
 import sys
 import wave
 from pathlib import Path
@@ -21,6 +22,8 @@ FILM = REPO / "data" / "demo_video" / "film"
 CLIPS = REPO / "data" / "demo_video" / "clips"
 PAD = 0.8  # seconds of breathing room after each line
 MAX_RATE = 2.0  # screen footage may play up to this much faster to fit its line
+BPM = 116  # music tempo; scene lengths snap to 2-beat steps so cuts land on the beat
+STEP = 2 * 60 / BPM
 
 TONES = {  # Chatterbox exaggeration, cfg_weight (lower cfg = calmer pace)
     "calm": (0.4, 0.5),
@@ -45,24 +48,26 @@ SCENES: list[dict] = [
     {"id": "v07-generate", "kind": "screen", "clip": "run", "tone": "calm", "segs": [[33.0, 45.0]],
      "cam": [["program_generator", 1.6]], "pip": DEMO_PANEL},
     {"id": "v08-repair", "kind": "screen", "clip": "repair_long", "tone": "calm",
-     "segs": [[8.0, 30.0], [52.5, 66.0]],
+     "segs": [[8.0, 30.0], [52.5, 66.0]], "claim": {"text": "4 repairs. Task succeeds.", "from_end": 3.2},
      "cam": [["a0_result", 2.2], ["a1_why", 1.8], ["a1_diff_body", 1.8], ["a4_result", 2.4], ["a4_rollout", 1.9]]},
     {"id": "v09-rollout", "kind": "screen", "clip": "run", "tone": "calm", "segs": [[50.0, 64.0]],
-     "cam": [["live_rollout", 1.7]], "pip": DEMO_PANEL},
-    {"id": "v10-result", "kind": "image", "image": "assets/fig1_success_rates.svg", "tone": "warm", "min": 8},
+     "cam": [["live_rollout", 1.7]], "pip": DEMO_PANEL,
+     "insert": {"at": 2.2, "dur": 99, "per": 99, "clips": [["assets/sim_candidate_v0.mp4", ""]]}},
+    {"id": "v10-result", "kind": "result", "tone": "warm", "min": 9},
     {"id": "v11-humancheck", "kind": "screen", "clip": "run", "tone": "calm", "segs": [[66.0, 78.0]],
      "cam": [["human_check", 1.8]], "clicks": ["continue_adversary"],
      "pip": {"x": 1537, "y": 580, "width": 367, "height": 206}},  # demo panel sits lower here
     {"id": "v12-adversary", "kind": "screen", "clip": "adversary", "tone": "calm",
      "segs": [[16.0, 27.0], [40.0, 53.0], [57.0, 63.0]],
-     "cam": [["certification", 1.6], ["videos_0", 1.5], ["timeline_0", 1.6], ["why_attack_0", 1.7]]},
-    {"id": "v13-gate", "kind": "loop", "tone": "calm", "min": 16},
+     "cam": [["certification", 1.6], ["videos_0", 1.5], ["timeline_0", 1.6], ["why_attack_0", 1.7]],
+     "insert": {"at": 4.0, "dur": 3.6, "per": 0.9, "clips": [["assets/sim_nominal51.mp4", "Normal run"],
+                ["assets/sim_pose.mp4", "Pose attack"], ["assets/sim_actuation.mp4", "Actuation attack"],
+                ["assets/sim_nominal57.mp4", "New scene seed"]]}},
+    {"id": "v13-gate", "kind": "loop", "tone": "calm", "min": 18},
     {"id": "v14-deploy", "kind": "screen", "clip": "deploy", "tone": "calm", "segs": [[3.5, 15.0]],
      "cam": [["typed_deploy", 1.8], ["deploy_reply", 1.8]], "banner": "Export the policy for deployment"},
-    {"id": "v15-deployconcept", "kind": "image", "image": "assets/deployment-concept.svg", "tone": "calm",
-     "min": 10, "badge": "Concept"},
-    {"id": "v16-newtask", "kind": "image", "image": "assets/prompt-authoring-detail.svg", "tone": "calm",
-     "min": 10, "badge": "Planned"},
+    {"id": "v15-deployconcept", "kind": "flow", "flow": "deploy", "tone": "calm", "min": 11},
+    {"id": "v16-newtask", "kind": "flow", "flow": "newtask", "tone": "calm", "min": 10},
     {"id": "v17-close", "kind": "card", "card": "close", "tone": "warm", "min": 5},
 ]  # fmt: skip
 
@@ -111,6 +116,7 @@ def build() -> None:
             footage /= rate
             s = {**s, "rate": round(rate, 3)}
         dur = max(footage, need)
+        dur = math.ceil(dur / STEP - 1e-6) * STEP  # land every cut on the beat grid
         scenes.append({**s, "start": round(t, 3), "duration": round(dur, 3),
                        "caption": plan[s["id"]].get("caption", ""),
                        "voice": v["file"] if v else None})  # fmt: skip
@@ -118,7 +124,7 @@ def build() -> None:
     out = REPO / "dev" / "demo_video" / "remotion" / "public" / "film"
     out.mkdir(parents=True, exist_ok=True)
     film = {"fps": 30, "width": 1920, "height": 1080, "duration": round(t, 3), "scenes": scenes,
-            "music": "film/music.wav"}  # fmt: skip
+            "music": "film/music.wav", "bpm": BPM}  # fmt: skip
     (out / "film.json").write_text(json.dumps(film, indent=1), encoding="utf-8")
     print(f"{out / 'film.json'}  {t:.1f} s, {len(scenes)} scenes")
     for s in scenes:
