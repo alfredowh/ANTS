@@ -2,10 +2,10 @@ import React from "react";
 import {AbsoluteFill, Easing, interpolate, spring, useCurrentFrame, useVideoConfig} from "remotion";
 import {BLUE, FONT, INK, Logo, MUTED} from "./common";
 
-export type TitleCardProps = {line: string};
+export type TitleCardProps = {line?: string; subtitle?: string};
 
 /** White title card: logo, title, subtitle, then one line at ~2 s. Used for `logo` and `close`. */
-export const TitleCard: React.FC<TitleCardProps> = ({line}) => {
+export const TitleCard: React.FC<TitleCardProps> = ({line = "", subtitle = "Making Agentic Physical AI Production-Ready"}) => {
   const frame = useCurrentFrame();
   const {fps, durationInFrames} = useVideoConfig();
   const pop = spring({frame, fps, config: {damping: 14, mass: 0.8}});
@@ -23,11 +23,13 @@ export const TitleCard: React.FC<TitleCardProps> = ({line}) => {
           Adversarial Agentic Task Synthesis
         </div>
         <div style={{opacity: fade(0.9), transform: `translateY(${rise(0.9)}px)`, fontSize: 36, fontWeight: 500, color: MUTED}}>
-          Agentic Physical AI for Industrial Automation
+          {subtitle}
         </div>
-        <div style={{marginTop: 30, opacity: fade(2), transform: `translateY(${rise(2)}px)`, fontSize: 44, fontWeight: 600, color: BLUE}}>
-          {line}
-        </div>
+        {line && (
+          <div style={{marginTop: 30, opacity: fade(2), transform: `translateY(${rise(2)}px)`, fontSize: 44, fontWeight: 600, color: BLUE}}>
+            {line}
+          </div>
+        )}
       </div>
     </AbsoluteFill>
   );

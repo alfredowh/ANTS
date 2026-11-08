@@ -23,7 +23,7 @@ export const Root = () => (
         durationInFrames={clipDuration(c)}
       />
     ))}
-    <Composition id="logo" component={TitleCard} defaultProps={{line: "Making agentic physical AI production-ready."}} fps={30} width={1920} height={1080} durationInFrames={150} />
+    <Composition id="logo" component={TitleCard} defaultProps={{line: ""}} fps={30} width={1920} height={1080} durationInFrames={150} />
     <Composition id="problem" component={Problem} fps={30} width={1920} height={1080} durationInFrames={PROBLEM_SECONDS * 30} />
     <Composition id="close" component={TitleCard} defaultProps={{line: "Show once. Break smart."}} fps={30} width={1920} height={1080} durationInFrames={150} />
   </>
