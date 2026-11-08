@@ -810,6 +810,12 @@ Replays the robot carve on a dumped planning cloud (needs the GPU) and reports w
 cd ASPIRE && .venv-curobo/bin/python ../dev/curobo/carve_check.py CLOUD.npy TRACE_CALLS_DIR CALL_ID 0.477 -0.175 0.237
 ```
 
+C0 re-run on the a4b rack run (2026-11-07; the original 92->4 inputs are not recorded, a4/clouds is empty):
+
+```bash
+cd ASPIRE && .venv-curobo/bin/python ../dev/curobo/carve_check.py ../data/runs/curobo_debug/a4b/clouds/cloud_025.npy ../data/runs/curobo_debug/a4b/run/libero-pro/libero_goal_swap/08-put-the-bowl-on-the-plate/0051/run-20261102T061728.596042Z-6501b000/trace/calls 201 0.477 -0.175 0.237
+```
+
 ### `curobo.carve-curve`: Sweep the carve margin
 
 Same replay as carve_check, over a range of margins (stock is 5 cm); prints JSON.
