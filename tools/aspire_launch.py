@@ -177,6 +177,19 @@ def bowl_spheres(profile, centre_xy, z_bottom: float, sphere_r: float) -> np.nda
     return np.asarray(out)
 
 
+def held_points(points: np.ndarray, hand: np.ndarray, radius_m: float) -> np.ndarray:
+    """Keep only mask points within `radius_m` (xy) of the hand.
+
+    A text query ("bowl") returns several masks per camera, and their union also covers other
+    objects (wine bottle, plate). Fitting the held object to that union put the attached spheres on
+    the bottle, 16-28 cm from the hand, on 8 of 15 C0 replays; removing the union from the cloud
+    also deleted real obstacles. The held object is the one at the hand.
+    """
+    if not len(points):
+        return points
+    return points[np.linalg.norm(points[:, :2] - hand[:2], axis=1) < radius_m]
+
+
 def fit_axis(points: np.ndarray, radius: float) -> np.ndarray:
     """Centre (x, y) of a round bowl of known rim radius from the visible rim points."""
     rim = points[points[:, 2] > points[:, 2].max() - 0.02][:, :2]
@@ -656,6 +669,10 @@ def install_curobo_planning(cfg: dict) -> None:
                 )
                 if mask_diag:
                     info["masks"] = mask_diag
+                crop = attach.get("crop_m")
+                if crop:
+                    info["n_bowl_raw"] = int(len(bowl))
+                    bowl = held_points(bowl, t, float(crop))
                 dist = float(np.linalg.norm(bowl.mean(axis=0) - t)) if len(bowl) else -1.0
                 near = len(bowl) >= 30 and dist < attach.get("hold_dist_m", 0.16)
                 profile = [tuple(r) for r in attach["profile"]]

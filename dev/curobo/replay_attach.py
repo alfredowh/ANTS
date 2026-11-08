@@ -66,7 +66,7 @@ def aspire_env() -> dict:
     return env
 
 
-def make_spec(base: Path, out: Path, mode: str) -> Path:
+def make_spec(base: Path, out: Path, mode: str, crop_m: float | None = None) -> Path:
     spec = json.loads(base.read_text(encoding="utf-8"))
     planner = spec["planner"]
     planner["cloud_dir"] = str(out / "clouds")
@@ -74,6 +74,8 @@ def make_spec(base: Path, out: Path, mode: str) -> Path:
         planner.pop("attach", None)
     else:
         planner["attach"]["file"] = str(GLOBAL_ATTACH)
+        if crop_m:
+            planner["attach"]["crop_m"] = crop_m
     if mode.startswith("oracle"):
         planner["oracle_exclude"] = ["akita_black_bowl", "plate_1"]
     planner["label_goals"] = {
@@ -116,6 +118,12 @@ def main() -> int:
         "--seeds", default="51", help="comma-separated acceptance seeds, 51 to 65 (never held-out)"
     )
     p.add_argument("--timeout-s", type=int, default=900)
+    p.add_argument(
+        "--attach-crop-m",
+        type=float,
+        default=None,
+        help="fit and remove the held object only from mask points within this xy radius of the hand",
+    )
     args = p.parse_args()
     only = {s for s in args.only.split(",") if s}
     base_out = (ROOT / args.out).resolve() if not args.out.is_absolute() else args.out
@@ -130,7 +138,7 @@ def main() -> int:
             if out.exists():
                 shutil.rmtree(out)
             out.mkdir(parents=True)
-            spec = make_spec(base, out, args.mode)
+            spec = make_spec(base, out, args.mode, args.attach_crop_m)
             GLOBAL_ATTACH.write_text(json.dumps({"spheres": []}), encoding="utf-8")
             cmd = [
                 str(ASPIRE_PY), str(LAUNCHER), str(spec), "--",

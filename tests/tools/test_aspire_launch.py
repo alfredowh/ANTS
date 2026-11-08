@@ -103,6 +103,18 @@ def test_removal_mask_cuts_around_observed_bowl_points():
     assert cut.tolist() == [True, False]
 
 
+def test_held_points_drop_other_objects_matched_by_the_query():
+    import numpy as np
+
+    # C0 seed 52: bowl rim at the hand, wine bottle top 25 cm away and higher
+    hand = np.array([0.612, 0.184, 0.04])
+    bowl = np.array([[0.62, 0.15, 0.06], [0.58, 0.12, 0.06]])
+    bottle = np.array([[0.702, -0.018, 0.25]])
+    kept = launch.held_points(np.vstack([bowl, bottle]), hand, 0.15)
+    assert np.allclose(kept, bowl)
+    assert launch.held_points(np.zeros((0, 3)), hand, 0.15).shape == (0, 3)
+
+
 def test_attached_spheres_are_written_in_the_panda_hand_frame():
     """A point at the logged gripper site must land on panda_hand + the offset, by FK."""
     import numpy as np

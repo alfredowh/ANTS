@@ -4144,6 +4144,13 @@
           "kind": "value",
           "on": false,
           "desc": "Per-run wall clock."
+        },
+        {
+          "flag": "--attach-crop-m",
+          "value": "0.15",
+          "kind": "value",
+          "on": false,
+          "desc": "Attach mode: fit the held-bowl spheres and remove its points only from SAM 'bowl' mask points within this xy radius of the hand. Without it the union of all 'bowl' masks is used, which put the spheres on the wine bottle on 8 of 15 C0 replays (C0b, 2026-11-08)."
         }
       ],
       "description": "Costs no model tokens (GPU and simulator only). Needs the SAM 3 and PyRoki services and the dev cuRobo service on 8118 (services.start, curobo.service). Runs one program at a time and resets the global attach file before each run; never start two at once. Written 2026-11-04 for the cuRobo false-negative debugging (handoff-curobo-debug.md, dev note not in repo). Every plan's goal is labelled against the simulator (planner.label_goals); score with curobo.goal-confusion. Do not run while another simulator is running.",
@@ -4155,6 +4162,10 @@
         {
           "title": "Oracle upper bound",
           "cmd": "ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode oracle --out data/runs/curobo/replay_oracle --only exp10_nodemo_a1"
+        },
+        {
+          "title": "C0b: held-object crop, seeds 51-53",
+          "cmd": "ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.15 --out data/runs/curobo/replay_c0b --only exp10_nodemo_a1,exp10_nodemo_a2,exp10_nodemo_a3,exp10_clip233859_a3,exp10_clip233832_a2 --seeds 51,52,53"
         }
       ],
       "modules": [

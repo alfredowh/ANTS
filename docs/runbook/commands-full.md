@@ -1105,6 +1105,7 @@ ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py \
 | `--only` | `exp10_nodemo_a1,exp10_nodemo_a2` | no | Comma-separated labels (see PROGRAMS in the script). Default: all seven. |
 | `--seeds` | `51,52,53` | no | Comma-separated acceptance seeds (51 to 65 only; default 51). Output folders end in _s<seed>. |
 | `--timeout-s` | `900` | no | Per-run wall clock. |
+| `--attach-crop-m` | `0.15` | no | Attach mode: fit the held-bowl spheres and remove its points only from SAM 'bowl' mask points within this xy radius of the hand. Without it the union of all 'bowl' masks is used, which put the spheres on the wine bottle on 8 of 15 C0 replays (C0b, 2026-11-08). |
 
 Two programs, attach on:
 
@@ -1116,6 +1117,12 @@ Oracle upper bound:
 
 ```bash
 ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode oracle --out data/runs/curobo/replay_oracle --only exp10_nodemo_a1
+```
+
+C0b: held-object crop, seeds 51-53:
+
+```bash
+ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.15 --out data/runs/curobo/replay_c0b --only exp10_nodemo_a1,exp10_nodemo_a2,exp10_nodemo_a3,exp10_clip233859_a3,exp10_clip233832_a2 --seeds 51,52,53
 ```
 
 ### `curobo.goal-confusion`: Score cuRobo verdicts against the simulator (false negatives and positives)
