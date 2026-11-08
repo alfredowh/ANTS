@@ -1484,3 +1484,151 @@ Orbit rings used above:
 ```bash
 cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py --n-frames 32 --height 0.95 --out-dir ../data/runs/mapper_probe/frames_orbit_r1 && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py --n-frames 32 --height 1.35 --radius 0.5 --out-dir ../data/runs/mapper_probe/frames_orbit_r2
 ```
+
+## Studio demo videos (cursor, zoom, captions)
+
+*clip 1 rendered.* Can we show how a user works with ANTS Studio in short, re-renderable clips?
+
+- Docs: `dev/demo_video/record_repair.py` · run dir: `data/demo_video/clips`
+- Inputs: a logged run
+- Outputs: raw.mp4 + timeline.json; rendered MP4; captions.srt, narration.md
+- Result so far: Long raw takes: prompt 55 s, deploy 19 s, adversary 111 s, repair_long 76 s, run (walkthrough re-cut) 118 s; Remotion logo, problem, close cards.
+
+### `demo_video.record_repair`: Demo video: record the repair clip
+
+Replays the logged run data/runs/exp03_explain/clip_233859 (5 attempts, 4 failures then a pass) in ANTS Studio, clicks through the attempts panel with Playwright (headless /usr/bin/google-chrome) and writes data/demo_video/clips/repair/raw.mp4 (1920x1080, 30 fps, no cursor) plus timeline.json (time and element box per action). No model calls; nothing is generated. Env HOLD stretches every pause (HOLD=2 for long raw takes) and CLIP names the output folder (default repair).
+
+```bash
+ANTS repo root && uv run python dev/demo_video/record_repair.py
+```
+
+Record:
+
+```bash
+uv run python dev/demo_video/record_repair.py
+```
+
+Long raw take (2x holds):
+
+```bash
+HOLD=2 CLIP=repair_long uv run python dev/demo_video/record_repair.py
+```
+
+### `demo_video.record_console`: Demo video: record the live console (prompt, settings, deploy)
+
+Long raw takes of the live Studio console with no model calls: 'prompt' types the task, attaches the hurobo clip (the native file dialog is answered with the clip path, nothing opens on the desktop), opens the settings dialog, holds on every field and cancels (no run starts); 'deploy' sends /deploy, which copies the incumbent program to data/deploy/. Writes data/demo_video/clips/<take>/raw.mp4 and timeline.json.
+
+```bash
+ANTS repo root && uv run python dev/demo_video/record_console.py \
+    <takes> 'prompt deploy'
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `<takes>` | `prompt deploy` | yes | Takes to record (default: all). |
+
+Record both takes:
+
+```bash
+uv run python dev/demo_video/record_console.py prompt deploy
+```
+
+### `demo_video.record_adversary`: Demo video: record the Adversary tab
+
+Long raw take of the Adversary tab (light theme, inside the console) on a logged run: Harden (attacks, tiles, certification, log, usage), each attack in Replay with videos playing, then Versions. Default run: run-20261104T214055 (real LIBERO simulator, 2 attacks, Muse Spark off). No model calls.
+
+```bash
+ANTS repo root && uv run python dev/demo_video/record_adversary.py
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `<run_dir>` | `data/console_sessions/sess-20261104-213329/runs/run-20261104T214055` | no | Run folder with run.json and attacks.jsonl. |
+
+Record the default run:
+
+```bash
+uv run python dev/demo_video/record_adversary.py
+```
+
+### `demo_video.tts`: Demo video: narration in a cloned voice (Chatterbox)
+
+Speaks each caption's 'say' line from src/shots/<clip>.json with Chatterbox (GPU, separate workbench env with torch; never the ANTS env), cloning the voice in --ref. Writes data/demo_video/clips/<clip>/voice/*.wav and voice.json; Remotion then holds each section until its line ends. Lines are cached by text, ref and settings. The reference data/demo_video/tts/voice_ref.wav is 12 s cut from data/demo_video/ants_demo_voice.mp4 (21.3 to 33.3 s, denoised, loudness-normalised). The workbench module needs setuptools<81 (Chatterbox's watermarker imports pkg_resources).
+
+```bash
+ANTS repo root && env -u VIRTUAL_ENV uv run --project ../workbench/modules/tts-chatterbox python dev/demo_video/tts_chatterbox.py \
+    <clip> repair \
+    --ref data/demo_video/tts/voice_ref.wav
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `<clip>` | `repair` | yes | Clip name. |
+| `--ref` | `data/demo_video/tts/voice_ref.wav` | yes | About 10 s wav of the voice to clone. |
+| `--exaggeration` | `0.5` | no | Expressiveness, 0.25 flat to 1.0 dramatic. |
+| `--cfg-weight` | `0.5` | no | Lower gives a slower, calmer pace. |
+| `--seed` | `0` | no | Sampling seed. |
+
+Narrate the repair clip:
+
+```bash
+env -u VIRTUAL_ENV uv run --project ../workbench/modules/tts-chatterbox python dev/demo_video/tts_chatterbox.py repair --ref data/demo_video/tts/voice_ref.wav
+```
+
+### `demo_video.render`: Demo video: render a clip with Remotion
+
+Adds the cursor, click ripples, zooms and captions to raw.mp4 from src/shots/<clip>.json (editable) and timeline.json. First time: install packages with the npm ci example. Node comes from the nodejs-wheel PyPI package via uvx (no system Node). Studio (timeline preview, hot reload on shot-list edits) with the studio example. Compositions: repair (screen clip with cursor, zoom, captions, voice), logo and close (title cards), problem (five-beat problem illustration; beat times in src/scenes/Problem.tsx).
+
+```bash
+dev/demo_video/remotion && uvx --from nodejs-wheel npx remotion render \
+    <clip> repair \
+    <out> out/repair.mp4
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `<clip>` | `repair` | yes | Composition id (= clip folder name). |
+| `<out>` | `out/repair.mp4` | yes | Output MP4. |
+
+Install packages (once):
+
+```bash
+cd dev/demo_video/remotion && uvx --from nodejs-wheel npm ci
+```
+
+Render:
+
+```bash
+cd dev/demo_video/remotion && uvx --from nodejs-wheel npx remotion render repair out/repair.mp4
+```
+
+Open Remotion Studio:
+
+```bash
+cd dev/demo_video/remotion && uvx --from nodejs-wheel npx remotion studio
+```
+
+Render the title card and the problem scene:
+
+```bash
+cd dev/demo_video/remotion && uvx --from nodejs-wheel npx remotion render logo out/logo.mp4 && uvx --from nodejs-wheel npx remotion render problem out/problem.mp4
+```
+
+### `demo_video.text`: Demo video: captions and narration script
+
+Writes captions.srt and a timed narration.md (with words per second, flags lines too fast to speak) from the same shot list Remotion renders.
+
+```bash
+ANTS repo root && uv run python dev/demo_video/export_text.py \
+    <clip> repair
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `<clip>` | `repair` | yes | Clip name. |
+
+Export:
+
+```bash
+uv run python dev/demo_video/export_text.py repair
+```

@@ -359,3 +359,20 @@ LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl
 ```bash
 LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_arm.py
 ```
+
+## Studio demo videos (cursor, zoom, captions)
+
+Can we show how a user works with ANTS Studio in short, re-renderable clips? Details: `dev/demo_video/record_repair.py`.
+
+**Demo video: record the repair clip**
+
+```bash
+ANTS repo root && uv run python dev/demo_video/record_repair.py
+```
+
+**Demo video: record the live console (prompt, settings, deploy)**
+
+```bash
+ANTS repo root && uv run python dev/demo_video/record_console.py \
+    <takes> 'prompt deploy'
+```
