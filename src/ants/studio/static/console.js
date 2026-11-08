@@ -724,7 +724,7 @@ function openStream() {
   };
 }
 
-/* ---------- chat composer: three cases (see docs/studio/chat-field-design.md) ---------- */
+/* ---------- chat composer: three cases (see docs/dev/studio/chat-field-design.md) ---------- */
 let chatMode = "idle"; // "idle" | "awaiting_answer" | "queued"
 let chatBuffer = ""; // accumulates chat_muse_event output.delta text for the current chat turn
 let chatTurnEl = null;

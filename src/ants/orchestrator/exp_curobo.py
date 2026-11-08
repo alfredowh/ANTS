@@ -62,8 +62,8 @@ EXPERIMENTS = {
     },
 }
 DOCS = {
-    "attach": "docs/synthesizer/experiment-09-11-curobo-attach.md",
-    "plain": "docs/synthesizer/experiment-06-08-curobo.md",
+    "attach": "docs/dev/synthesizer/experiments/experiment-09-11-curobo-attach.md",
+    "plain": "docs/dev/synthesizer/experiments/experiment-06-08-curobo.md",
 }
 
 

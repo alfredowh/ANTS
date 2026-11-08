@@ -54,7 +54,8 @@ Learn a robot skill from one demonstration with a frozen generative model, then 
 ## Documentation
 
 - **README.md is the storefront: short and visible.** Include only the one-line pitch, the main idea, headline results, images/GIFs/video, the architecture diagram, quick start, and links to `docs/`. Aim for roughly one screen of text plus visuals; no long prose, no full API or design details.
-- **Details live in `docs/`** (concept, architecture, evaluation protocol, stack decisions, experiment logs). README links to them.
+- **Details live in `docs/`** (concept, architecture, evaluation protocol, stack decisions, results). README links to them. Only documents a reader of the final project needs go here.
+- **Handoffs and dev notes go in `docs/dev/`, which is gitignored. Never write them into the tracked `docs/` tree.** That covers session handoffs and "instructions for the next agent", debug and smoke-test logs, working experiment write-ups, literature and radar notes, design scratch notes, UI reviews, proposals and plans. Group them in subfolders (`docs/dev/synthesizer/{research,experiments,notes}/`, `docs/dev/studio/`). Do not link to `docs/dev/` from tracked files (the link would be dead for everyone else); name the note and say it is a local dev note. If a dev note turns out to matter to the final project, ask before promoting it into `docs/`.
 - Put images and diagrams in `docs/images/` and embed the best ones in the README.
 - Results in the README (tables, numbers, figures) must come from logged runs; link to the run or doc they came from. If there are no results yet, say "results coming" instead of leaving filler.
 - When a change affects behavior, results or architecture, update the matching doc and, if it is headline-worthy, the README.
@@ -102,7 +103,7 @@ Before finishing a change, run lint and tests and report the real result.
 
 ## Layout
 
-- `docs/` detailed documentation; `docs/images/` figures and diagrams
+- `docs/` detailed documentation; `docs/images/` figures and diagrams; `docs/dev/` gitignored handoffs and dev notes
 - `docs/<module>/spec.md` per-module agent spec (rules, architecture, build order); read it before working in that module. Import new ones in `CLAUDE.md`.
 - `src/ants/contracts/` shared types (the only thing both systems import)
 - `src/ants/synthesizer/` System 1: policy synthesis, model client, prompts

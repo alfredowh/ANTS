@@ -63,7 +63,7 @@ WORK_FIELDS = (
 BATCH_SIZE = 50
 # Fields whose being unverified makes the whole entry a draft (a guessed limitation does not).
 CORE_FIELDS = {"title", "arxiv", "github"}
-# Block numbers used by the module radar (docs/synthesizer/research/module-radar.md).
+# Block numbers used by the module radar (module-radar.md (dev note, not in repo)).
 BLOCK_NUMBERS = {
     1: "human-video-to-robot",
     2: "perception",
