@@ -74,7 +74,7 @@ structurally the same kind of tool as the one running this session. Confirmed by
   closest built-in starting point for an orchestrator-shaped agent and worth reading before writing
   one from scratch).
 - A trivial 5-word test cost 28,484 input / 187 reasoning / 202 output tokens. Muse costs about
-  $13.5 per million tokens (per `docs/runbook/agent-access.md`). **Every real call is non-trivial
+  $13.5 per million tokens (per `agent-access.md` (dev note, not in repo)). **Every real call is non-trivial
   cost; budget this explicitly, log it per call, and do not loop this uncapped.**
 
 This directly replaces the open "if we can't get all the reasoning from the model API" fallback:
@@ -122,10 +122,10 @@ stretch goal, not part of the first orchestrator.
 ### Phase B: deployment (fast loop)
 
 The accepted policy runs in production. Execution is perception-only -- simulator state is never
-available at runtime, matching the already-logged decision d1 in `docs/storyline-discussion.md`
+available at runtime, matching the already-logged decision d1 in `storyline-discussion.md` (dev note, not in repo)
 ("adopt sensed, camera-based `locate`, not privileged sim state"). Simulator state is only ever used
 *inside Phase A's repair loop*, for grounding and validation -- exactly what experiments 09-11
-already do (`docs/synthesizer/experiment-09-11-curobo-attach.md`): cuRobo-planned trajectories and
+already do (`experiment-09-11-curobo-attach.md (dev note, not in repo)`): cuRobo-planned trajectories and
 SAM3 perception ground the repair reasoning; the sim never substitutes for perception at execution
 time.
 
@@ -139,7 +139,7 @@ policy running in production --> orchestrator monitors (new failure signature ob
 ```
 
 No monitor or re-entry trigger exists in code today (the "checkpoint monitor" is listed as optional
-in `docs/HANDOFF.md`). This is new-build, scoped below as "stretch" given the deadline.
+in `HANDOFF.md` (dev note, not in repo)). This is new-build, scoped below as "stretch" given the deadline.
 
 ## The first orchestrator: design
 

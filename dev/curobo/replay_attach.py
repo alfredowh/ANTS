@@ -1,6 +1,6 @@
 """Replay logged attempts through the launcher, with the held-bowl attach on or off.
 
-Dev tool for the attach experiment (docs/synthesizer/experiment-09-11-curobo-attach.md). The same
+Dev tool for the attach experiment (experiment-09-11-curobo-attach.md (dev note, not in repo)). The same
 seven no-demo and demo programs run under two conditions on seed 51:
 
 - `sparse`: no attach (the single-frame carved cloud, the exp06 to 08 setting).

@@ -4,7 +4,7 @@ For Muse continuing this in `/home/eeschner/alfredo/workspace/ANTS`, branch `syn
 User is asleep and asked for autonomous work. Read `AGENTS.md` first. Do not touch
 `src/ants/adversary/` or `src/ants/orchestrator/` without Daniel. hurobo is read-only:
 outputs go to `ANTS/data/`, never into `hurobo/`. Push with `git -c http.proxy= push`
-(global proxy is stale, per `docs/HANDOFF.md` §2).
+(global proxy is stale, per `HANDOFF.md` (dev note, not in repo) §2).
 
 ## What the user wants (final goal)
 
@@ -80,5 +80,5 @@ If that doc is absent, Muse was cut off; start from "Next steps" below.
 - Never commit `data/` (git-ignored), `.env`, or ASPIRE submodule changes.
 - Uncommitted files in this checkout (`src/ants/studio/console*`, `scene2d/3d*`,
   `dashboard*`, `docs/studio/`) are the live-console work — separate topic, see
-  `docs/studio/live-console-handoff.md`. They are NOT part of this commit.
+  `live-console-handoff.md` (dev note, not in repo). They are NOT part of this commit.
 - Seeds: always `--init-mode seeded`. GPU: don't run two sims + SAM3 at once.
