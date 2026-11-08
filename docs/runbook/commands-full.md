@@ -1492,7 +1492,7 @@ cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/ma
 - Docs: `dev/demo_video/record_repair.py` · run dir: `data/demo_video/clips`
 - Inputs: a logged run
 - Outputs: raw.mp4 + timeline.json; rendered MP4; captions.srt, narration.md
-- Result so far: Long raw takes: prompt 55 s, deploy 19 s, adversary 111 s, repair_long 76 s, run (walkthrough re-cut) 118 s; Remotion logo, problem, close cards.
+- Result so far: Rough cut 1: 3:12, 17 scenes, cloned voice, generated music (out/film_rough.mp4).
 
 ### `demo_video.record_repair`: Demo video: record the repair clip
 
@@ -1631,4 +1631,74 @@ Export:
 
 ```bash
 uv run python dev/demo_video/export_text.py repair
+```
+
+### `demo_video.film`: Demo video: assemble the film (lines, spec)
+
+Builds the 17-scene demo film. 'lines' reads the scene planner export (data/demo_video/film/planner/, from the ANTS Demo Scene Planner artifact) and writes the voice lines with a tone per scene (calm, neutral, warm; no excited). 'build' reads voice.json and writes remotion/public/film/film.json: each scene lasts max(footage, line + 0.8 s); screen footage plays up to 2x faster to fit its line. Then render the 'film' composition.
+
+```bash
+ANTS repo root && uv run python dev/demo_video/film.py \
+    <step> lines
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `<step>` | `lines` | yes | lines or build. |
+
+Voice lines from the planner:
+
+```bash
+uv run python dev/demo_video/film.py lines
+```
+
+Film spec after the voice:
+
+```bash
+uv run python dev/demo_video/film.py build
+```
+
+Render the film:
+
+```bash
+cd dev/demo_video/remotion && uvx --from nodejs-wheel npx remotion render film out/film_rough.mp4
+```
+
+### `demo_video.tts_lines`: Demo video: narrate the film lines (Chatterbox)
+
+Speaks every scene line of data/demo_video/film/lines.json in the cloned voice, sentence by sentence (cached), joined with short pauses. Writes remotion/public/film/voice/<scene>.wav and data/demo_video/film/voice.json.
+
+```bash
+ANTS repo root && env -u VIRTUAL_ENV uv run --project ../workbench/modules/tts-chatterbox python dev/demo_video/tts_lines.py \
+    --ref data/demo_video/tts/voice_ref.wav
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `--ref` | `data/demo_video/tts/voice_ref.wav` | yes | Voice reference wav. |
+| `--only` | `v08-repair` | no | Scene ids to regenerate (lines are cached anyway). |
+
+Narrate all lines:
+
+```bash
+env -u VIRTUAL_ENV uv run --project ../workbench/modules/tts-chatterbox python dev/demo_video/tts_lines.py --ref data/demo_video/tts/voice_ref.wav
+```
+
+### `demo_video.music`: Demo video: generate the background music
+
+Synthesizes a quiet royalty-free bed (pads plus a sparse piano-like arpeggio, 72 bpm, C-G-Am-F, fade in and out), low-passed by ffmpeg. numpy is used one-off via --with, not a project dependency.
+
+```bash
+ANTS repo root && uv run python --with numpy dev/demo_video/music.py \
+    <seconds> 194
+```
+
+| Flag | Default | On | Meaning |
+|---|---|---|---|
+| `<seconds>` | `194` | yes | Length in seconds (match film.json duration). |
+
+Music for a 3:14 film:
+
+```bash
+uv run --with numpy python dev/demo_video/music.py 194
 ```

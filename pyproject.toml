@@ -42,6 +42,8 @@ testpaths = ["tests"]
 "src/ants/orchestrator/a0_replay.py" = ["E501"]
 "src/ants/synthesizer/generator.py" = ["E501"]
 "src/ants/evalkit/report.py" = ["E501"]
+# Demo video scene tables: one scene per line reads better than wrapped dicts.
+"dev/demo_video/film.py" = ["E501"]
 "src/ants/evalkit/system2_view.py" = ["E501"]
 "src/ants/evalkit/scene_view.py" = ["E501"]
 "src/ants/evalkit/contacts.py" = ["E501"]
