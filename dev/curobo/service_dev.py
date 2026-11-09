@@ -64,5 +64,29 @@ def _planner_with_attach(request):
 
 service._planner = _planner_with_attach
 
+
+def _lattice_mesher() -> None:
+    """ANTS_VOXEL_LATTICE=1: voxel faces on a fixed base-frame lattice (multiples of the pitch).
+
+    The stock mesher anchors the grid at the cloud minimum, often a stray depth return, so every
+    surface moves by up to one voxel (1 cm) when an unrelated point changes. On the C0 nodemo_a2
+    grasp that flipped the same goal between feasible and refused (cut tests, 2026-11-09).
+    """
+    import inspect
+    import textwrap
+
+    old = "origin = pts.min(axis=0) - pitch"
+    src = textwrap.dedent(inspect.getsource(service._mesh_from_pointcloud))
+    if old not in src:
+        raise RuntimeError("service._mesh_from_pointcloud changed; update the lattice patch")
+    src = src.replace(old, "origin = np.floor(pts.min(axis=0) / pitch) * pitch - pitch")
+    namespace = dict(vars(service))
+    exec(compile(src, service.__file__, "exec"), namespace)  # noqa: S102 - dev patch, local source
+    service._mesh_from_pointcloud = namespace["_mesh_from_pointcloud"]
+
+
+if os.environ.get("ANTS_VOXEL_LATTICE"):
+    _lattice_mesher()
+
 if __name__ == "__main__":
     service.main()

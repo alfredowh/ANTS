@@ -765,6 +765,7 @@ cd ASPIRE && ANTS_CARVE_MARGIN_M=0.0 ANTS_ATTACH_FILE=$PWD/../data/runs/curobo/a
 | Flag | Default | On | Meaning |
 |---|---|---|---|
 | `--port` | `8118` | yes | Service port (stock cuRobo port). |
+| `ANTS_VOXEL_LATTICE=` | `1` | no | Env: voxel faces on a fixed base-frame lattice instead of the cloud minimum, so a stray depth point no longer shifts every surface by up to 1 cm (C0b, 2026-11-09). Run the worktree's dev/curobo/service_dev.py. |
 
 Stock margin for comparison:
 
@@ -997,6 +998,7 @@ cd ASPIRE && ANTS_CARVE_MARGIN_M=0.0 ANTS_ATTACH_FILE=$PWD/../data/runs/curobo/a
 | Flag | Default | On | Meaning |
 |---|---|---|---|
 | `--port` | `8118` | yes | Service port (stock cuRobo port). |
+| `ANTS_VOXEL_LATTICE=` | `1` | no | Env: voxel faces on a fixed base-frame lattice instead of the cloud minimum, so a stray depth point no longer shifts every surface by up to 1 cm (C0b, 2026-11-09). Run the worktree's dev/curobo/service_dev.py. |
 
 Stock margin for comparison:
 
@@ -1106,6 +1108,9 @@ ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py \
 | `--seeds` | `51,52,53` | no | Comma-separated acceptance seeds (51 to 65 only; default 51). Output folders end in _s<seed>. |
 | `--timeout-s` | `900` | no | Per-run wall clock. |
 | `--attach-crop-m` | `0.15` | no | Attach mode: fit the held-bowl spheres and remove its points only from SAM 'bowl' mask points within this xy radius of the hand. Without it the union of all 'bowl' masks is used, which put the spheres on the wine bottle on 8 of 15 C0 replays (C0b, 2026-11-08). |
+| `--target-exclude-m` | `0.02` | no | Attach mode, gripper open: drop cloud points within this distance of the last localize_object cloud of the target. move_to_pose never passes a target cloud, so the spec's exclude_radius_m never ran for generated programs (C0b, 2026-11-09). Every attach replay also saves attach_debug/ (bowl points, hand pose, simulator box, diagnostics only). |
+| `--attach-fit` | `centroid` | no | Held-bowl sphere fit. rim (default): circle fit to the top 2 cm of the mask, which holds the gripper fingers at grasp time. centroid: xy centroid of the cropped mask, bottom = table plane under the bowl (C0c diagnostics: 2.6-2.9 cm and ~1 mm from simulator truth on 6 runs). Choices: rim, centroid. |
+| `--fuse` |  | no | Plan on a persistent log-odds occupancy map (tools/fused_map.py) fused over every planning frame: misses from depth see-through clear ghosts, occluded voxels are remembered. Saves fused_XXX.npy next to the frame clouds. |
 
 Two programs, attach on:
 
@@ -1123,6 +1128,18 @@ C0b: held-object crop, seeds 51-53:
 
 ```bash
 ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.15 --out data/runs/curobo/replay_c0b --only exp10_nodemo_a1,exp10_nodemo_a2,exp10_nodemo_a3,exp10_clip233859_a3,exp10_clip233832_a2 --seeds 51,52,53
+```
+
+C0c: crop + target exclusion, seeds 51-53:
+
+```bash
+ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.12 --target-exclude-m 0.02 --out data/runs/curobo/replay_c0c --only exp10_nodemo_a1,exp10_nodemo_a2,exp10_nodemo_a3,exp10_clip233859_a3,exp10_clip233832_a2 --seeds 51,52,53
+```
+
+C0d/C0e: centroid fit (+ fused map), lattice service:
+
+```bash
+ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.12 --target-exclude-m 0.02 --attach-fit centroid --fuse --out data/runs/curobo/replay_c0e --only exp10_nodemo_a1,exp10_nodemo_a2,exp10_nodemo_a3,exp10_clip233859_a3,exp10_clip233832_a2 --seeds 51,52,53
 ```
 
 ### `curobo.goal-confusion`: Score cuRobo verdicts against the simulator (false negatives and positives)

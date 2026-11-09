@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cuRobo Plan Replay</title>
+<style>
+:root{--bg:#f6f6f4;--fg:#1d1d1b;--muted:#6b6b66;--panel:#ffffffe6;--line:#d8d8d2;--ok:#1f8a5b;--bad:#c8372d;--accent:#2d6fd6}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#121314;--fg:#ececea;--muted:#9a9a94;--panel:#1c1d1fe6;--line:#33353a;--ok:#4cc38a;--bad:#ff6b5e;--accent:#6ea2ff}}
+:root[data-theme="dark"]{--bg:#121314;--fg:#ececea;--muted:#9a9a94;--panel:#1c1d1fe6;--line:#33353a;--ok:#4cc38a;--bad:#ff6b5e;--accent:#6ea2ff}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif;overflow:hidden}
+#view{position:fixed;inset:0}
+.panel{position:fixed;left:16px;top:16px;max-width:min(380px,calc(100vw - 32px));background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;backdrop-filter:blur(6px)}
+h1{font-size:15px;margin:0 0 4px}
+.sub{color:var(--muted);font-size:12px;margin-bottom:10px}
+select,button{font:inherit;color:var(--fg);background:transparent;border:1px solid var(--line);border-radius:6px;padding:4px 8px;cursor:pointer}
+select{width:100%;margin-bottom:8px}
+.calls{display:flex;flex-wrap:wrap;gap:4px;margin:6px 0 8px}
+.calls button{min-width:34px}
+.calls button.ok{border-color:var(--ok)}
+.calls button.bad{border-color:var(--bad);color:var(--bad)}
+.calls button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px}
+label{display:flex;gap:4px;align-items:center;color:var(--muted);font-size:12px;cursor:pointer}
+#status{font-size:13px;margin-top:6px}
+.legend{display:grid;grid-template-columns:auto 1fr;gap:2px 8px;font-size:12px;color:var(--muted);margin-top:8px}
+.sw{width:12px;height:12px;border-radius:3px;margin-top:2px}
+input[type=range]{width:100%}
+</style>
+</head>
+<body>
+<div id="view"></div>
+<div class="panel">
+  <h1>cuRobo plan replay</h1>
+  <div class="sub" id="sub"></div>
+  <select id="run"></select>
+  <div class="calls" id="calls"></div>
+  <input type="range" id="t" min="0" max="1000" value="0" aria-label="trajectory time">
+  <div class="row">
+    <button id="play">Pause</button>
+    <button id="all">Play all calls</button>
+  </div>
+  <div class="row">
+    <label><input type="checkbox" id="showCloud" checked> frame cloud</label>
+    <label><input type="checkbox" id="showFused" checked> fused map</label>
+    <label><input type="checkbox" id="showBowl" checked> held-bowl mask</label>
+    <label><input type="checkbox" id="showGhost"> trajectory ghosts</label>
+  </div>
+  <div id="status"></div>
+  <div class="legend">
+    <div class="sw" style="background:#8a8f99"></div><div>scene cloud cuRobo planned on (one frame, coloured by height)</div>
+    <div class="sw" style="background:#e08a2c"></div><div>fused occupancy map (voxels with log-odds &gt; 0)</div>
+    <div class="sw" style="background:#2d6fd6"></div><div>arm: cuRobo collision spheres along the plan</div>
+    <div class="sw" style="background:#1f8a5b"></div><div>goal (green planned, red refused) and end-effector path</div>
+    <div class="sw" style="background:#b24bd6"></div><div>bowl mask points at the attach</div>
+  </div>
+</div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from "three";
+import {OrbitControls} from "three/addons/controls/OrbitControls.js";
+const DATA = /*DATA*/null;
+const $ = id => document.getElementById(id);
+const dark = matchMedia("(prefers-color-scheme: dark)").matches;
+const renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setPixelRatio(devicePixelRatio);
+$("view").appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(dark ? 0x121314 : 0xf6f6f4);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.01, 20);
+camera.up.set(0,0,1);
+camera.position.set(1.6,-0.9,0.9);
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.target.set(0.5,0.05,0.1);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.2));
+const sun = new THREE.DirectionalLight(0xffffff, 1.4); sun.position.set(1,-1,2); scene.add(sun);
+const grid = new THREE.GridHelper(1.4, 14, dark?0x555555:0xbbbbbb, dark?0x2a2a2a:0xdddddd);
+grid.rotation.x = Math.PI/2; grid.position.set(0.4,0,-0.012); scene.add(grid);
+scene.add(new THREE.AxesHelper(0.15));
+
+function resize(){renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix();}
+addEventListener("resize", resize); resize();
+
+const groups = {cloud:new THREE.Group(), fused:new THREE.Group(), bowl:new THREE.Group(), arm:new THREE.Group(), ghost:new THREE.Group(), goal:new THREE.Group()};
+Object.values(groups).forEach(g => scene.add(g));
+const clear = g => { while(g.children.length){ const c=g.children.pop(); c.geometry?.dispose(); c.material?.dispose(); } };
+
+function cloud(mm, size, colorFn){
+  const n = mm.length/3, pos = new Float32Array(mm.length), col = new Float32Array(mm.length);
+  const c = new THREE.Color();
+  for(let i=0;i<n;i++){ for(let k=0;k<3;k++) pos[3*i+k]=mm[3*i+k]/1000; colorFn(pos[3*i+2], c); col.set([c.r,c.g,c.b],3*i); }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(pos,3));
+  g.setAttribute("color", new THREE.BufferAttribute(col,3));
+  return new THREE.Points(g, new THREE.PointsMaterial({size, vertexColors:true, sizeAttenuation:true}));
+}
+const heightColor = (z,c) => c.setHSL(0.6 - Math.min(Math.max((z+0.02)/0.35,0),1)*0.6, 0.35, dark?0.62:0.45);
+const sphereGeo = new THREE.SphereGeometry(1, 14, 10);
+function armMesh(sph, color, opacity){
+  const mat = new THREE.MeshStandardMaterial({color, transparent:opacity<1, opacity, roughness:0.5});
+  const m = new THREE.InstancedMesh(sphereGeo, mat, sph.length);
+  const o = new THREE.Object3D();
+  sph.forEach((s,i)=>{ o.position.set(s[0],s[1],s[2]); o.scale.setScalar(s[3]); o.updateMatrix(); m.setMatrixAt(i,o.matrix); });
+  return m;
+}
+
+let run=null, frameIdx=0, t=0, playing=true, playAll=false;
+const sel = $("run");
+DATA.forEach((r,i)=>{ const o=document.createElement("option"); o.value=i; o.textContent=`${r.experiment} / ${r.name} — ${r.success?"task success":"task failed"}`; sel.appendChild(o); });
+sel.onchange = () => loadRun(+sel.value);
+
+function loadRun(i){
+  run = DATA[i];
+  $("sub").textContent = `${run.frames.length} plan_motion calls · ${run.frames.filter(f=>!f.ok).length} refused · fused map ${run.frames.some(f=>f.fused.length)?"on":"off"}`;
+  const box = $("calls"); box.innerHTML="";
+  run.frames.forEach((f,j)=>{ const b=document.createElement("button"); b.textContent=j; b.className=f.ok?"ok":"bad"; b.title=f.ok?"planned":`refused: ${f.error}`; b.onclick=()=>{playAll=false; showFrame(j);}; box.appendChild(b); });
+  clear(groups.bowl);
+  if(run.bowl.length) groups.bowl.add(cloud(run.bowl, 0.006, (z,c)=>c.set(0xb24bd6)));
+  showFrame(0);
+}
+
+function showFrame(j){
+  frameIdx=j; t=0;
+  const f = run.frames[j];
+  [...$("calls").children].forEach((b,k)=>b.classList.toggle("on",k===j));
+  clear(groups.cloud); clear(groups.fused); clear(groups.ghost); clear(groups.goal);
+  if(f.points.length) groups.cloud.add(cloud(f.points, 0.004, heightColor));
+  if(f.fused.length) groups.fused.add(cloud(f.fused, 0.009, (z,c)=>c.set(0xe08a2c)));
+  const gcol = f.ok ? 0x1f8a5b : 0xc8372d;
+  const goal = new THREE.Mesh(new THREE.SphereGeometry(0.015,16,12), new THREE.MeshStandardMaterial({color:gcol, emissive:gcol, emissiveIntensity:0.4}));
+  goal.position.set(...f.goal); groups.goal.add(goal);
+  if(f.ee){ const g=new THREE.BufferGeometry().setFromPoints(f.ee.map(p=>new THREE.Vector3(...p))); groups.goal.add(new THREE.Line(g,new THREE.LineBasicMaterial({color:gcol}))); }
+  f.arm.forEach((a,k)=>{ if(k%4===0) groups.ghost.add(armMesh(a, 0x2d6fd6, 0.12)); });
+  $("status").innerHTML = f.ok
+    ? `Call ${j}: <b style="color:var(--ok)">planned</b>, ${f.arm.length} keyframes shown · goal (${f.goal.map(v=>v.toFixed(3)).join(", ")}) m`
+    : `Call ${j}: <b style="color:var(--bad)">refused (${f.error})</b> · goal (${f.goal.map(v=>v.toFixed(3)).join(", ")}) m. The arm is shown at its start pose.`;
+  applyToggles(); drawArm();
+}
+
+function drawArm(){
+  clear(groups.arm);
+  const a = run.frames[frameIdx].arm; if(!a.length) return;
+  const k = Math.min(a.length-1, Math.round(t*(a.length-1)));
+  groups.arm.add(armMesh(a[k], 0x2d6fd6, 0.85));
+  $("t").value = Math.round(t*1000);
+}
+function applyToggles(){
+  groups.cloud.visible=$("showCloud").checked; groups.fused.visible=$("showFused").checked;
+  groups.bowl.visible=$("showBowl").checked; groups.ghost.visible=$("showGhost").checked;
+}
+["showCloud","showFused","showBowl","showGhost"].forEach(id=>$(id).onchange=applyToggles);
+$("t").oninput = e => { playing=false; $("play").textContent="Play"; t=e.target.value/1000; drawArm(); };
+$("play").onclick = () => { playing=!playing; $("play").textContent=playing?"Pause":"Play"; if(playing&&t>=1) t=0; };
+$("all").onclick = () => { playAll=true; playing=true; $("play").textContent="Pause"; showFrame(0); };
+
+let last=performance.now();
+renderer.setAnimationLoop(now=>{
+  const dt=(now-last)/1000; last=now;
+  if(playing && run){
+    t += dt/2.5;
+    if(t>=1){ if(playAll && frameIdx<run.frames.length-1){ showFrame(frameIdx+1); } else { t=1; if(!playAll) t=0; else playing=false; } }
+    drawArm();
+  }
+  controls.update(); renderer.render(scene,camera);
+});
+loadRun(0);
+</script>
+</body>
+</html>

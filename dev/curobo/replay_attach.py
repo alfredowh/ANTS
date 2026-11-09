@@ -66,7 +66,15 @@ def aspire_env() -> dict:
     return env
 
 
-def make_spec(base: Path, out: Path, mode: str, crop_m: float | None = None) -> Path:
+def make_spec(
+    base: Path,
+    out: Path,
+    mode: str,
+    crop_m: float | None = None,
+    target_m: float | None = None,
+    fit: str | None = None,
+    fuse: bool = False,
+) -> Path:
     spec = json.loads(base.read_text(encoding="utf-8"))
     planner = spec["planner"]
     planner["cloud_dir"] = str(out / "clouds")
@@ -76,8 +84,15 @@ def make_spec(base: Path, out: Path, mode: str, crop_m: float | None = None) -> 
         planner["attach"]["file"] = str(GLOBAL_ATTACH)
         if crop_m:
             planner["attach"]["crop_m"] = crop_m
+        planner["attach"]["debug_dir"] = str(out / "attach_debug")
+        if target_m:
+            planner["attach"]["target_exclude_m"] = target_m
+        if fit:
+            planner["attach"]["fit"] = fit
     if mode.startswith("oracle"):
         planner["oracle_exclude"] = ["akita_black_bowl", "plate_1"]
+    if fuse:
+        planner["fuse"] = True
     planner["label_goals"] = {
         "file": str(out / "goal_labels.jsonl"),
         "body_main": "akita_black_bowl_1_main",
@@ -124,6 +139,23 @@ def main() -> int:
         default=None,
         help="fit and remove the held object only from mask points within this xy radius of the hand",
     )
+    p.add_argument(
+        "--target-exclude-m",
+        type=float,
+        default=None,
+        help="open gripper: drop cloud points within this distance of the last localized target",
+    )
+    p.add_argument(
+        "--attach-fit",
+        choices=["rim", "centroid"],
+        default=None,
+        help="held-bowl axis: rim circle fit (default) or mask centroid + table plane",
+    )
+    p.add_argument(
+        "--fuse",
+        action="store_true",
+        help="plan on a persistent occupancy map fused over all planning frames",
+    )
     args = p.parse_args()
     only = {s for s in args.only.split(",") if s}
     base_out = (ROOT / args.out).resolve() if not args.out.is_absolute() else args.out
@@ -138,7 +170,15 @@ def main() -> int:
             if out.exists():
                 shutil.rmtree(out)
             out.mkdir(parents=True)
-            spec = make_spec(base, out, args.mode, args.attach_crop_m)
+            spec = make_spec(
+                base,
+                out,
+                args.mode,
+                args.attach_crop_m,
+                args.target_exclude_m,
+                args.attach_fit,
+                args.fuse,
+            )
             GLOBAL_ATTACH.write_text(json.dumps({"spheres": []}), encoding="utf-8")
             cmd = [
                 str(ASPIRE_PY), str(LAUNCHER), str(spec), "--",

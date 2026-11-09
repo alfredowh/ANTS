@@ -115,6 +115,22 @@ def test_held_points_drop_other_objects_matched_by_the_query():
     assert launch.held_points(np.zeros((0, 3)), hand, 0.15).shape == (0, 3)
 
 
+def test_fit_centroid_ignores_finger_points_above_the_rim():
+    import numpy as np
+
+    rng = np.random.default_rng(0)
+    ang = rng.uniform(0, 2 * np.pi, 400)
+    bowl = np.c_[0.6 + 0.07 * np.cos(ang), 0.1 + 0.07 * np.sin(ang), rng.uniform(0.0, 0.05, 400)]
+    fingers = np.c_[np.full(80, 0.67), np.full(80, 0.1), rng.uniform(0.05, 0.1, 80)]
+    table = np.c_[rng.uniform(0.45, 0.75, 500), rng.uniform(-0.05, 0.25, 500), np.full(500, -0.011)]
+    centre, z_bottom = launch.fit_centroid(np.vstack([bowl, fingers]), table)
+    assert np.linalg.norm(centre - [0.6, 0.1]) < 0.02
+    assert abs(z_bottom + 0.011) < 1e-6
+    # no table in view: fall back to the mask's low percentile
+    _, fallback = launch.fit_centroid(bowl, np.zeros((0, 3)))
+    assert 0.0 <= fallback < 0.005
+
+
 def test_attached_spheres_are_written_in_the_panda_hand_frame():
     """A point at the logged gripper site must land on panda_hand + the offset, by FK."""
     import numpy as np

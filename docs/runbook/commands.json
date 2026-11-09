@@ -2643,6 +2643,13 @@
           "kind": "value",
           "on": true,
           "desc": "Service port (stock cuRobo port)."
+        },
+        {
+          "flag": "ANTS_VOXEL_LATTICE=",
+          "value": "1",
+          "kind": "env",
+          "on": false,
+          "desc": "Env: voxel faces on a fixed base-frame lattice instead of the cloud minimum, so a stray depth point no longer shifts every surface by up to 1 cm (C0b, 2026-11-09). Run the worktree's dev/curobo/service_dev.py."
         }
       ],
       "description": "Stock service deletes every scene point within 5 cm of the robot spheres, so an obstacle next to the gripper is invisible. ANTS_CARVE_MARGIN_M replaces that (default here 0.02). Stop the supervised cuRobo first. Since 2026-11-02 it also uses dev/curobo/franka_attach.yml (64 sphere slots on the attached_object link) and reads the spheres to attach from $ANTS_ATTACH_FILE before every plan (written by tools/aspire_launch.py, planner.attach). Exp06 to 08 ran with ANTS_CARVE_MARGIN_M=0.0, which the service turns into max(voxel 0.01 m, 0.0) = 1 cm, not the 2 cm the doc first stated.",
@@ -4151,6 +4158,30 @@
           "kind": "value",
           "on": false,
           "desc": "Attach mode: fit the held-bowl spheres and remove its points only from SAM 'bowl' mask points within this xy radius of the hand. Without it the union of all 'bowl' masks is used, which put the spheres on the wine bottle on 8 of 15 C0 replays (C0b, 2026-11-08)."
+        },
+        {
+          "flag": "--target-exclude-m",
+          "value": "0.02",
+          "kind": "value",
+          "on": false,
+          "desc": "Attach mode, gripper open: drop cloud points within this distance of the last localize_object cloud of the target. move_to_pose never passes a target cloud, so the spec's exclude_radius_m never ran for generated programs (C0b, 2026-11-09). Every attach replay also saves attach_debug/ (bowl points, hand pose, simulator box, diagnostics only)."
+        },
+        {
+          "flag": "--attach-fit",
+          "value": "centroid",
+          "kind": "value",
+          "on": false,
+          "choices": [
+            "rim",
+            "centroid"
+          ],
+          "desc": "Held-bowl sphere fit. rim (default): circle fit to the top 2 cm of the mask, which holds the gripper fingers at grasp time. centroid: xy centroid of the cropped mask, bottom = table plane under the bowl (C0c diagnostics: 2.6-2.9 cm and ~1 mm from simulator truth on 6 runs)."
+        },
+        {
+          "flag": "--fuse",
+          "kind": "switch",
+          "on": false,
+          "desc": "Plan on a persistent log-odds occupancy map (tools/fused_map.py) fused over every planning frame: misses from depth see-through clear ghosts, occluded voxels are remembered. Saves fused_XXX.npy next to the frame clouds."
         }
       ],
       "description": "Costs no model tokens (GPU and simulator only). Needs the SAM 3 and PyRoki services and the dev cuRobo service on 8118 (services.start, curobo.service). Runs one program at a time and resets the global attach file before each run; never start two at once. Written 2026-11-04 for the cuRobo false-negative debugging (handoff-curobo-debug.md, dev note not in repo). Every plan's goal is labelled against the simulator (planner.label_goals); score with curobo.goal-confusion. Do not run while another simulator is running.",
@@ -4166,6 +4197,14 @@
         {
           "title": "C0b: held-object crop, seeds 51-53",
           "cmd": "ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.15 --out data/runs/curobo/replay_c0b --only exp10_nodemo_a1,exp10_nodemo_a2,exp10_nodemo_a3,exp10_clip233859_a3,exp10_clip233832_a2 --seeds 51,52,53"
+        },
+        {
+          "title": "C0c: crop + target exclusion, seeds 51-53",
+          "cmd": "ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.12 --target-exclude-m 0.02 --out data/runs/curobo/replay_c0c --only exp10_nodemo_a1,exp10_nodemo_a2,exp10_nodemo_a3,exp10_clip233859_a3,exp10_clip233832_a2 --seeds 51,52,53"
+        },
+        {
+          "title": "C0d/C0e: centroid fit (+ fused map), lattice service",
+          "cmd": "ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.12 --target-exclude-m 0.02 --attach-fit centroid --fuse --out data/runs/curobo/replay_c0e --only exp10_nodemo_a1,exp10_nodemo_a2,exp10_nodemo_a3,exp10_clip233859_a3,exp10_clip233832_a2 --seeds 51,52,53"
         }
       ],
       "modules": [
@@ -4180,6 +4219,48 @@
       "out": [
         "<out>/<mode>/<label>_s<seed>/result.json",
         "<out>/<mode>/<label>_s<seed>/goal_labels.jsonl"
+      ]
+    },
+    {
+      "id": "curobo.viz3d",
+      "title": "3D replay page of attach-mode runs: scene cloud, fused map, planned arm motion (no tokens)",
+      "group": "experiments",
+      "runner": "shell",
+      "base": "ASPIRE/.venv-libero/bin/python dev/curobo/viz3d.py data/runs/curobo/replay_c0e/attach/exp10_nodemo_a1_s52",
+      "args": [
+        {
+          "flag": "--out",
+          "value": "",
+          "kind": "value",
+          "on": false,
+          "desc": "HTML file to write (default: <first run>/viz3d.html)."
+        },
+        {
+          "flag": "--points",
+          "value": "12000",
+          "kind": "value",
+          "on": false,
+          "desc": "Max cloud points per plan call (keeps the page small)."
+        }
+      ],
+      "description": "Positional: one or more run folders from curobo.replay (the base shows one). Reads logged data only (no simulator, no GPU). Per plan_motion call: the frame cloud cuRobo planned on, the fused occupancy map when the run used --fuse, the goal (green planned, red refused), and the arm as cuRobo collision spheres along the logged joint trajectory (FK in ants.evalkit.panda). One self-contained HTML page, three.js from jsdelivr.",
+      "examples": [
+        {
+          "title": "Fused-map run next to the c0d run of the same case",
+          "cmd": "ASPIRE/.venv-libero/bin/python dev/curobo/viz3d.py data/runs/curobo/replay_c0e/attach/exp10_nodemo_a1_s52 data/runs/curobo/replay_c0d/attach/exp10_nodemo_a1_s52 --out data/runs/curobo/viz_c0e.html"
+        }
+      ],
+      "modules": [
+        "launcher",
+        "rollout",
+        "aspire",
+        "services"
+      ],
+      "in": [
+        "data/runs/curobo/replay_*/attach/<label>_s<seed>/ (clouds/, run/, attach_debug/)"
+      ],
+      "out": [
+        "<out> (one HTML page)"
       ]
     },
     {

@@ -190,6 +190,51 @@ def held_points(points: np.ndarray, hand: np.ndarray, radius_m: float) -> np.nda
     return points[np.linalg.norm(points[:, :2] - hand[:2], axis=1) < radius_m]
 
 
+def debug_attach(out: Path, bowl: np.ndarray, hand: np.ndarray, rot: np.ndarray, attach: dict):
+    """Save the attach-time bowl points, hand pose and simulator truth for offline fitting."""
+    out.mkdir(parents=True, exist_ok=True)
+    truth = None
+    try:
+        import mujoco
+
+        env = LIVE["env"]
+        model, data = env.sim.model._model, env.sim.data._data
+        lo, hi = body_aabb(env, env.sim.model.body_name2id(attach["body_main"]))
+        base = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "robot0_base")
+        bp = np.asarray(data.xpos[base], dtype=float)
+        bm = np.asarray(data.xmat[base], dtype=float).reshape(3, 3)
+        truth = {
+            "lo": ((np.asarray(lo) - bp) @ bm).tolist(),
+            "hi": ((np.asarray(hi) - bp) @ bm).tolist(),
+        }
+    except Exception as err:
+        truth = {"error": f"{type(err).__name__}: {err}"}
+    np.save(out / "bowl_points.npy", bowl)
+    (out / "attach_debug.json").write_text(
+        json.dumps({"hand": hand.tolist(), "rot": rot.tolist(), "truth_aabb": truth}),
+        encoding="utf-8",
+    )
+
+
+def fit_centroid(bowl: np.ndarray, scene: np.ndarray) -> tuple[np.ndarray, float]:
+    """Held-bowl axis (x, y) and bottom z, robust to finger points in the mask.
+
+    The rim fit (`fit_axis`) takes the top 2 cm of the mask as the rim; at grasp time that band
+    holds the gripper fingers, which moved the axis 0.4-9.9 cm from simulator truth and the bottom
+    3-4.5 cm too high (C0c diagnostics). The xy centroid of the cropped mask was within 2.6-2.9 cm
+    on the same frames. The bottom is the table plane under the bowl (the bowl rests on it at
+    attach time); the mask's 1st z percentile, about 1 cm high, is the fallback.
+    """
+    centre = bowl[:, :2].mean(axis=0)
+    low = float(np.percentile(bowl[:, 2], 1))
+    if len(scene):
+        near = np.linalg.norm(scene[:, :2] - centre, axis=1) < 0.15
+        table = scene[near & (scene[:, 2] < low + 0.005) & (scene[:, 2] > low - 0.05), 2]
+        if len(table) >= 30:
+            return centre, float(np.median(table))
+    return centre, low
+
+
 def fit_axis(points: np.ndarray, radius: float) -> np.ndarray:
     """Centre (x, y) of a round bowl of known rim radius from the visible rim points."""
     rim = points[points[:, 2] > points[:, 2].max() - 0.02][:, :2]
@@ -304,6 +349,9 @@ def scale_ontop_tolerance(factors: dict[str, float], area_fraction: float | None
 
 
 LIVE: dict = {}
+# Last localize_object cloud of the manipulated object. Programs call move_to_pose, which never
+# passes a target cloud, so ASPIRE's own target exclusion (plan_motion only) never runs for them.
+LAST_TARGET: dict = {}
 ROBOT_PROMPTS = ("robot arm", "robot gripper")
 SAM31_MODEL = "sam-3.1"
 SAM31_API = "https://api.meta.ai/v1/responses"
@@ -689,17 +737,35 @@ def install_curobo_planning(cfg: dict) -> None:
                     f"distance to hand {dist:.3f} m -> {action}",
                     file=sys.stderr,
                 )
-                if action == "wait":
-                    return scene
-                if action == "release":
-                    if held_state.pop("local", None) is not None:
+                if action in ("wait", "release"):
+                    if action == "release" and held_state.pop("local", None) is not None:
                         write([])
                         print("[ants-attach] released", file=sys.stderr)
+                    target = LAST_TARGET.get("points")
+                    radius = attach.get("target_exclude_m")
+                    if radius and target is not None and LAST_TARGET.get("frame") == frame:
+                        cut = removal_mask(
+                            scene.point_cloud.points, target, float(radius), np.zeros((0, 3)), 0.0
+                        )
+                        info["n_target_removed"] = int(cut.sum())
+                        scene = PlanningScene(
+                            point_cloud=PointCloud(
+                                points=scene.point_cloud.points[~cut],
+                                frame=scene.point_cloud.frame,
+                            ),
+                            voxel_size_m=scene.voxel_size_m,
+                            timestamp_s=scene.timestamp_s,
+                        )
                     return scene
                 if "local" not in held_state:
                     if mode in ("curobo-sam3", "curobo-sam31"):
-                        centre = fit_axis(bowl, max(r for _, r in profile))
-                        z_bottom = float(bowl[:, 2].max()) - max(h for h, _ in profile)
+                        if attach.get("fit") == "centroid":
+                            centre, z_bottom = fit_centroid(bowl, scene.point_cloud.points)
+                        else:
+                            centre = fit_axis(bowl, max(r for _, r in profile))
+                            z_bottom = float(bowl[:, 2].max()) - max(h for h, _ in profile)
+                        if attach.get("debug_dir"):  # diagnostics only: truth is never used
+                            debug_attach(Path(attach["debug_dir"]), bowl, t, rot, attach)
                     else:
                         env = LIVE["env"]
                         model = env.sim.model._model
@@ -753,6 +819,17 @@ def install_curobo_planning(cfg: dict) -> None:
             return scene
 
         CapApi._planning_scene = with_attach
+        if attach.get("target_exclude_m"):
+            inner_localize = CapApi.localize_object
+
+            def remember_target(self, query, *a, **kw):
+                result = inner_localize(self, query, *a, **kw)
+                cloud = getattr(result, "point_cloud", None)
+                if attach["query"] in str(query).lower() and getattr(result, "ok", False) and cloud:
+                    LAST_TARGET.update(points=np.asarray(cloud.points), frame=cloud.frame)
+                return result
+
+            CapApi.localize_object = remember_target
         write([])
     radius = cfg.get("exclude_radius_m")
     if radius:
@@ -791,6 +868,53 @@ def install_curobo_planning(cfg: dict) -> None:
             return result
 
         CuRoboProvider.plan_to_joints = labelled
+    fuse = cfg.get("fuse")
+    if fuse:  # persistent occupancy map over all planning frames (tools/fused_map.py)
+        from cap_harness.contracts import PlanningScene, PointCloud
+        from fused_map import Camera, FusedMap
+
+        fmap = FusedMap(**(fuse if isinstance(fuse, dict) else {}))
+        frame_scene = CapApi._planning_scene
+        fused_dir = Path(cfg["cloud_dir"]) if cfg.get("cloud_dir") else None
+        fused_count = iter(range(10_000))
+
+        def fused_scene(self, *a, **kw):
+            scene = frame_scene(self, *a, **kw)
+            try:
+                return fuse_into(self, scene)
+            except Exception as err:  # never break planning because the map failed
+                print(f"[ants-fuse] failed: {type(err).__name__}: {err}", file=sys.stderr)
+                return scene
+
+        def fuse_into(self, scene):
+            observation = self.get_observation()
+            frame = observation.robot_state.base_frame
+            cameras = [
+                Camera(
+                    np.asarray(cam.depth_m, dtype=float),
+                    np.asarray(cam.intrinsics, dtype=float),
+                    np.asarray(cam.camera_pose.as_matrix(), dtype=float),
+                )
+                for cam in observation.cameras.values()
+                if cam.camera_pose.frame == frame
+            ]
+            points = fmap.update(np.asarray(scene.point_cloud.points), cameras)
+            print(
+                f"[ants-fuse] frame {len(scene.point_cloud.points)} pts -> map {len(fmap.keys)}"
+                f" voxels, {len(points)} occupied",
+                file=sys.stderr,
+            )
+            if fused_dir is not None:
+                np.save(fused_dir / f"fused_{next(fused_count):03d}.npy", points)
+            if not len(points):
+                return scene
+            return PlanningScene(
+                point_cloud=PointCloud(points=points, frame=scene.point_cloud.frame),
+                voxel_size_m=scene.voxel_size_m,
+                timestamp_s=scene.timestamp_s,
+            )
+
+        CapApi._planning_scene = fused_scene
     if oracle_prefixes:
         scene_builder = CapApi._planning_scene
 
