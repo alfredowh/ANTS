@@ -3669,6 +3669,10 @@
         {
           "title": "Default bowl-on-plate orbit scan (what produced the 2026-11-03 result)",
           "cmd": "cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py"
+        },
+        {
+          "title": "Hi-res ring for the coloured map (repeat for --height 1.15, 1.35, 1.6)",
+          "cmd": "cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py --seed 51 --n-frames 24 --image-size 1024 --target-x -0.15 --target-y 0.0 --target-z 0.92 --radius 0.7 --height 1.15 --out-dir ../data/runs/mapper_probe/frames_hires1024_h1.15"
         }
       ],
       "modules": [
@@ -3679,6 +3683,63 @@
       "out": [
         "data/runs/mapper_probe/frames/*.npz",
         "data/runs/mapper_probe/frames/manifest.txt"
+      ],
+      "cost": "free",
+      "minutes": 1,
+      "doc": "docs/perception/scene-reconstruction-probe.md"
+    },
+    {
+      "id": "scene_recon.color_fuse",
+      "title": "Coloured fused map from scan frames (tools/fused_map.py + mean RGB per voxel, no tokens)",
+      "group": "scene-recon",
+      "runner": "shell",
+      "base": "ASPIRE/.venv-libero/bin/python tools/mapper_probe/color_fuse.py",
+      "args": [
+        {
+          "flag": "--frames-glob",
+          "value": "data/runs/mapper_probe/frames_hires1024_h*/frame_*.npz",
+          "kind": "value",
+          "on": false,
+          "desc": "Scan frames (.npz from scan_orbit.py)."
+        },
+        {
+          "flag": "--voxel",
+          "value": "0.003",
+          "kind": "value",
+          "on": false,
+          "desc": "Voxel size in metres."
+        },
+        {
+          "flag": "--out",
+          "value": "data/runs/mapper_probe/fused_color_hires1024.npz",
+          "kind": "value",
+          "on": false,
+          "desc": "Output npz: occ, rgb (fused), raw, rawrgb (no see-through clearing)."
+        },
+        {
+          "flag": "--viewer-json",
+          "value": "",
+          "kind": "value",
+          "on": false,
+          "desc": "Also write int16-packed points for a three.js viewer page."
+        }
+      ],
+      "description": "Reads saved frames only (no simulator). Runs the planner's log-odds FusedMap over every frame and colours each occupied voxel by the mean RGB of its pixels; cropped to the table workspace. Logged 2026-11-09: 72 frames at 1024 px, 3 mm, 268,591 coloured voxels.",
+      "examples": [
+        {
+          "title": "Hi-res scan (3 rings x 24 at 1024 px), 3 mm",
+          "cmd": "ASPIRE/.venv-libero/bin/python tools/mapper_probe/color_fuse.py --viewer-json data/runs/mapper_probe/cmap.json"
+        }
+      ],
+      "modules": [
+        "scene_recon",
+        "aspire"
+      ],
+      "in": [
+        "data/runs/mapper_probe/frames_*/frame_*.npz"
+      ],
+      "out": [
+        "<out> npz"
       ],
       "cost": "free",
       "minutes": 1,

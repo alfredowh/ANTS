@@ -1445,6 +1445,12 @@ Default bowl-on-plate orbit scan (what produced the 2026-11-03 result):
 cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py
 ```
 
+Hi-res ring for the coloured map (repeat for --height 1.15, 1.35, 1.6):
+
+```bash
+cd ASPIRE && LIBERO_CONFIG_PATH=$PWD/.libero TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1 MUJOCO_GL=egl PYOPENGL_PLATFORM=egl EGL_PLATFORM=device CUDA_VISIBLE_DEVICES=0 .venv-libero/bin/python ../tools/mapper_probe/scan_orbit.py --seed 51 --n-frames 24 --image-size 1024 --target-x -0.15 --target-y 0.0 --target-z 0.92 --radius 0.7 --height 1.15 --out-dir ../data/runs/mapper_probe/frames_hires1024_h1.15
+```
+
 ### `scene_recon.scan_arm`: Real arm-driven scan: sweep the Franka's wrist camera (not a teleport)
 
 Closed-loop drives the Franka's shoulder-pan and shoulder-lift joints through a pan x lift waypoint grid using the exact delta-joint formula LiberoActionCodec.encode uses, then saves robot0_eye_in_hand RGB-D + world-frame camera pose per waypoint -- genuine robot motion, not a camera teleport.
