@@ -4243,6 +4243,13 @@
           "kind": "switch",
           "on": false,
           "desc": "Plan on a persistent log-odds occupancy map (tools/fused_map.py) fused over every planning frame: misses from depth see-through clear ghosts, occluded voxels are remembered. Saves fused_XXX.npy next to the frame clouds."
+        },
+        {
+          "flag": "--twin-dir",
+          "value": "data/runs/real2sim_twin/twins",
+          "kind": "value",
+          "on": false,
+          "desc": "Object-level twin: loads <dir>/<label>_s<seed>/twin.json (tools/real2sim/twin_bodies.py) into the launcher's \"twin\" key, which rescales and moves the bowl and plate to the reconstruction after every reset."
         }
       ],
       "description": "Costs no model tokens (GPU and simulator only). Needs the SAM 3 and PyRoki services and the dev cuRobo service on 8118 (services.start, curobo.service). Runs one program at a time and resets the global attach file before each run; never start two at once. Written 2026-11-04 for the cuRobo false-negative debugging (handoff-curobo-debug.md, dev note not in repo). Every plan's goal is labelled against the simulator (planner.label_goals); score with curobo.goal-confusion. Do not run while another simulator is running.",
@@ -4266,6 +4273,10 @@
         {
           "title": "C0d/C0e: centroid fit (+ fused map), lattice service",
           "cmd": "ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.12 --target-exclude-m 0.02 --attach-fit centroid --fuse --out data/runs/curobo/replay_c0e --only exp10_nodemo_a1,exp10_nodemo_a2,exp10_nodemo_a3,exp10_clip233859_a3,exp10_clip233832_a2 --seeds 51,52,53"
+        },
+        {
+          "title": "Twin replay (stock first with --fuse, then twin_bodies, then this)",
+          "cmd": "ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.12 --target-exclude-m 0.02 --attach-fit centroid --fuse --twin-dir data/runs/real2sim_twin/twins --out data/runs/real2sim_twin/twin --only exp10_nodemo_a2,exp10_nodemo_a3 --seeds 51,52,53,54,55,56"
         }
       ],
       "modules": [
@@ -4322,6 +4333,49 @@
       ],
       "out": [
         "<out> (one HTML page)"
+      ]
+    },
+    {
+      "id": "real2sim.twin_bodies",
+      "title": "Object-level twin spec (bowl, plate size and position) from a run's raw first frames (no tokens)",
+      "group": "experiments",
+      "runner": "shell",
+      "base": "ASPIRE/.venv-libero/bin/python tools/real2sim/twin_bodies.py data/runs/real2sim_twin/stock/attach/exp10_nodemo_a2_s51",
+      "args": [
+        {
+          "flag": "--out",
+          "value": "",
+          "kind": "value",
+          "on": false,
+          "desc": "Spec file (default <run>/twin.json)."
+        },
+        {
+          "flag": "--score",
+          "value": "",
+          "kind": "switch",
+          "on": true,
+          "desc": "Add diameter and xy error against simulator truth (scoring only)."
+        }
+      ],
+      "description": "Positional: one or more replay run folders recorded with --fuse (the launcher then saves clouds/cameras_000.npz, the raw first frames before any removal). Segments bowl and plate around the first localize_object pose (SAM 3), measures diameter and xy centre. Truth is read only with --score. Written 2026-11-09 for the twin experiment (local dev note fused-map-as-sim.md).",
+      "examples": [
+        {
+          "title": "Build and score one twin",
+          "cmd": "ASPIRE/.venv-libero/bin/python tools/real2sim/twin_bodies.py data/runs/real2sim_twin/stock/attach/exp10_nodemo_a2_s51 --score --out data/runs/real2sim_twin/twins/exp10_nodemo_a2_s51/twin.json"
+        }
+      ],
+      "modules": [
+        "launcher",
+        "rollout",
+        "aspire",
+        "services"
+      ],
+      "in": [
+        "<run>/clouds/cameras_000.npz",
+        "<run>/run/.../trace/calls/*-localize-object"
+      ],
+      "out": [
+        "<run>/twin.json or --out"
       ]
     },
     {

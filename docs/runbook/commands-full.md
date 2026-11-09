@@ -1111,6 +1111,7 @@ ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py \
 | `--target-exclude-m` | `0.02` | no | Attach mode, gripper open: drop cloud points within this distance of the last localize_object cloud of the target. move_to_pose never passes a target cloud, so the spec's exclude_radius_m never ran for generated programs (C0b, 2026-11-09). Every attach replay also saves attach_debug/ (bowl points, hand pose, simulator box, diagnostics only). |
 | `--attach-fit` | `centroid` | no | Held-bowl sphere fit. rim (default): circle fit to the top 2 cm of the mask, which holds the gripper fingers at grasp time. centroid: xy centroid of the cropped mask, bottom = table plane under the bowl (C0c diagnostics: 2.6-2.9 cm and ~1 mm from simulator truth on 6 runs). Choices: rim, centroid. |
 | `--fuse` |  | no | Plan on a persistent log-odds occupancy map (tools/fused_map.py) fused over every planning frame: misses from depth see-through clear ghosts, occluded voxels are remembered. Saves fused_XXX.npy next to the frame clouds. |
+| `--twin-dir` | `data/runs/real2sim_twin/twins` | no | Object-level twin: loads <dir>/<label>_s<seed>/twin.json (tools/real2sim/twin_bodies.py) into the launcher's "twin" key, which rescales and moves the bowl and plate to the reconstruction after every reset. |
 
 Two programs, attach on:
 
@@ -1140,6 +1141,12 @@ C0d/C0e: centroid fit (+ fused map), lattice service:
 
 ```bash
 ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.12 --target-exclude-m 0.02 --attach-fit centroid --fuse --out data/runs/curobo/replay_c0e --only exp10_nodemo_a1,exp10_nodemo_a2,exp10_nodemo_a3,exp10_clip233859_a3,exp10_clip233832_a2 --seeds 51,52,53
+```
+
+Twin replay (stock first with --fuse, then twin_bodies, then this):
+
+```bash
+ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.12 --target-exclude-m 0.02 --attach-fit centroid --fuse --twin-dir data/runs/real2sim_twin/twins --out data/runs/real2sim_twin/twin --only exp10_nodemo_a2,exp10_nodemo_a3 --seeds 51,52,53,54,55,56
 ```
 
 ### `curobo.goal-confusion`: Score cuRobo verdicts against the simulator (false negatives and positives)

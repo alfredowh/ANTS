@@ -74,6 +74,7 @@ def make_spec(
     target_m: float | None = None,
     fit: str | None = None,
     fuse: bool = False,
+    twin: dict | None = None,
 ) -> Path:
     spec = json.loads(base.read_text(encoding="utf-8"))
     planner = spec["planner"]
@@ -93,6 +94,8 @@ def make_spec(
         planner["oracle_exclude"] = ["akita_black_bowl", "plate_1"]
     if fuse:
         planner["fuse"] = True
+    if twin:
+        spec["twin"] = {"bodies": twin}
     planner["label_goals"] = {
         "file": str(out / "goal_labels.jsonl"),
         "body_main": "akita_black_bowl_1_main",
@@ -102,6 +105,15 @@ def make_spec(
     path = out / "spec.json"
     path.write_text(json.dumps(spec, indent=1), encoding="utf-8")
     return path
+
+
+def twin_for(twin_dir: Path | None, label: str, seed: int) -> dict | None:
+    if twin_dir is None:
+        return None
+    path = twin_dir / f"{label}_s{seed}" / "twin.json"
+    if not path.is_file():
+        raise SystemExit(f"--twin-dir: missing {path}")
+    return json.loads(path.read_text(encoding="utf-8"))["bodies"]
 
 
 def summarise(out: Path) -> dict:
@@ -156,6 +168,12 @@ def main() -> int:
         action="store_true",
         help="plan on a persistent occupancy map fused over all planning frames",
     )
+    p.add_argument(
+        "--twin-dir",
+        type=Path,
+        default=None,
+        help="object-level twin: <dir>/<label>_s<seed>/twin.json from tools/real2sim/twin_bodies.py",
+    )
     args = p.parse_args()
     only = {s for s in args.only.split(",") if s}
     base_out = (ROOT / args.out).resolve() if not args.out.is_absolute() else args.out
@@ -178,6 +196,7 @@ def main() -> int:
                 args.target_exclude_m,
                 args.attach_fit,
                 args.fuse,
+                twin_for(args.twin_dir, label, seed),
             )
             GLOBAL_ATTACH.write_text(json.dumps({"spheres": []}), encoding="utf-8")
             cmd = [

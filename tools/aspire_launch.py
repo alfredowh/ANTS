@@ -898,6 +898,20 @@ def install_curobo_planning(cfg: dict) -> None:
                 for cam in observation.cameras.values()
                 if cam.camera_pose.frame == frame
             ]
+            if fused_dir is not None and not (fused_dir / "cameras_000.npz").exists():
+                # raw first frames, before any robot/target removal: input for tools/real2sim/twin_bodies.py
+                raw = {}
+                for i, (name, cam) in enumerate(observation.cameras.items()):
+                    if cam.camera_pose.frame != frame:
+                        continue
+                    raw[f"depth_{i}"] = np.asarray(cam.depth_m, dtype=np.float32)
+                    raw[f"intrinsics_{i}"] = np.asarray(cam.intrinsics, dtype=float)
+                    raw[f"pose_{i}"] = np.asarray(cam.camera_pose.as_matrix(), dtype=float)
+                    rgb = getattr(cam, "rgb", None)
+                    if rgb is not None:
+                        raw[f"rgb_{i}"] = np.asarray(rgb, dtype=np.uint8)
+                    raw[f"name_{i}"] = np.array(name)
+                np.savez_compressed(fused_dir / "cameras_000.npz", **raw)
             points = fmap.update(np.asarray(scene.point_cloud.points), cameras)
             print(
                 f"[ants-fuse] frame {len(scene.point_cloud.points)} pts -> map {len(fmap.keys)}"
@@ -1051,6 +1065,9 @@ class PerturbedEnv:
         if scale:
             obs = self._rescale(scale, obs)
             self._applied["scaled_bounding_radius_m"] = self._radii(list(scale))
+        twin = (self._spec.get("twin") or {}).get("bodies")
+        if twin:
+            obs = self._twin(twin)
         self._apply_scene()
         self._queue.clear()
         if self._contact_path is not None:
@@ -1080,6 +1097,37 @@ class PerturbedEnv:
                 self.sim.data.set_joint_qpos(name, qpos)
         self.sim.forward()
         return self._inner.env._get_observations(force_update=True)
+
+    def _twin(self, bodies: dict):
+        """Object-level twin: resize and move bodies to a reconstruction (tools/real2sim/twin_bodies.py).
+
+        Each body {"diameter_m", "xy_base"} gets a uniform scale so its collision box's mean
+        horizontal size equals the reconstructed diameter (the LIBERO mesh is the shape prior), then
+        its free joint is shifted so the box centre sits at the reconstructed xy (robot base frame).
+        Only the model's own geometry is read here; the targets come from perception.
+        """
+        model = self.sim.model
+        factors = {}
+        for name, b in bodies.items():
+            lo, hi = body_aabb(self._inner.env, model.body_name2id(name))
+            factors[name] = float(b["diameter_m"]) / float(np.mean((hi - lo)[:2]))
+        obs = self._rescale(factors, None)
+        model, data = self.sim.model, self.sim.data
+        base = data.body_xpos[model.body_name2id("robot0_base")]
+        shifted = {}
+        for name, b in bodies.items():
+            bid = model.body_name2id(name)
+            lo, hi = body_aabb(self._inner.env, bid)
+            target = base[:2] + np.asarray(b["xy_base"], dtype=float)
+            jnt = int(model.body_jntadr[bid])
+            adr = int(model.jnt_qposadr[jnt])
+            qpos = np.array(data.qpos[adr : adr + 7], dtype=float)
+            qpos[:2] += target - (lo[:2] + hi[:2]) / 2
+            data.set_joint_qpos(model.joint(jnt).name, qpos)
+            shifted[name] = [round(float(v), 4) for v in qpos[:3]]
+        self.sim.forward()
+        self._applied["twin"] = {"factor": {k: round(v, 4) for k, v in factors.items()}, "qpos": shifted}
+        return obs
 
     def _radii(self, names: list[str]) -> dict:
         """Largest geom bounding radius per body: proof that scaling reached the simulator."""
