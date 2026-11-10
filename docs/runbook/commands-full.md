@@ -1112,6 +1112,8 @@ ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py \
 | `--attach-fit` | `centroid` | no | Held-bowl sphere fit. rim (default): circle fit to the top 2 cm of the mask, which holds the gripper fingers at grasp time. centroid: xy centroid of the cropped mask, bottom = table plane under the bowl (C0c diagnostics: 2.6-2.9 cm and ~1 mm from simulator truth on 6 runs). Choices: rim, centroid. |
 | `--fuse` |  | no | Plan on a persistent log-odds occupancy map (tools/fused_map.py) fused over every planning frame: misses from depth see-through clear ghosts, occluded voxels are remembered. Saves fused_XXX.npy next to the frame clouds. |
 | `--twin-dir` | `data/runs/real2sim_twin/twins` | no | Object-level twin: loads <dir>/<label>_s<seed>/twin.json (tools/real2sim/twin_bodies.py) into the launcher's "twin" key, which rescales and moves the bowl and plate to the reconstruction after every reset. |
+| `--perturb` | `data/runs/real2sim_perturb/perturb/pose.json` | no | JSON with launcher perturbation keys (pose, scale, physics, camera, ...) merged into the spec; scale multiplies the task's own factors. With --twin-dir or --mesh-twin-dir, pose and scale are skipped because the twin re-measured them. |
+| `--mesh-twin-dir` | `data/runs/real2sim_mesh/nominal/meshes` | no | Mesh twin: loads <dir>/<label>_s<seed>/mesh_twin.json (tools/real2sim/mesh_twin.py) into the launcher's twin.mesh key, which replaces bowl and plate geometry, colour, mass and friction with the estimate after every reset. |
 
 Two programs, attach on:
 
@@ -1147,6 +1149,18 @@ Twin replay (stock first with --fuse, then twin_bodies, then this):
 
 ```bash
 ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.12 --target-exclude-m 0.02 --attach-fit centroid --fuse --twin-dir data/runs/real2sim_twin/twins --out data/runs/real2sim_twin/twin --only exp10_nodemo_a2,exp10_nodemo_a3 --seeds 51,52,53,54,55,56
+```
+
+Perturbed stock run (bowl moved 6 cm, 5 cm):
+
+```bash
+ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.12 --target-exclude-m 0.02 --attach-fit centroid --fuse --perturb data/runs/real2sim_perturb/perturb/pose.json --out data/runs/real2sim_perturb/pose/stock --only exp10_nodemo_a2,exp10_nodemo_a3 --seeds 51,52
+```
+
+Mesh twin replay (stock first with --fuse, then mesh_twin.py, then this):
+
+```bash
+ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.12 --target-exclude-m 0.02 --attach-fit centroid --fuse --mesh-twin-dir data/runs/real2sim_mesh/nominal/meshes --out data/runs/real2sim_mesh/nominal/twin --only exp10_nodemo_a2,exp10_nodemo_a3 --seeds 51,52,53,54,55,56
 ```
 
 ### `curobo.goal-confusion`: Score cuRobo verdicts against the simulator (false negatives and positives)

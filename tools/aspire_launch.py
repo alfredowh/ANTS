@@ -124,6 +124,40 @@ def scale_body_xml(root: ET.Element, body_name: str, factor: float) -> None:
             _scale_floats(el, "diaginertia", factor**5)
 
 
+def mesh_twin_xml(root: ET.Element, spec: dict) -> None:
+    """Rewrite bodies in an MJCF tree with `tools/real2sim/mesh_twin.py` geometry (see `_mesh_twin`)."""
+    asset = root.find("asset")
+    fmt = lambda v: " ".join(f"{float(x):.6g}" for x in v)  # noqa: E731
+    for name, b in spec["bodies"].items():
+        body = next(e for e in root.iter("body") if e.get("name") == name)
+        geoms = body.findall("geom")
+        visual = [g for g in geoms if g.get("contype") == "0" and g.get("conaffinity") == "0"]
+        coll = [g for g in geoms if g not in visual]
+        mesh_name = f"twin_{name}"
+        ET.SubElement(asset, "mesh", name=mesh_name, file=b["mesh"])
+        for g in visual:
+            for attr in ("material", "size", "fromto"):
+                g.attrib.pop(attr, None)
+            g.set("type", "mesh")
+            g.set("mesh", mesh_name)
+            g.set("pos", "0 0 0")
+            g.set("quat", "1 0 0 0")
+            g.set("rgba", fmt(b["rgba"]))
+            g.set("mass", "0")
+        for g, est in zip(coll, b["geoms"], strict=False):
+            for attr in ("mesh", "fromto", "material"):
+                g.attrib.pop(attr, None)
+            g.set("type", est["type"])
+            g.set("size", fmt(est["size"]))
+            g.set("pos", fmt(est["pos"]))
+            g.set("quat", fmt(est["quat"]))
+            g.set("friction", fmt(b["friction"]))
+            g.set("mass", f"{b['mass_kg'] / len(coll):.6g}")
+        inertial = body.find("inertial")
+        if inertial is not None:
+            body.remove(inertial)  # mass and inertia now come from the estimated geoms
+
+
 def circle_overlap_fraction(c1, r1: float, c2, r2: float) -> float:
     """Share of circle 1's area that lies inside circle 2."""
     d = float(np.hypot(c1[0] - c2[0], c1[1] - c2[1]))
@@ -1068,6 +1102,9 @@ class PerturbedEnv:
         twin = (self._spec.get("twin") or {}).get("bodies")
         if twin:
             obs = self._twin(twin)
+        mesh_twin = (self._spec.get("twin") or {}).get("mesh")
+        if mesh_twin:
+            obs = self._mesh_twin(mesh_twin)
         self._apply_scene()
         self._queue.clear()
         if self._contact_path is not None:
@@ -1128,6 +1165,47 @@ class PerturbedEnv:
         self.sim.forward()
         self._applied["twin"] = {"factor": {k: round(v, 4) for k, v in factors.items()}, "qpos": shifted}
         return obs
+
+    def _mesh_twin(self, spec: dict):
+        """Mesh twin: replace each body's geometry with one rebuilt from perception.
+
+        `spec` is `tools/real2sim/mesh_twin.py` output. Per body: the visual geom becomes the revolved
+        profile mesh with the estimated colour; the collision geoms keep their LIBERO names (the task's
+        contact checks use them) and take the estimated wall boxes; mass and friction are the
+        estimate's priors. The body frame keeps its orientation (the shapes are symmetric about z) and
+        is moved so the footprint centre sits at the reconstructed xy, on the reconstructed table.
+        """
+        model = self.sim.model
+        saved = {
+            model.joint(j).name: self.sim.data.qpos[
+                model.jnt_qposadr[j] : model.jnt_qposadr[j] + (7 if model.jnt_type[j] == 0 else 1)
+            ].copy()
+            for j in range(model.njnt)
+        }
+        root = ET.fromstring(model.get_xml())
+        mesh_twin_xml(root, spec)
+        self._inner.env.reset_from_xml_string(ET.tostring(root, encoding="unicode"))
+        model, data = self.sim.model, self.sim.data
+        names = {model.joint(j).name for j in range(model.njnt)}
+        for jname, qpos in saved.items():
+            if jname in names:
+                data.set_joint_qpos(jname, qpos)
+        self.sim.forward()
+        base = data.body_xpos[model.body_name2id("robot0_base")]
+        placed = {}
+        for name, b in spec["bodies"].items():
+            bid = model.body_name2id(name)
+            jnt = int(model.body_jntadr[bid])
+            adr = int(model.jnt_qposadr[jnt])
+            qpos = np.array(data.qpos[adr : adr + 7], dtype=float)
+            qpos[:2] = base[:2] + np.asarray(b["xy_base"], dtype=float)
+            qpos[2] = base[2] + float(spec["table_z_base"]) + 0.002
+            data.set_joint_qpos(model.joint(jnt).name, qpos)
+            placed[name] = {"qpos": [round(float(v), 4) for v in qpos[:3]],
+                            "mass_kg": round(float(model.body_mass[bid]), 4)}  # fmt: skip
+        self.sim.forward()
+        self._applied["mesh_twin"] = placed
+        return self._inner.env._get_observations(force_update=True)
 
     def _radii(self, names: list[str]) -> dict:
         """Largest geom bounding radius per body: proof that scaling reached the simulator."""

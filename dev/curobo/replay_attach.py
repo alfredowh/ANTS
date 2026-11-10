@@ -75,8 +75,19 @@ def make_spec(
     fit: str | None = None,
     fuse: bool = False,
     twin: dict | None = None,
+    perturb: dict | None = None,
+    mesh: dict | None = None,
 ) -> Path:
     spec = json.loads(base.read_text(encoding="utf-8"))
+    for key, value in (perturb or {}).items():
+        if (twin or mesh) and key in ("pose", "scale"):
+            continue  # the twin re-measures object pose and size from the stock run's cameras
+        if key == "scale":  # multiply onto the task's own scale factors
+            bodies = spec.setdefault("scale", {}).setdefault("bodies", {})
+            for body, f in value["bodies"].items():
+                bodies[body] = round(bodies.get(body, 1.0) * float(f), 4)
+            continue
+        spec[key] = value
     planner = spec["planner"]
     planner["cloud_dir"] = str(out / "clouds")
     if mode in ("sparse", "oracle"):
@@ -96,6 +107,8 @@ def make_spec(
         planner["fuse"] = True
     if twin:
         spec["twin"] = {"bodies": twin}
+    if mesh:
+        spec.setdefault("twin", {})["mesh"] = mesh
     planner["label_goals"] = {
         "file": str(out / "goal_labels.jsonl"),
         "body_main": "akita_black_bowl_1_main",
@@ -114,6 +127,15 @@ def twin_for(twin_dir: Path | None, label: str, seed: int) -> dict | None:
     if not path.is_file():
         raise SystemExit(f"--twin-dir: missing {path}")
     return json.loads(path.read_text(encoding="utf-8"))["bodies"]
+
+
+def mesh_for(mesh_dir: Path | None, label: str, seed: int) -> dict | None:
+    if mesh_dir is None:
+        return None
+    path = mesh_dir / f"{label}_s{seed}" / "mesh_twin.json"
+    if not path.is_file():
+        raise SystemExit(f"--mesh-twin-dir: missing {path}")
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def summarise(out: Path) -> dict:
@@ -174,7 +196,21 @@ def main() -> int:
         default=None,
         help="object-level twin: <dir>/<label>_s<seed>/twin.json from tools/real2sim/twin_bodies.py",
     )
+    p.add_argument(
+        "--perturb",
+        type=Path,
+        default=None,
+        help="JSON with launcher perturbation keys (pose, scale, physics, ...) merged into the spec;"
+        " with --twin-dir, pose and scale are skipped (the twin measured them)",
+    )
+    p.add_argument(
+        "--mesh-twin-dir",
+        type=Path,
+        default=None,
+        help="mesh twin: <dir>/<label>_s<seed>/mesh_twin.json from tools/real2sim/mesh_twin.py",
+    )
     args = p.parse_args()
+    perturb = json.loads(args.perturb.read_text(encoding="utf-8")) if args.perturb else None
     only = {s for s in args.only.split(",") if s}
     base_out = (ROOT / args.out).resolve() if not args.out.is_absolute() else args.out
     seeds = [int(s) for s in args.seeds.split(",")]
@@ -197,6 +233,8 @@ def main() -> int:
                 args.attach_fit,
                 args.fuse,
                 twin_for(args.twin_dir, label, seed),
+                perturb,
+                mesh_for(args.mesh_twin_dir, label, seed),
             )
             GLOBAL_ATTACH.write_text(json.dumps({"spheres": []}), encoding="utf-8")
             cmd = [

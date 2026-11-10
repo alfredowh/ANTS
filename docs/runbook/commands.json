@@ -4250,6 +4250,20 @@
           "kind": "value",
           "on": false,
           "desc": "Object-level twin: loads <dir>/<label>_s<seed>/twin.json (tools/real2sim/twin_bodies.py) into the launcher's \"twin\" key, which rescales and moves the bowl and plate to the reconstruction after every reset."
+        },
+        {
+          "flag": "--perturb",
+          "value": "data/runs/real2sim_perturb/perturb/pose.json",
+          "kind": "value",
+          "on": false,
+          "desc": "JSON with launcher perturbation keys (pose, scale, physics, camera, ...) merged into the spec; scale multiplies the task's own factors. With --twin-dir or --mesh-twin-dir, pose and scale are skipped because the twin re-measured them."
+        },
+        {
+          "flag": "--mesh-twin-dir",
+          "value": "data/runs/real2sim_mesh/nominal/meshes",
+          "kind": "value",
+          "on": false,
+          "desc": "Mesh twin: loads <dir>/<label>_s<seed>/mesh_twin.json (tools/real2sim/mesh_twin.py) into the launcher's twin.mesh key, which replaces bowl and plate geometry, colour, mass and friction with the estimate after every reset."
         }
       ],
       "description": "Costs no model tokens (GPU and simulator only). Needs the SAM 3 and PyRoki services and the dev cuRobo service on 8118 (services.start, curobo.service). Runs one program at a time and resets the global attach file before each run; never start two at once. Written 2026-11-04 for the cuRobo false-negative debugging (handoff-curobo-debug.md, dev note not in repo). Every plan's goal is labelled against the simulator (planner.label_goals); score with curobo.goal-confusion. Do not run while another simulator is running.",
@@ -4277,6 +4291,14 @@
         {
           "title": "Twin replay (stock first with --fuse, then twin_bodies, then this)",
           "cmd": "ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.12 --target-exclude-m 0.02 --attach-fit centroid --fuse --twin-dir data/runs/real2sim_twin/twins --out data/runs/real2sim_twin/twin --only exp10_nodemo_a2,exp10_nodemo_a3 --seeds 51,52,53,54,55,56"
+        },
+        {
+          "title": "Perturbed stock run (bowl moved 6 cm, 5 cm)",
+          "cmd": "ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.12 --target-exclude-m 0.02 --attach-fit centroid --fuse --perturb data/runs/real2sim_perturb/perturb/pose.json --out data/runs/real2sim_perturb/pose/stock --only exp10_nodemo_a2,exp10_nodemo_a3 --seeds 51,52"
+        },
+        {
+          "title": "Mesh twin replay (stock first with --fuse, then mesh_twin.py, then this)",
+          "cmd": "ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.12 --target-exclude-m 0.02 --attach-fit centroid --fuse --mesh-twin-dir data/runs/real2sim_mesh/nominal/meshes --out data/runs/real2sim_mesh/nominal/twin --only exp10_nodemo_a2,exp10_nodemo_a3 --seeds 51,52,53,54,55,56"
         }
       ],
       "modules": [
@@ -4376,6 +4398,140 @@
       ],
       "out": [
         "<run>/twin.json or --out"
+      ]
+    },
+    {
+      "id": "real2sim.mesh_twin",
+      "title": "Mesh twin (bowl, plate profile mesh, colour, mass prior) from a run's raw first frames (no tokens)",
+      "group": "experiments",
+      "runner": "shell",
+      "base": "ASPIRE/.venv-libero/bin/python tools/real2sim/mesh_twin.py data/runs/real2sim_twin/stock/attach/exp10_nodemo_a2_s51",
+      "args": [
+        {
+          "flag": "--out",
+          "value": "data/runs/real2sim_mesh/test/mesh_twin.json",
+          "kind": "value",
+          "on": true,
+          "desc": "Spec file; the OBJ meshes are written next to it."
+        },
+        {
+          "flag": "--score",
+          "value": "",
+          "kind": "switch",
+          "on": true,
+          "desc": "Add diameter, xy and mass error against simulator truth (scoring only)."
+        }
+      ],
+      "description": "Same segmentation as twin_bodies. Fits a radial profile r(h) per object (3 mm bins, 97th percentile radius), revolves it into an OBJ (visual), writes wall and floor collision boxes under LIBERO's geom names, median RGB as colour, mass = shell volume x 2400 kg/m3 (prior), friction = MuJoCo default (prior). Wall thickness 4 mm is a prior. Written 2026-11-09.",
+      "examples": [
+        {
+          "title": "Build and score one mesh twin",
+          "cmd": "ASPIRE/.venv-libero/bin/python tools/real2sim/mesh_twin.py data/runs/real2sim_twin/stock/attach/exp10_nodemo_a2_s51 --out data/runs/real2sim_mesh/test/mesh_twin.json --score"
+        }
+      ],
+      "modules": [
+        "launcher",
+        "rollout",
+        "aspire",
+        "services"
+      ],
+      "in": [
+        "<run>/clouds/cameras_000.npz",
+        "<run>/run/.../trace/calls/*-localize-object"
+      ],
+      "out": [
+        "mesh_twin.json",
+        "bowl.obj",
+        "plate.obj"
+      ]
+    },
+    {
+      "id": "real2sim.real_scan",
+      "title": "Real tabletop scan to object meshes from a phone video with the ChArUco board (visual hull, no tokens)",
+      "group": "experiments",
+      "runner": "shell",
+      "base": "hurobo/.venv/bin/python ../ANTS-real2sim/tools/real2sim/real_scan.py hurobo/data/raw/setup_01/table_scene_zoom_02.mp4 --setup hurobo/data/raw/setup_01/measurements.yaml",
+      "args": [
+        {
+          "flag": "--out",
+          "value": "data/runs/real2sim_real/setup_01_v3mm",
+          "kind": "value",
+          "on": true,
+          "desc": "Output folder (scan.json, <object>_hull.obj, hull_voxels.npz)."
+        },
+        {
+          "flag": "--every",
+          "value": "3",
+          "kind": "value",
+          "on": true,
+          "desc": "Use every Nth frame."
+        },
+        {
+          "flag": "--voxel",
+          "value": "0.003",
+          "kind": "value",
+          "on": true,
+          "desc": "Carving voxel in metres."
+        },
+        {
+          "flag": "--keep",
+          "value": "0.85",
+          "kind": "value",
+          "on": false,
+          "desc": "Fraction of views that must see the voxel inside the object mask."
+        },
+        {
+          "flag": "--min-corners",
+          "value": "12",
+          "kind": "value",
+          "on": false,
+          "desc": "Minimum ChArUco corners for a posed view."
+        },
+        {
+          "flag": "--sat-max",
+          "value": "95",
+          "kind": "value",
+          "on": false,
+          "desc": "HSV saturation below which a pixel counts as white object."
+        },
+        {
+          "flag": "--val-min",
+          "value": "80",
+          "kind": "value",
+          "on": false,
+          "desc": "HSV value above which a pixel counts as object."
+        },
+        {
+          "flag": "--intrinsics",
+          "value": "",
+          "kind": "value",
+          "on": false,
+          "desc": "Camera npz (default hurobo/data/camera_intrinsics_s24.npz)."
+        }
+      ],
+      "description": "Run from the ANTS checkout with the hurobo venv. Board poses from OpenCV ChArUco, white-object colour mask inside the image of the table volume, voxel carving, components named plate (flattest) and bowl (tallest), scored against measurements.yaml. Status 2026-11-09: NOT usable on setup_01 (only table_scene_zoom_02 sees the board, from one low arc; heights unbounded, glare passes the mask). Needs a capture with the board in view from several heights all around, or SAM 3 masks.",
+      "examples": [
+        {
+          "title": "Carve setup_01 at 3 mm",
+          "cmd": "hurobo/.venv/bin/python ../ANTS-real2sim/tools/real2sim/real_scan.py hurobo/data/raw/setup_01/table_scene_zoom_02.mp4 --setup hurobo/data/raw/setup_01/measurements.yaml --out data/runs/real2sim_real/setup_01_v3mm --voxel 0.003 --every 3"
+        }
+      ],
+      "modules": [
+        "launcher",
+        "rollout",
+        "aspire",
+        "services"
+      ],
+      "in": [
+        "phone video with ChArUco board",
+        "measurements.yaml",
+        "camera intrinsics npz"
+      ],
+      "out": [
+        "scan.json",
+        "bowl_hull.obj",
+        "plate_hull.obj",
+        "hull_voxels.npz"
       ]
     },
     {
