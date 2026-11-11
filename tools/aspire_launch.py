@@ -71,6 +71,7 @@ LIBERO's 0.03 m "on top of" centre tolerance by the target's factor (`scale_onto
 
 from __future__ import annotations
 
+import atexit
 import base64
 import collections
 import json
@@ -1110,6 +1111,12 @@ class PerturbedEnv:
         if self._contact_path is not None:
             self._contact_step = 0
             self._dump_scene(self._scene_path("_scene_reset.json"))
+        if self._spec.get("live_twin") and getattr(self, "_live_twin", None) is None:
+            sys.path.insert(0, str(Path(__file__).resolve().parent / "real2sim"))
+            from live_twin import Sender
+
+            self._live_twin = Sender(self.sim, self._spec["live_twin"])
+            atexit.register(self._live_twin.close)
         return obs
 
     def _rescale(self, scale: dict, obs):
@@ -1289,6 +1296,8 @@ class PerturbedEnv:
         result = self._inner.step(action)
         if self._contact_path is not None:
             self._log_contacts()
+        if getattr(self, "_live_twin", None) is not None:
+            self._live_twin.step(float(self.sim.data.time))
         return result
 
 

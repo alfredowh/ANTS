@@ -4446,6 +4446,118 @@
       ]
     },
     {
+      "id": "real2sim.e1_twin",
+      "title": "Box twin of each real E1 clip: real bowl and plate layout placed in the LIBERO scene (no tokens)",
+      "group": "experiments",
+      "runner": "shell",
+      "base": "hurobo/.venv/bin/python tools/real2sim/e1_twin.py hurobo/data/raw/e1/clips",
+      "args": [
+        {
+          "flag": "--out",
+          "value": "data/runs/real2sim_e1",
+          "kind": "value",
+          "on": true,
+          "desc": "Output folder: <clip>/twin.json per clip plus summary.json."
+        },
+        {
+          "flag": "--hurobo",
+          "value": "hurobo",
+          "kind": "value",
+          "on": false,
+          "desc": "hurobo checkout (estimator, measurements.yaml, S24 intrinsics). Default hurobo."
+        },
+        {
+          "flag": "--seconds",
+          "value": "1.0",
+          "kind": "value",
+          "on": false,
+          "desc": "Layout window from the clip start, before the hand moves anything. Default 1.0."
+        },
+        {
+          "flag": "--anchor",
+          "value": "0.5397 0.0466",
+          "kind": "value",
+          "on": false,
+          "desc": "Base-frame xy of the bowl-plate midpoint. Default: LIBERO nominal midpoint, seed 51."
+        }
+      ],
+      "description": "Board (ChArUco) gives the table frame, bowl pad marker id 21 and plate marker id 22 give the objects (hurobo BoardMarkerPoseEstimator), median over the first second. Sizes are the tape measurements (bowl 0.138 m, plate 0.255 m). Robot placed where the phone stood (phone faces the board from its far side: table -x -> base -y, table -y -> base +x); the bowl-plate midpoint is anchored at the LIBERO nominal midpoint, so the real relative layout is kept, the absolute table offset is not. Output is the launcher's twin bodies format. Run from the ANTS checkout with the ANTS-real2sim tool path. Written 2026-11-10.",
+      "examples": [
+        {
+          "title": "Build twins for all E1 clips",
+          "cmd": "hurobo/.venv/bin/python tools/real2sim/e1_twin.py hurobo/data/raw/e1/clips --out data/runs/real2sim_e1"
+        }
+      ],
+      "modules": [
+        "launcher",
+        "rollout",
+        "aspire",
+        "services"
+      ],
+      "in": [
+        "hurobo/data/raw/e1/clips/*.mp4",
+        "hurobo/data/raw/setup_01/measurements.yaml"
+      ],
+      "out": [
+        "data/runs/real2sim_e1/<clip>/twin.json",
+        "data/runs/real2sim_e1/summary.json"
+      ]
+    },
+    {
+      "id": "real2sim.e1_render",
+      "title": "Render the E1 twins in the LIBERO scene and measure settled positions (no tokens)",
+      "group": "experiments",
+      "runner": "shell",
+      "base": "MUJOCO_GL=egl LIBERO_CONFIG_PATH=ASPIRE/.libero ASPIRE/.venv-libero/bin/python tools/real2sim/e1_render.py data/runs/real2sim_e1",
+      "args": [
+        {
+          "flag": "--cameras",
+          "value": "agentview birdview",
+          "kind": "value",
+          "on": false,
+          "desc": "Cameras to render. Default agentview birdview."
+        },
+        {
+          "flag": "--size",
+          "value": "480",
+          "kind": "value",
+          "on": false,
+          "desc": "Image size in pixels. Default 480."
+        },
+        {
+          "flag": "--seed",
+          "value": "51",
+          "kind": "value",
+          "on": false,
+          "desc": "Acceptance seed for the rest of the scene. Default 51."
+        },
+        {
+          "flag": "--limit",
+          "value": "1",
+          "kind": "value",
+          "on": false,
+          "desc": "Only the first N clips."
+        }
+      ],
+      "description": "Loads each twin through the launcher's twin key in libero_goal_swap task 8, takes 20 no-op steps, renders, and writes target vs settled xy and simulated diameter to render.json. Needs ASPIRE's LIBERO config. No services needed. Written 2026-11-11.",
+      "examples": [
+        {
+          "title": "Render all E1 twins",
+          "cmd": "MUJOCO_GL=egl LIBERO_CONFIG_PATH=ASPIRE/.libero ASPIRE/.venv-libero/bin/python tools/real2sim/e1_render.py data/runs/real2sim_e1"
+        }
+      ],
+      "modules": [
+        "launcher"
+      ],
+      "in": [
+        "data/runs/real2sim_e1/<clip>/twin.json"
+      ],
+      "out": [
+        "data/runs/real2sim_e1/<clip>/{agentview,birdview}.png",
+        "data/runs/real2sim_e1/render.json"
+      ]
+    },
+    {
       "id": "real2sim.real_scan",
       "title": "Real tabletop scan to object meshes from a phone video with the ChArUco board (visual hull, no tokens)",
       "group": "experiments",
@@ -4556,6 +4668,175 @@
       ],
       "out": [
         "stdout"
+      ]
+    },
+    {
+      "id": "real2sim.scan_objects",
+      "title": "Fit bowl and plate shapes from table-scan videos (no tokens, needs SAM 3)",
+      "group": "experiments",
+      "runner": "shell",
+      "base": "hurobo/.venv/bin/python ../ANTS-real2sim/tools/real2sim/scan_objects.py hurobo/data/raw/setup_01/table_scene_zoom_02.mp4 hurobo/data/raw/setup_01/table_scene_zoom_03.mp4 --setup hurobo/data/raw/setup_01/measurements.yaml --square-m 0.02695 --out data/runs/real2sim_scan/setup_01",
+      "args": [
+        {
+          "flag": "--every",
+          "value": "6",
+          "kind": "value",
+          "on": false,
+          "desc": "Use every Nth frame. Default 6."
+        },
+        {
+          "flag": "--min-corners",
+          "value": "6",
+          "kind": "value",
+          "on": false,
+          "desc": "Minimum board corners for a pose. Default 6."
+        },
+        {
+          "flag": "--voxel",
+          "value": "0.003",
+          "kind": "value",
+          "on": false,
+          "desc": "Carving voxel size in m."
+        },
+        {
+          "flag": "--keep",
+          "value": "0.9",
+          "kind": "value",
+          "on": false,
+          "desc": "Fraction of views a voxel must stay inside."
+        },
+        {
+          "flag": "--min-seen",
+          "value": "20",
+          "kind": "value",
+          "on": false,
+          "desc": "Minimum views per voxel."
+        },
+        {
+          "flag": "--intrinsics",
+          "value": "",
+          "kind": "value",
+          "on": false,
+          "desc": "Camera intrinsics file."
+        },
+        {
+          "flag": "--segment-path",
+          "value": "/segment",
+          "kind": "value",
+          "on": false,
+          "desc": "SAM 3 route."
+        }
+      ],
+      "description": "Poses frames from the ChArUco board, segments with SAM 3 (127.0.0.1:8114), fits parametric shapes to silhouettes, writes scan.json. --square-m 0.02695 is calibrated from the plate tape diameter because the setup_01 board scale came out 1.36x too large. Written 2026-11-11.",
+      "examples": [
+        {
+          "title": "Fit bowl and plate shapes from table-scan videos (no tokens, needs SAM 3)",
+          "cmd": "hurobo/.venv/bin/python ../ANTS-real2sim/tools/real2sim/scan_objects.py hurobo/data/raw/setup_01/table_scene_zoom_02.mp4 hurobo/data/raw/setup_01/table_scene_zoom_03.mp4 --setup hurobo/data/raw/setup_01/measurements.yaml --square-m 0.02695 --out data/runs/real2sim_scan/setup_01"
+        }
+      ],
+      "modules": [
+        "launcher"
+      ],
+      "in": [
+        "hurobo/data/raw/setup_01/*.mp4"
+      ],
+      "out": [
+        "data/runs/real2sim_scan/setup_01/scan.json"
+      ]
+    },
+    {
+      "id": "real2sim.scan_sim",
+      "title": "Franka Panda bowl-on-plate on scanned objects in MuJoCo (no tokens)",
+      "group": "experiments",
+      "runner": "shell",
+      "base": "MUJOCO_GL=egl ASPIRE/.venv-libero/bin/python ../ANTS-real2sim/tools/real2sim/scan_sim.py data/runs/real2sim_scan/setup_01 --out data/runs/real2sim_scan/setup_01/sim",
+      "args": [
+        {
+          "flag": "--no-video",
+          "value": "",
+          "kind": "switch",
+          "on": false,
+          "desc": "Skip video rendering."
+        },
+        {
+          "flag": "--seconds-scale",
+          "value": "1.0",
+          "kind": "value",
+          "on": false,
+          "desc": "Stretch the motion timing."
+        }
+      ],
+      "description": "Builds the scene from scan.json (no stock object assets) and runs a scripted rim pinch. Mass, friction and wall thickness are priors. Writes task.json, scene.xml, trace.json, front.mp4, side.mp4. Written 2026-11-11.",
+      "examples": [
+        {
+          "title": "Franka Panda bowl-on-plate on scanned objects in MuJoCo (no tokens)",
+          "cmd": "MUJOCO_GL=egl ASPIRE/.venv-libero/bin/python ../ANTS-real2sim/tools/real2sim/scan_sim.py data/runs/real2sim_scan/setup_01 --out data/runs/real2sim_scan/setup_01/sim"
+        }
+      ],
+      "modules": [
+        "launcher"
+      ],
+      "in": [
+        "data/runs/real2sim_scan/setup_01/scan.json"
+      ],
+      "out": [
+        "data/runs/real2sim_scan/setup_01/sim/task.json"
+      ]
+    },
+    {
+      "id": "real2sim.live_twin",
+      "title": "Replay a program with a live twin tracking it from joints and RGB-D (no tokens, needs services)",
+      "group": "experiments",
+      "runner": "shell",
+      "base": "ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.12 --target-exclude-m 0.02 --attach-fit centroid --fuse --out data/runs/real2sim_live2 --only exp10_nodemo_a2 --seeds 51 --live-twin data/runs/real2sim_twin/twins/exp10_nodemo_a2_s51/twin.json",
+      "args": [
+        {
+          "flag": "--live-twin",
+          "value": "",
+          "kind": "value",
+          "on": false,
+          "desc": "twin.json with the tracker's initial xy."
+        }
+      ],
+      "description": "Run from the ANTS-real2sim checkout with sam3,pyroki and cuRobo services up. Writes <run>/live_twin/{live.mp4,twin_est.jsonl,truth.jsonl}. Truth is used for scoring only. Score with: ASPIRE/.venv-libero/bin/python tools/real2sim/live_twin.py score <run>/live_twin. Replay flags are reconstructed (c0e). Written 2026-11-11.",
+      "examples": [
+        {
+          "title": "Replay a program with a live twin tracking it from joints and RGB-D (no tokens, needs services)",
+          "cmd": "ASPIRE/.venv-libero/bin/python dev/curobo/replay_attach.py --mode attach --attach-crop-m 0.12 --target-exclude-m 0.02 --attach-fit centroid --fuse --out data/runs/real2sim_live2 --only exp10_nodemo_a2 --seeds 51 --live-twin data/runs/real2sim_twin/twins/exp10_nodemo_a2_s51/twin.json"
+        }
+      ],
+      "modules": [
+        "launcher"
+      ],
+      "in": [
+        "data/runs/real2sim_twin/twins/exp10_nodemo_a2_s51/twin.json"
+      ],
+      "out": [
+        "data/runs/real2sim_live2/attach/exp10_nodemo_a2_s51/live_twin/score.json"
+      ]
+    },
+    {
+      "id": "real2sim.e1_demo",
+      "title": "Replay no-demo programs in the 6 stable E1 twins (no tokens, needs services)",
+      "group": "experiments",
+      "runner": "shell",
+      "base": "bash data/runs/real2sim_e1_demo/chain.sh",
+      "args": [],
+      "description": "Starts services, then replays exp10_nodemo_a2 and a3 on the clips that stayed in place, seed 51, c0e flags (reconstructed), --twin-dir per clip. Results in data/runs/real2sim_e1_demo/results.jsonl. Written 2026-11-11.",
+      "examples": [
+        {
+          "title": "Replay no-demo programs in the 6 stable E1 twins (no tokens, needs services)",
+          "cmd": "bash data/runs/real2sim_e1_demo/chain.sh"
+        }
+      ],
+      "modules": [
+        "launcher"
+      ],
+      "in": [
+        "data/runs/real2sim_e1/<clip>/twin.json"
+      ],
+      "out": [
+        "data/runs/real2sim_e1_demo/results.jsonl"
       ]
     }
   ]

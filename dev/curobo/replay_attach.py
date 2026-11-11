@@ -77,6 +77,7 @@ def make_spec(
     twin: dict | None = None,
     perturb: dict | None = None,
     mesh: dict | None = None,
+    live_twin: Path | None = None,
 ) -> Path:
     spec = json.loads(base.read_text(encoding="utf-8"))
     for key, value in (perturb or {}).items():
@@ -109,6 +110,8 @@ def make_spec(
         spec["twin"] = {"bodies": twin}
     if mesh:
         spec.setdefault("twin", {})["mesh"] = mesh
+    if live_twin:
+        spec["live_twin"] = {"dir": str(out / "live_twin"), "init": str(live_twin)}
     planner["label_goals"] = {
         "file": str(out / "goal_labels.jsonl"),
         "body_main": "akita_black_bowl_1_main",
@@ -209,6 +212,13 @@ def main() -> int:
         default=None,
         help="mesh twin: <dir>/<label>_s<seed>/mesh_twin.json from tools/real2sim/mesh_twin.py",
     )
+    p.add_argument(
+        "--live-twin",
+        type=Path,
+        default=None,
+        help="twin.json with initial object xy: follow the run live in a second scene"
+        " (tools/real2sim/live_twin.py), writes <run>/live_twin/",
+    )
     args = p.parse_args()
     perturb = json.loads(args.perturb.read_text(encoding="utf-8")) if args.perturb else None
     only = {s for s in args.only.split(",") if s}
@@ -235,6 +245,7 @@ def main() -> int:
                 twin_for(args.twin_dir, label, seed),
                 perturb,
                 mesh_for(args.mesh_twin_dir, label, seed),
+                args.live_twin.resolve() if args.live_twin else None,
             )
             GLOBAL_ATTACH.write_text(json.dumps({"spheres": []}), encoding="utf-8")
             cmd = [
