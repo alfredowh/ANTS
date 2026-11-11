@@ -236,7 +236,7 @@ comparison has not been re-run.
    path of `src/ants/adversary/` needs Daniel first.
 3. Gate: convex decomposition, more objects, a settle case that can fail, and per-object
    segmentation of the scene mesh. Real2sim from the hurobo clips is in
-   the local dev note `real2sim-research.md` (research only, nothing run; not in the repo).
+   `docs/perception/real2sim-research.md` (research only, nothing run).
 
 ## Why this isn't `dev/curobo/`
 
